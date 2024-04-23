@@ -79,6 +79,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 /* Hook prototypes */
 void vApplicationIdleHook(void);
 void vApplicationTickHook(void);
+void vApplicationMallocFailedHook(void);
 
 /* USER CODE BEGIN 2 */
 void vApplicationIdleHook( void )
@@ -107,6 +108,13 @@ void vApplicationTickHook( void )
 }
 /* USER CODE END 3 */
 
+/* USER CODE BEGIN 5 */
+void vApplicationMallocFailedHook(void)
+{
+   SendInfo2Uart(&huart1,"No Space to Malloc",18);
+}
+/* USER CODE END 5 */
+
 /**
   * @brief  FreeRTOS initialization
   * @param  None
@@ -130,7 +138,7 @@ void MX_FREERTOS_Init(void) {
   TimerHandle = osTimerNew(Timer_100ms, osTimerPeriodic, NULL, &Timer_attributes);
 
   /* USER CODE BEGIN RTOS_TIMERS */
-  osTimerStart(TimerHandle,1000U);
+  osTimerStart(TimerHandle,5000U);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -164,7 +172,15 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+		uint64_t ncount = 0;
+		for(uint32_t i=0;i<5000;++i)
+		{
+			++ncount;
+		}
+		
+		--ncount;
+		
+    vTaskDelay(4);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -176,6 +192,9 @@ void Timer_100ms(void *argument)
 	ProcessUart(xTaskGetTickCount());
 	static char test[76]="";
 	sprintf(test,"cpu usage %d\n",GetCPUUsage());
+	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
+	osDelay(10);
+	sprintf(test,"heap size %d\n",xPortGetFreeHeapSize());
 	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
 	osDelay(10);
 	for(uint8_t index=0;index<GetUartCount();++index)

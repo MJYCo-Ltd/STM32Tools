@@ -29,7 +29,9 @@ typedef struct _Uart_IO_Info
 	uint64_t unDealCount;
 }UartIOInfo;
 
-typedef void (*ReceiveUartCallback)(UART_HandleTypeDef*,const uint8_t* pData,uint16_t nDataSize);
+typedef uint16_t ReceiveCalType;
+
+typedef void (*ReceiveUartCallback)(UART_HandleTypeDef*,const uint8_t* pData,ReceiveCalType nDataSize);
 
 /// 初始化串口数量
 void InitUartCount(uint8_t unMaxUartSize);

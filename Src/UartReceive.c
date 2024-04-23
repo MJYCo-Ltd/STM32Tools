@@ -4,7 +4,6 @@
  *  Created on: Apr 10, 2024
  *      Author: yty
  */
-#include "stdlib.h"
 #include "string.h"
 #include "UartReceive.h"
 
@@ -15,7 +14,7 @@ typedef struct _Uart_Info
 	ReceiveUartCallback pCallback;
 	uint8_t* pBuffer;
 	uint8_t* pReceive;
-	uint16_t countReceive;
+	ReceiveCalType countReceive;
 	TickType_t lastTime;
 	UartIOInfo allIOInfo;
 }Uart_Info;
@@ -23,9 +22,9 @@ typedef struct _Uart_Info
 Uart_Info** pUartInfoArray=NULL;
 uint8_t* pSendBuffer=NULL;
 
-const uint16_t UART_BUFFER_LENGTH = 100;
-const uint32_t DELAY_TIME = 100;
-const uint16_t UART_RECEIVE=1;
+const ReceiveCalType UART_BUFFER_LENGTH = 100;
+const TickType_t DELAY_TICK = 100;
+const ReceiveCalType UART_ONCE_RECEIVE_BYTES=1;
 
 static const uint8_t YTY_FALSE=0;
 static const uint8_t YTY_TRUE=1;
@@ -40,9 +39,9 @@ void InitUartCount(uint8_t unMaxUartSize)
 	{
 		/// 此处程序刚开始，如果没有空间说明芯片不合适
 		/// 故没有进行判断指针为空的问题
-		pUartInfoArray = (Uart_Info**) malloc(sizeof(*pUartInfoArray)*unMaxUartSize);
+		pUartInfoArray = (Uart_Info**) pvPortMalloc(sizeof(*pUartInfoArray)*unMaxUartSize);
 		memset(pUartInfoArray,0,sizeof(*pUartInfoArray)*unMaxUartSize);
-		pSendBuffer = (uint8_t*)malloc(sizeof(*pSendBuffer)*UART_BUFFER_LENGTH);
+		pSendBuffer = (uint8_t*)pvPortMalloc(sizeof(*pSendBuffer)*UART_BUFFER_LENGTH);
 	}
 }
 /**
@@ -55,7 +54,7 @@ uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback)
 		return(0);
 	}
 
-	Uart_Info* pUartInfo = (Uart_Info*)malloc(sizeof(*pUartInfo));
+	Uart_Info* pUartInfo = (Uart_Info*)pvPortMalloc(sizeof(*pUartInfo));
 
 	if(NULL == pUartInfo)
 	{
@@ -64,10 +63,10 @@ uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback)
 	else
 	{
 		memset(pUartInfo,0,sizeof(*pUartInfo));
-		uint8_t* pBuffer = (uint8_t*)malloc(sizeof(*pBuffer)*UART_BUFFER_LENGTH);
+		uint8_t* pBuffer = (uint8_t*)pvPortMalloc(sizeof(*pBuffer)*UART_BUFFER_LENGTH);
 		if(NULL == pBuffer)
 		{
-			free(pUartInfo);
+			vPortFree(pUartInfo);
 			return(0);
 		}
 		memset(pBuffer,0,sizeof(*pBuffer)*UART_BUFFER_LENGTH);
@@ -88,7 +87,7 @@ void BeginReciveUartInfo(uint8_t uId)
 {
 	if(uId <1 ) return;
 	Uart_Info* pUartInfo = pUartInfoArray[uId-1];
-	HAL_UART_Receive_IT(pUartInfo->pHUart, pUartInfo->pReceive, UART_RECEIVE);
+	HAL_UART_Receive_IT(pUartInfo->pHUart, pUartInfo->pReceive, UART_ONCE_RECEIVE_BYTES);
 }
 
 /// 通过回调发送数据
@@ -102,8 +101,8 @@ void SendData(Uart_Info* pUartInfo,uint8_t clear)
 	}
 	else
 	{
-		uint8_t subSize = pReceive - pBuffer;
-		uint8_t preSize = pUartInfo->countReceive - subSize;
+		ReceiveCalType subSize = pReceive - pBuffer;
+		ReceiveCalType preSize = pUartInfo->countReceive - subSize;
 		if(preSize>0) memcpy(pSendBuffer,pBuffer + UART_BUFFER_LENGTH - preSize,preSize*sizeof(*pReceive));
 		if(subSize>0) memcpy(pSendBuffer+preSize,pBuffer,subSize*sizeof(*pReceive));
 	}
@@ -127,9 +126,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *pHUart)
 		if(pHUart == pUartInfo->pHUart)
 		{
 			pUartInfo->lastTime = xTaskGetTickCountFromISR();
-			pUartInfo->pReceive += UART_RECEIVE;
-			pUartInfo->countReceive += UART_RECEIVE;
-			pUartInfo->allIOInfo.unReciveCount += UART_RECEIVE;
+			pUartInfo->pReceive += UART_ONCE_RECEIVE_BYTES;
+			pUartInfo->countReceive += UART_ONCE_RECEIVE_BYTES;
+			pUartInfo->allIOInfo.unReciveCount += UART_ONCE_RECEIVE_BYTES;
 			
 			/// 如果索引越界直接减去缓冲区大小
 			if((pUartInfo->pReceive - pUartInfo->pBuffer)>=UART_BUFFER_LENGTH)
@@ -138,12 +137,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *pHUart)
 			}
 			
 			/// 一旦要接收的数据加上已接收的数据大于缓冲区，进行处理
-			if(pUartInfo->countReceive + UART_RECEIVE > UART_BUFFER_LENGTH)
+			if(pUartInfo->countReceive + UART_ONCE_RECEIVE_BYTES > UART_BUFFER_LENGTH)
 			{
 				SendData(pUartInfo,YTY_TRUE);
 			}
 
-			HAL_UART_Receive_IT(pUartInfo->pHUart, pUartInfo->pReceive, UART_RECEIVE);
+			/// 重新申请中断
+			HAL_UART_Receive_IT(pUartInfo->pHUart, pUartInfo->pReceive, UART_ONCE_RECEIVE_BYTES);
 		}
 	}
 }
@@ -154,7 +154,7 @@ void ProcessUart(TickType_t clock)
 	for(uint8_t index=0;index<uUartIndex;++index)
 	{
 		Uart_Info* pUartInfo = pUartInfoArray[index];
-		if(pUartInfo->countReceive > 0 && clock-pUartInfo->lastTime > DELAY_TIME)
+		if(pUartInfo->countReceive > 0 && clock-pUartInfo->lastTime > DELAY_TICK)
 		{
 			SendData(pUartInfo,YTY_FALSE);
 		}
