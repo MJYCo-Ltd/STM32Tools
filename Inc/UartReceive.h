@@ -19,6 +19,15 @@
 #ifndef __UART_RECEIVE_H
 #define __UART_RECEIVE_H
 #include "stm32f1xx_hal.h"
+#include "FreeRTOS.h"
+
+/// 定义串口接收数据量用于调试
+typedef struct _Uart_IO_Info
+{
+	uint64_t unReciveCount;
+	uint64_t unSendCount;
+	uint64_t unDealCount;
+}UartIOInfo;
 
 typedef void (*ReceiveUartCallback)(UART_HandleTypeDef*,const uint8_t* pData,uint16_t nDataSize);
 
@@ -31,13 +40,28 @@ void InitUartCount(uint8_t unMaxUartSize);
 uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback);
 
 /**
- *接收指定id的串口数据
+ * 获取串口接收数据信息
  */
-void ReciveUartInfo(uint8_t uId);
+const UartIOInfo* GetUartIOInfo(uint8_t uId);
 
 /**
- *定时处理
+ * 更新串口发送数据
  */
-void ProcessUart(uint32_t clock);
+void UpdateUartSendInfo(UART_HandleTypeDef* pHUart,uint16_t unLength);
+
+/**
+ * 接收指定id的串口数据
+ */
+void BeginReciveUartInfo(uint8_t uId);
+
+/**
+ * 定时处理
+ */
+void ProcessUart(TickType_t clock);
+
+/**
+ * 获取串口数据的数量
+ */
+uint8_t GetUartCount(void);
 
 #endif

@@ -26,13 +26,12 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
-#include "UartReceive.h"
 #include "Auxiliary.h"
+#include "UartReceive.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -60,14 +59,20 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for Timer */
+osTimerId_t TimerHandle;
+const osTimerAttr_t Timer_attributes = {
+  .name = "Timer"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 uint8_t GetCPUUsage(void);
-extern UART_HandleTypeDef huart3;
+extern UART_HandleTypeDef huart1;
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
+void Timer_100ms(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -78,10 +83,8 @@ void vApplicationTickHook(void);
 /* USER CODE BEGIN 2 */
 void vApplicationIdleHook( void )
 {
-	SendInfo2Uart(&huart3,"44\n",3);
    if(NULL == xIdleHandle)
 	 {
-		 SendInfo2Uart(&huart3,"55\n",3);
 		 xIdleHandle = xTaskGetCurrentTaskHandle();
 	 }
 }
@@ -122,8 +125,12 @@ void MX_FREERTOS_Init(void) {
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* creation of Timer */
+  TimerHandle = osTimerNew(Timer_100ms, osTimerPeriodic, NULL, &Timer_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
+  osTimerStart(TimerHandle,1000U);
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -157,34 +164,45 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-		static char test[40]="";
-		//sprintf(test,"cpu usage %d\n",GetCPUUsage());
-		SendInfo2Uart(&huart3,test,15);
-		ProcessUart(HAL_GetTick());
-    HAL_Delay(500);
+    osDelay(1);
   }
   /* USER CODE END StartDefaultTask */
 }
 
+/* Timer_100ms function */
+void Timer_100ms(void *argument)
+{
+  /* USER CODE BEGIN Timer_100ms */
+	ProcessUart(xTaskGetTickCount());
+	static char test[76]="";
+	sprintf(test,"cpu usage %d\n",GetCPUUsage());
+	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
+	osDelay(10);
+	for(uint8_t index=0;index<GetUartCount();++index)
+	{
+		const UartIOInfo* pIOInfo = GetUartIOInfo(index);
+		sprintf(test,"%d Uart Recive %llu bytes Deal %llu bytes\nSend %llu bytes\n",index,
+		pIOInfo->unDealCount,pIOInfo->unReciveCount,pIOInfo->unSendCount);
+	  SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
+	}
+
+  /* USER CODE END Timer_100ms */
+}
+
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-
 void StartIdleMonitor(void)
 {
-	SendInfo2Uart(&huart3,"00\n",3);
 	if(xTaskGetCurrentTaskHandle()==xIdleHandle)
 	{
-		SendInfo2Uart(&huart3,"11\n",3);
 		osCPU_IdleStartTime = xTaskGetTickCountFromISR();
 	}
 }
 
 void EndIdleMonitor(void)
 {
-	SendInfo2Uart(&huart3,"22\n",3);
 	if(xTaskGetCurrentTaskHandle()==xIdleHandle)
 	{
-		SendInfo2Uart(&huart3,"33\n",3);
 		osCPU_IdleSpentTime = xTaskGetTickCountFromISR() - osCPU_IdleStartTime;
 		osCPU_IdleTotalTime += osCPU_IdleSpentTime;
 	}

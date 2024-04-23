@@ -8,20 +8,22 @@
 #include "string.h"
 #include "UartReceive.h"
 
+/// 定义串口数据结构体
 typedef struct _Uart_Info
 {
 	UART_HandleTypeDef* pHUart;
 	ReceiveUartCallback pCallback;
 	uint8_t* pBuffer;
 	uint8_t* pReceive;
-	uint8_t  countReceive;
-	uint32_t lastTime;
+	uint16_t countReceive;
+	TickType_t lastTime;
+	UartIOInfo allIOInfo;
 }Uart_Info;
 
 Uart_Info** pUartInfoArray=NULL;
 uint8_t* pSendBuffer=NULL;
 
-const uint8_t UART_BUFFER_LENGTH = 100;
+const uint16_t UART_BUFFER_LENGTH = 100;
 const uint32_t DELAY_TIME = 100;
 const uint16_t UART_RECEIVE=1;
 
@@ -29,7 +31,7 @@ static const uint8_t YTY_FALSE=0;
 static const uint8_t YTY_TRUE=1;
 
 
-uint8_t nUartIndex=0;
+uint8_t uUartIndex=0;
 
 /// 初始化串口数量
 void InitUartCount(uint8_t unMaxUartSize)
@@ -75,14 +77,14 @@ uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback)
 		pUartInfo->pBuffer = pBuffer;
 		pUartInfo->pReceive = pBuffer;
 		pUartInfo->pCallback = pCallback;
-		pUartInfoArray[nUartIndex] = pUartInfo;
+		pUartInfoArray[uUartIndex] = pUartInfo;
 	}
 
-	return(++nUartIndex);
+	return(++uUartIndex);
 }
 
 ///开始接收数据
-void ReciveUartInfo(uint8_t uId)
+void BeginReciveUartInfo(uint8_t uId)
 {
 	if(uId <1 ) return;
 	Uart_Info* pUartInfo = pUartInfoArray[uId-1];
@@ -106,6 +108,7 @@ void SendData(Uart_Info* pUartInfo,uint8_t clear)
 		if(subSize>0) memcpy(pSendBuffer+preSize,pBuffer,subSize*sizeof(*pReceive));
 	}
 	pUartInfo->pCallback(pUartInfo->pHUart,pSendBuffer, pUartInfo->countReceive);
+	pUartInfo->allIOInfo.unDealCount += pUartInfo->countReceive;
 	pUartInfo->countReceive = 0;
 	
 	/// 将数据置空，将指针重置
@@ -116,16 +119,17 @@ void SendData(Uart_Info* pUartInfo,uint8_t clear)
 }
 
 /// 异步接收回调
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *pHUart)
 {
-	for(uint8_t index=0;index<nUartIndex;++index)
+	for(uint8_t index=0;index<uUartIndex;++index)
 	{
 		Uart_Info* pUartInfo = pUartInfoArray[index];
-		if(huart == pUartInfo->pHUart)
+		if(pHUart == pUartInfo->pHUart)
 		{
-			pUartInfo->lastTime = HAL_GetTick();
+			pUartInfo->lastTime = xTaskGetTickCountFromISR();
 			pUartInfo->pReceive += UART_RECEIVE;
 			pUartInfo->countReceive += UART_RECEIVE;
+			pUartInfo->allIOInfo.unReciveCount += UART_RECEIVE;
 			
 			/// 如果索引越界直接减去缓冲区大小
 			if((pUartInfo->pReceive - pUartInfo->pBuffer)>=UART_BUFFER_LENGTH)
@@ -144,10 +148,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
-/// 定时发送数据
-void ProcessUart(uint32_t clock)
+/// 定时处理数据
+void ProcessUart(TickType_t clock)
 {
-	for(uint8_t index=0;index<nUartIndex;++index)
+	for(uint8_t index=0;index<uUartIndex;++index)
 	{
 		Uart_Info* pUartInfo = pUartInfoArray[index];
 		if(pUartInfo->countReceive > 0 && clock-pUartInfo->lastTime > DELAY_TIME)
@@ -155,4 +159,38 @@ void ProcessUart(uint32_t clock)
 			SendData(pUartInfo,YTY_FALSE);
 		}
 	}
+}
+
+/// 获取串口接收数据信息
+const UartIOInfo* GetUartIOInfo(uint8_t uId)
+{
+	if(uId <= uUartIndex)
+	{
+		Uart_Info* pUartInfo = pUartInfoArray[uId];
+		if(NULL != pUartInfo)
+		{
+			return(&pUartInfo->allIOInfo);
+		}
+	}
+	
+	return (NULL);
+}
+
+/// 更新串口发送数据
+void UpdateUartSendInfo(UART_HandleTypeDef* pHUart,uint16_t unLength)
+{
+	for(uint8_t index=0;index<uUartIndex;++index)
+	{
+		Uart_Info* pUartInfo = pUartInfoArray[index];
+		if(pHUart == pUartInfo->pHUart)
+		{
+			pUartInfo->allIOInfo.unSendCount += unLength;
+		}
+	}
+}
+
+/// 获取管理里面的串口数量
+uint8_t GetUartCount(void)
+{
+	return(uUartIndex);
 }

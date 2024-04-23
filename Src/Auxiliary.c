@@ -6,13 +6,14 @@
  */
  #include "FreeRTOS.h"
  #include "Auxiliary.h"
-
-void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t unLength)
+ 
+void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t uLength)
 {
-	while(HAL_OK != HAL_UART_Transmit_IT(pHUart,pData,unLength))
+	while(HAL_OK != HAL_UART_Transmit_IT(pHUart,pData,uLength))
 	{
-		HAL_Delay(100);
+		vTaskDelay(10);
 	}
+	UpdateUartSendInfo(pHUart,uLength);
 }
 
 /// ÈÃ°å×ÓÐÝÃß
