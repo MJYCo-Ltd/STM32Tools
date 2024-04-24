@@ -4,14 +4,14 @@
  *  Created on: Apr 12, 2024
  *      Author: yty
  */
- #include "FreeRTOS.h"
+ #include "cmsis_os.h"
  #include "Auxiliary.h"
  
 void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t uLength)
 {
 	while(HAL_OK != HAL_UART_Transmit_IT(pHUart,pData,uLength))
 	{
-		vTaskDelay(10);
+		osDelay(10);
 	}
 	UpdateUartSendInfo(pHUart,uLength);
 }

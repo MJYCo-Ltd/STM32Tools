@@ -79,6 +79,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 /* Hook prototypes */
 void vApplicationIdleHook(void);
 void vApplicationTickHook(void);
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
 void vApplicationMallocFailedHook(void);
 
 /* USER CODE BEGIN 2 */
@@ -94,24 +95,34 @@ void vApplicationIdleHook( void )
 /* USER CODE BEGIN 3 */
 void vApplicationTickHook( void )
 {
-	static uint16_t S_LOCAL_TICK=0;
-	if(S_LOCAL_TICK++ > CALCULATION_PERIOD)
+	if(NULL != xIdleHandle)
 	{
-		S_LOCAL_TICK = 0;
-		if(osCPU_IdleTotalTime > CALCULATION_PERIOD)
+		static uint16_t S_LOCAL_TICK=0;
+		if(S_LOCAL_TICK++ > CALCULATION_PERIOD)
 		{
-			osCPU_IdleTotalTime = CALCULATION_PERIOD;
+			S_LOCAL_TICK = 0;
+			if(osCPU_IdleTotalTime > CALCULATION_PERIOD)
+			{
+				osCPU_IdleTotalTime = CALCULATION_PERIOD;
+			}
+			osCPU_Usege = (100-(osCPU_IdleTotalTime*100)/CALCULATION_PERIOD);
+			osCPU_IdleTotalTime = 0;
 		}
-		osCPU_Usege = (100-(osCPU_IdleTotalTime*100)/CALCULATION_PERIOD);
-		osCPU_IdleTotalTime = 0;
 	}
 }
 /* USER CODE END 3 */
 
+/* USER CODE BEGIN 4 */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
+{
+   SendInfo2Uart(&huart1,pcTaskName,strlen(pcTaskName));
+}
+/* USER CODE END 4 */
+
 /* USER CODE BEGIN 5 */
 void vApplicationMallocFailedHook(void)
 {
-   SendInfo2Uart(&huart1,"No Space to Malloc",18);
+   SendInfo2Uart(&huart1,"Malloc Failed",13);
 }
 /* USER CODE END 5 */
 
@@ -169,19 +180,11 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-  for(;;)
-  {
-		uint64_t ncount = 0;
-		for(uint32_t i=0;i<5000;++i)
-		{
-			++ncount;
-		}
-		
-		--ncount;
-		
-    vTaskDelay(4);
-  }
+	for(;;)
+	{
+		ProcessUart();
+		osDelay(1);
+	}
   /* USER CODE END StartDefaultTask */
 }
 
@@ -189,7 +192,6 @@ void StartDefaultTask(void *argument)
 void Timer_100ms(void *argument)
 {
   /* USER CODE BEGIN Timer_100ms */
-	ProcessUart(xTaskGetTickCount());
 	static char test[76]="";
 	sprintf(test,"cpu usage %d\n",GetCPUUsage());
 	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
