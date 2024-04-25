@@ -6,6 +6,7 @@
  */
  #include "cmsis_os.h"
  #include "Auxiliary.h"
+ #include "UartReceive.h"
  
 void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t uLength)
 {

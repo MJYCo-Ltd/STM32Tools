@@ -4,6 +4,7 @@
  *  Created on: Apr 10, 2024
  *      Author: yty
  */
+#include "string.h"
 #include "cmsis_os.h"
 #include "UartReceive.h"
 
@@ -97,8 +98,11 @@ void ProcessUart(void)
 		Uart_Info* pUartInfo = pUartInfoArray[index];
 		if(NULL != pUartInfo->pHUart)
 		{
-			osMessageQueueGet(pUartInfo->hQueueId,&LOCAL_BYTE,NULL,NULL);
-			pUartInfo->pCallback(pUartInfo->pHUart,LOCAL_BYTE);
+			if(osMessageQueueGetCount(pUartInfo->hQueueId) > 0 && 
+				osOK == osMessageQueueGet(pUartInfo->hQueueId,&LOCAL_BYTE,NULL,NULL))
+			{
+				pUartInfo->pCallback(pUartInfo->pHUart,LOCAL_BYTE);
+			}
 		}
 	}
 }
