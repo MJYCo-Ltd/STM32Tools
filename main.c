@@ -46,9 +46,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-void ReciveUartData(UART_HandleTypeDef* pHUart,const uint8_t* pBuffer, uint16_t unBufferLength)
+void ReciveUartData(UART_HandleTypeDef* pHUart,uint8_t uData)
 {
-	//SendInfo2Uart(pHUart,pBuffer,unBufferLength);
+	//SendInfo2Uart(pHUart,&uData,1);
 }
 /* USER CODE END PV */
 

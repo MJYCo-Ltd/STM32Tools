@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
+#include "string.h"
 #include "Auxiliary.h"
 #include "UartReceive.h"
 /* USER CODE END Includes */
@@ -115,7 +116,7 @@ void vApplicationTickHook( void )
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 {
-   SendInfo2Uart(&huart1,pcTaskName,strlen(pcTaskName));
+   SendInfo2Uart(&huart1,(const unsigned char*)pcTaskName,strlen((const char*)pcTaskName));
 }
 /* USER CODE END 4 */
 
@@ -203,7 +204,7 @@ void Timer_100ms(void *argument)
 	{
 		const UartIOInfo* pIOInfo = GetUartIOInfo(index);
 		sprintf(test,"%d Uart Recive %llu bytes Deal %llu bytes\nSend %llu bytes\n",index,
-		pIOInfo->unDealCount,pIOInfo->unReciveCount,pIOInfo->unSendCount);
+		pIOInfo->unReciveCount,pIOInfo->unDealCount,pIOInfo->unSendCount);
 	  SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
 	}
 

@@ -81,8 +81,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *pHUart)
 		Uart_Info* pUartInfo = pUartInfoArray[index];
 		if(pHUart == pUartInfo->pHUart)
 		{
-			++pUartInfo->allIOInfo.unReciveCount;
-			osMessageQueuePut(pUartInfo->hQueueId,&pUartInfo->cReceive,NULL,NULL);
+			if(osOK == osMessageQueuePut(pUartInfo->hQueueId,&pUartInfo->cReceive,NULL,NULL))
+			{
+				++pUartInfo->allIOInfo.unReciveCount;
+			}
 			/// 重新申请中断
 			HAL_UART_Receive_IT(pUartInfo->pHUart, &pUartInfo->cReceive, 1);
 		}
@@ -102,6 +104,7 @@ void ProcessUart(void)
 				osOK == osMessageQueueGet(pUartInfo->hQueueId,&LOCAL_BYTE,NULL,NULL))
 			{
 				pUartInfo->pCallback(pUartInfo->pHUart,LOCAL_BYTE);
+				++pUartInfo->allIOInfo.unDealCount;
 			}
 		}
 	}
