@@ -16,32 +16,34 @@
   *      Author: wshys
   ******************************************************************************
  */
-#ifndef __UART_RECEIVE_H
-#define __UART_RECEIVE_H
-#include "stm32f1xx_hal.h"
-
-/// 定义串口接收数据量用于调试
-typedef struct _Uart_IO_Info
+#ifndef __YTY_UART_RECEIVE_H_
+#define __YTY_UART_RECEIVE_H_
+#include "Auxiliary.h"
+/// 定义串口传输
+typedef struct _Uart_Queue_Info
 {
-	uint64_t unReciveCount;
-	uint64_t unSendCount;
-	uint64_t unDealCount;
-}UartIOInfo;
+	uint8_t* pBuffer;
+	uint16_t nLength;
+}UartQueueInfo;
 
-typedef void (*ReceiveUartCallback)(UART_HandleTypeDef*,uint8_t uData);
+typedef void (*ReceiveUartCallback)(UART_HandleTypeDef*,uint8_t* pData,uint16_t nLength);
 
-/// 初始化串口数量
+/**
+ * 初始化串口数量
+ * @attention 此数量用于开辟空间
+ */
 void InitUartCount(uint8_t unMaxUartSize);
 
 /**
- * 增加串口
+ * 添加串口
  */
 uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback);
+UART_HandleTypeDef* GetUart(uint8_t uId);
 
 /**
  * 获取串口接收数据信息
  */
-const UartIOInfo* GetUartIOInfo(uint8_t uId);
+const IOInfo* GetUartIOInfo(uint8_t uId);
 
 /**
  * 更新串口发送数据
@@ -51,7 +53,8 @@ void UpdateUartSendInfo(UART_HandleTypeDef* pHUart,uint16_t unLength);
 /**
  * 接收指定id的串口数据
  */
-void BeginReciveUartInfo(uint8_t uId);
+void BeginReceiveUartInfo(uint8_t uId);
+void StopReceiveUartInfo(uint8_t uId);
 
 /**
  * 定时处理

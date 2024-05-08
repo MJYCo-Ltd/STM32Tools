@@ -4,19 +4,40 @@
  *  Created on: Apr 12, 2024
  *      Author: yty
  */
- #include "cmsis_os.h"
- #include "Auxiliary.h"
- #include "UartReceive.h"
- 
-void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t uLength)
+#include "string.h"
+#include "cmsis_os.h"
+#include "Auxiliary.h"
+#include "UartReceive.h"
+
+/// 发送信息给串口
+void SendDebugInfo(const unsigned char* pData, uint16_t uLength)
 {
-	while(HAL_OK != HAL_UART_Transmit_IT(pHUart,pData,uLength))
+	if(GetUartCount() < 1) return;
+	UART_HandleTypeDef* pHUart = GetUart(1);
+	while(HAL_OK != HAL_UART_Transmit_DMA(pHUart,pData,uLength))
 	{
 		osDelay(10);
 	}
 	UpdateUartSendInfo(pHUart,uLength);
 }
 
+/// 请求空间
+void* RequestSpace(size_t unSize)
+{
+	void* pBuffer = pvPortMalloc(unSize);
+	if(NULL != pBuffer)
+	{
+		memset(pBuffer,0,unSize);
+	}
+	
+	return(pBuffer);
+}
+
+/// 回收空间
+void RecycleSpace(void* pBuffer)
+{
+	vPortFree(pBuffer);
+}
 /// 让板子休眠
 void SetBoardSleep()
 {

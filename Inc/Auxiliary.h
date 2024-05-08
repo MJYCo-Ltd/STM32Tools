@@ -8,8 +8,8 @@
  *  Created on: Apr 12, 2024
  *      Author: yty
  */
-#ifndef __YTY_AUXILIARY_H
-#define __YTY_AUXILIARY_H
+#ifndef __YTY_AUXILIARY_H_
+#define __YTY_AUXILIARY_H_
 #include "stm32f1xx_hal.h"
 
 typedef enum
@@ -24,13 +24,34 @@ typedef struct
 	uint8_t unCPURate;      /// CPU使用率
 	uint8_t unCPUFrequency; /// CPU主频
 }STMSTATUS;
+
+///接收数据
+typedef struct
+{
+	uint64_t unReciveCount; /// 接收到的数据总数 (字节)
+	uint64_t unSendCount;   /// 发送的数据总数 (字节)
+	uint64_t unDealCount;   /// 处理的数据总数 (字节)
+}IOInfo;
+
 /**
- * 发送信息到串口
- *@pragma pHUart  指向串口句柄的指针
+ * 发送调试信息
  *@pragma pData   要打印的字符串
  *@pragma unLength 要打印的字符串长度
  */
-void SendInfo2Uart(UART_HandleTypeDef* pHUart,const unsigned char* pData, uint16_t unLength);
+void SendDebugInfo(const unsigned char* pData, uint16_t unLength);
+
+/**
+ * 请求新的空间
+ *@pragma unSize 要开辟空间的字节大小
+ *@return 如果剩余空间大小小于申请的空间返回NULL
+ *@attention 返回的空间都进行了置零操作
+ */
+void* RequestSpace(size_t unSize);
+
+/**
+ * 回收空间
+ */
+void RecycleSpace(void* pBuffer);
 
 /**
  *更改单片机状态
