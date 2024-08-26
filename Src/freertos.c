@@ -65,11 +65,14 @@ osTimerId_t TimerHandle;
 const osTimerAttr_t Timer_attributes = {
   .name = "Timer"
 };
+/* Definitions for ReceiveData */
+osEventFlagsId_t ReceiveDataHandle;
+const osEventFlagsAttr_t ReceiveData_attributes = {
+  .name = "ReceiveData"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-uint8_t GetCPUUsage(void);
-extern UART_HandleTypeDef huart1;
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -84,46 +87,22 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
 void vApplicationMallocFailedHook(void);
 
 /* USER CODE BEGIN 2 */
-void vApplicationIdleHook( void )
-{
-   if(NULL == xIdleHandle)
-	 {
-		 xIdleHandle = xTaskGetCurrentTaskHandle();
-	 }
-}
 /* USER CODE END 2 */
 
 /* USER CODE BEGIN 3 */
-void vApplicationTickHook( void )
-{
-	if(NULL != xIdleHandle)
-	{
-		static uint16_t S_LOCAL_TICK=0;
-		if(S_LOCAL_TICK++ > CALCULATION_PERIOD)
-		{
-			S_LOCAL_TICK = 0;
-			if(osCPU_IdleTotalTime > CALCULATION_PERIOD)
-			{
-				osCPU_IdleTotalTime = CALCULATION_PERIOD;
-			}
-			osCPU_Usege = (100-(osCPU_IdleTotalTime*100)/CALCULATION_PERIOD);
-			osCPU_IdleTotalTime = 0;
-		}
-	}
-}
 /* USER CODE END 3 */
 
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 {
-   SendInfo2Uart(&huart1,(const unsigned char*)pcTaskName,strlen((const char*)pcTaskName));
+   SendDebugInfo((const unsigned char*)pcTaskName,strlen((const char*)pcTaskName));
 }
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN 5 */
 void vApplicationMallocFailedHook(void)
 {
-   SendInfo2Uart(&huart1,"Malloc Failed",13);
+   SendDebugInfo("Malloc Failed",13);
 }
 /* USER CODE END 5 */
 
@@ -165,6 +144,10 @@ void MX_FREERTOS_Init(void) {
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
+  /* Create the event(s) */
+  /* creation of ReceiveData */
+  ReceiveDataHandle = osEventFlagsNew(&ReceiveData_attributes);
+
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
@@ -194,18 +177,15 @@ void Timer_100ms(void *argument)
 {
   /* USER CODE BEGIN Timer_100ms */
 	static char test[76]="";
-	sprintf(test,"cpu usage %d\n",GetCPUUsage());
-	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
-	osDelay(10);
 	sprintf(test,"heap size %d\n",xPortGetFreeHeapSize());
-	SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
+	SendDebugInfo((const unsigned char*)test,strlen(test));
 	osDelay(10);
 	for(uint8_t index=0;index<GetUartCount();++index)
 	{
-		const UartIOInfo* pIOInfo = GetUartIOInfo(index);
+		const IOInfo* pIOInfo = GetUartIOInfo(index);
 		sprintf(test,"%d Uart Recive %llu bytes Deal %llu bytes\nSend %llu bytes\n",index,
 		pIOInfo->unReciveCount,pIOInfo->unDealCount,pIOInfo->unSendCount);
-	  SendInfo2Uart(&huart1,(const unsigned char*)test,strlen(test));
+	  SendDebugInfo((const unsigned char*)test,strlen(test));
 	}
 
   /* USER CODE END Timer_100ms */
@@ -213,26 +193,5 @@ void Timer_100ms(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-void StartIdleMonitor(void)
-{
-	if(xTaskGetCurrentTaskHandle()==xIdleHandle)
-	{
-		osCPU_IdleStartTime = xTaskGetTickCountFromISR();
-	}
-}
-
-void EndIdleMonitor(void)
-{
-	if(xTaskGetCurrentTaskHandle()==xIdleHandle)
-	{
-		osCPU_IdleSpentTime = xTaskGetTickCountFromISR() - osCPU_IdleStartTime;
-		osCPU_IdleTotalTime += osCPU_IdleSpentTime;
-	}
-}
-
-uint8_t GetCPUUsage(void)
-{
-	return(osCPU_Usege);
-}
 /* USER CODE END Application */
 

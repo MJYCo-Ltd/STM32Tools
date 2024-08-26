@@ -56,7 +56,7 @@ uint8_t AddUart(UART_HandleTypeDef* pHUart,ReceiveUartCallback pCallback)
 	}
 	else
 	{
-		pUartInfo->hQueueId = osMessageQueueNew( 2, sizeof(UartQueueInfo),NULL);
+		pUartInfo->hQueueId = osMessageQueueNew(10, sizeof(UartQueueInfo),NULL);
 		///绑定
 		pUartInfo->pHUart = pHUart;
 		pUartInfo->pCallback = pCallback;
@@ -132,7 +132,7 @@ void ProcessUart(void)
 		Uart_Info* pUartInfo = pUartInfoArray[index];
 		if(NULL != pUartInfo->pHUart)
 		{
-			if(osMessageQueueGetCount(pUartInfo->hQueueId) > 0 && 
+			while(osMessageQueueGetCount(pUartInfo->hQueueId) > 0 && 
 				osOK == osMessageQueueGet(pUartInfo->hQueueId,&LOCAL_QUEUE_INFO,NULL,NULL))
 			{
 				/// 如果长度小于整个缓冲区得长度

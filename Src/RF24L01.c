@@ -33,7 +33,7 @@ uint8_t NRF24L01_Read_Reg( uint8_t RegAddr )
     uint8_t btmp;
 	
     RF24L01_SET_CS_LOW( );			//片选
-    HAL_SPI_Transmit();
+    //HAL_SPI_Transmit();
     drv_spi_read_write_byte( NRF_READ_REG | RegAddr );	//读命令 地址
     btmp = drv_spi_read_write_byte( 0xFF );				//读数据
 	

@@ -63,6 +63,6 @@ STMSTATUS GetStatus(void)
 {
 	static STMSTATUS S_LOCAL={0,0,0,0};
 	S_LOCAL.unRamFree = xPortGetFreeHeapSize();
-	S_LOCAL.unCPURate = GetCPUUsage();
+//	S_LOCAL.unCPURate = GetCPUUsage();
 	return(S_LOCAL);
 }
