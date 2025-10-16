@@ -16,7 +16,7 @@ void SendDebugInfo(const unsigned char* pData, uint16_t uLength)
 	UART_HandleTypeDef* pHUart = GetUart(1);
 	while(HAL_OK != HAL_UART_Transmit_DMA(pHUart,pData,uLength))
 	{
-		osDelay(10);
+		osDelay(1);
 	}
 	UpdateUartSendInfo(pHUart,uLength);
 }

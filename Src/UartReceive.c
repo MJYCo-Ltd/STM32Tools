@@ -123,6 +123,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize)
 	}
 }
 
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	huart->gState = HAL_UART_STATE_READY;
+}
 /// 定时处理数据
 void ProcessUart(void)
 {
