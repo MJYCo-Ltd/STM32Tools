@@ -1,25 +1,5 @@
-#include <stdio.h>
-#include <string.h>
-#include "main.h"
-#include "cmsis_os.h"
-#include "epd_uc8253.h"
-#include "Auxiliary.h"
-
-#define SELECT_EPD HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET)
-#define UNSELECT_EPD HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET)
-
-#define EPD_CMD HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_RESET)
-#define EPD_DATA HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET)
-
-#define EPD_ISBUSY (HAL_GPIO_ReadPin(BUSY_GPIO_Port, BUSY_Pin) == GPIO_PIN_RESET)
-
-#define SCL_UNDER HAL_GPIO_WritePin(SCL_GPIO_Port, SCL_Pin, GPIO_PIN_RESET)
-#define SCL_HIGH HAL_GPIO_WritePin(SCL_GPIO_Port, SCL_Pin, GPIO_PIN_SET)
-
-#define SDA_UNDER HAL_GPIO_WritePin(SDA_GPIO_Port, SDA_Pin, GPIO_PIN_RESET)
-#define SDA_HIGH HAL_GPIO_WritePin(SDA_GPIO_Port, SDA_Pin, GPIO_PIN_SET)
-
-//extern SPI_HandleTypeDef hspi1;
+#include "EPD/epd_uc8253.h"
+#include "EPD/epd_uc8253_User.c"
 
 // ===================== LUT 全刷新 =====================
 static const uint8_t lut_full_update[] = {
@@ -43,59 +23,6 @@ static const uint8_t lut_partial_update[] = {
     0x13, 0x11, 0x00, 0x00, 0x00, 0x00
 };
 
-//void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef* hspi)
-//{
-//    hspi->State = HAL_SPI_STATE_READY;
-//}
-
-//void SPI_Write(unsigned char value)
-//{
-//    uint8_t timeout = 3;
-//    while (HAL_OK != HAL_SPI_Transmit(&hspi1, &value, 1, 1)&& timeout--)
-//    {
-//        osDelay(1);
-//    }
-//
-//    if (timeout == 0)
-//    {
-//        SendDebugInfo("SPI TIMEOUT", 11);
-//    }
-//}
-
-//void SPI_WriteBuffer(const unsigned char* pBuffer,uint16_t unLength)
-//{
-//    uint8_t timeout = 3;
-//    while (HAL_OK != HAL_SPI_Transmit(&hspi1, pBuffer, unLength, 20)&& timeout--)
-//    {
-//        osDelay(1);
-//    }
-//
-//    if (timeout == 0)
-//    {
-//        SendDebugInfo("Buffer TIMEOUT", 14);
-//    }
-//}
-
-void SPI_Write(uint8_t dat)
-{
-    uint8_t i;
-    SELECT_EPD;
-    for(i=0;i<8;i++)
-    {
-        SCL_UNDER;
-        if(dat&0x80)
-        {
-            SDA_HIGH;
-        }
-        else
-        {
-            SDA_UNDER;
-        }
-        SCL_HIGH;
-        dat<<=1;
-    }
-    UNSELECT_EPD;
-}
 // ================= 低层通信函数 =================
 void EPD_SendCommand(uint8_t cmd) {
     SELECT_EPD;
@@ -115,32 +42,18 @@ void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength)
 {
     SELECT_EPD;
     EPD_DATA;
-    //SPI_WriteBuffer(pBuffer,unLength);
+    SPI_WriteBuffer(pBuffer,unLength);
     UNSELECT_EPD;
-}
-
-void EPD_WaitUntilIdle(void)
-{
-    uint32_t timeout = 5000;
-    while (EPD_ISBUSY && timeout--)
-    {
-        osDelay(1);
-    }
-    if (timeout == 0)
-    {
-        SendDebugInfo("BUSY TIMEOUT", 12);
-    }
 }
 
 // ================= 电源管理 =================
 void EPD_Wakeup(void) {
     EPD_SendCommand(EPD_CMD_POWER_ON); // Power ON
-    EPD_WaitUntilIdle();
 }
 
 void EPD_Sleep(void) {
-    EPD_SendCommand(EPD_CMD_POWER_OFF); // Power OFF
-    EPD_SendCommand(EPD_CMD_DEEP_SLEEP); // Deep Sleep
+    EPD_SendCommand(EPD_CMD_POWER_OFF);
+    EPD_SendCommand(EPD_CMD_DEEP_SLEEP);
     EPD_SendData(0xA5);
 }
 
@@ -183,11 +96,7 @@ void EPD_DisplayPartialBuffer(uint8_t* buffer) {
 // ================= 初始化 =================
 void EPD_Init(void) {
     // 硬复位
-    HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_RESET);
-    osDelay(1);
-    HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_SET);
-    osDelay(1);
-    EPD_WaitUntilIdle();
+    EPD_Rest();
 
 
     // Power Setting
