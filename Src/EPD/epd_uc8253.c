@@ -21,368 +21,344 @@
 
 //extern SPI_HandleTypeDef hspi1;
 
-// ===================== LUT È«Ë¢ÐÂ =====================
+// ===================== LUT å…¨åˆ·æ–° =====================
 static const uint8_t lut_full_update[] = {
-	0x80, 0x48, 0x40, 0x00, 0x00, 0x00,
-	0x40, 0x48, 0x80, 0x00, 0x00, 0x00,
-	0x80, 0x48, 0x40, 0x00, 0x00, 0x00,
-	0x40, 0x48, 0x80, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00,
-	0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00
+    0x80, 0x48, 0x40, 0x00, 0x00, 0x00,
+    0x40, 0x48, 0x80, 0x00, 0x00, 0x00,
+    0x80, 0x48, 0x40, 0x00, 0x00, 0x00,
+    0x40, 0x48, 0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00,
+    0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00
 };
 
-// ===================== LUT ¾Ö²¿Ë¢ÐÂ =====================
+// ===================== LUT å±€éƒ¨åˆ·æ–° =====================
 static const uint8_t lut_partial_update[] = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x80, 0x80, 0x00, 0x00, 0x00, 0x00,
-	0x80, 0x80, 0x00, 0x00, 0x00, 0x00,
-	0x10, 0x10, 0x00, 0x00, 0x00, 0x00,
-	0x10, 0x10, 0x00, 0x00, 0x00, 0x00,
-	0x13, 0x11, 0x00, 0x00, 0x00, 0x00,
-	0x13, 0x11, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x80, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x80, 0x00, 0x00, 0x00, 0x00,
+    0x10, 0x10, 0x00, 0x00, 0x00, 0x00,
+    0x10, 0x10, 0x00, 0x00, 0x00, 0x00,
+    0x13, 0x11, 0x00, 0x00, 0x00, 0x00,
+    0x13, 0x11, 0x00, 0x00, 0x00, 0x00
 };
 
 //void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef* hspi)
 //{
-//	hspi->State = HAL_SPI_STATE_READY;
+//    hspi->State = HAL_SPI_STATE_READY;
 //}
 
 //void SPI_Write(unsigned char value)
 //{
-//	uint8_t timeout = 3;
-//	while (HAL_OK != HAL_SPI_Transmit(&hspi1, &value, 1, 1)&& timeout--)
-//	{
-//		osDelay(1);
-//	}
-//	
-//	if (timeout == 0)
-//	{
-//		SendDebugInfo("SPI TIMEOUT", 11);
-//	}
+//    uint8_t timeout = 3;
+//    while (HAL_OK != HAL_SPI_Transmit(&hspi1, &value, 1, 1)&& timeout--)
+//    {
+//        osDelay(1);
+//    }
+//
+//    if (timeout == 0)
+//    {
+//        SendDebugInfo("SPI TIMEOUT", 11);
+//    }
 //}
 
 //void SPI_WriteBuffer(const unsigned char* pBuffer,uint16_t unLength)
 //{
-//	uint8_t timeout = 3;
-//	while (HAL_OK != HAL_SPI_Transmit(&hspi1, pBuffer, unLength, 20)&& timeout--)
-//	{
-//		osDelay(1);
-//	}
-//	
-//	if (timeout == 0)
-//	{
-//		SendDebugInfo("Buffer TIMEOUT", 14);
-//	}
+//    uint8_t timeout = 3;
+//    while (HAL_OK != HAL_SPI_Transmit(&hspi1, pBuffer, unLength, 20)&& timeout--)
+//    {
+//        osDelay(1);
+//    }
+//
+//    if (timeout == 0)
+//    {
+//        SendDebugInfo("Buffer TIMEOUT", 14);
+//    }
 //}
 
 void SPI_Write(uint8_t dat)
 {
-	uint8_t i;
-	SELECT_EPD;
-	for(i=0;i<8;i++)
-	{
-		SCL_UNDER;
-		if(dat&0x80)
-		{
-			SDA_HIGH;
-		}
-		else
-		{
-			SDA_UNDER;
-		}
-		SCL_HIGH;
-		dat<<=1;
-	}
-	UNSELECT_EPD;	
+    uint8_t i;
+    SELECT_EPD;
+    for(i=0;i<8;i++)
+    {
+        SCL_UNDER;
+        if(dat&0x80)
+        {
+            SDA_HIGH;
+        }
+        else
+        {
+            SDA_UNDER;
+        }
+        SCL_HIGH;
+        dat<<=1;
+    }
+    UNSELECT_EPD;
 }
-// ================= µÍ²ãÍ¨ÐÅº¯Êý =================
+// ================= ä½Žå±‚é€šä¿¡å‡½æ•° =================
 void EPD_SendCommand(uint8_t cmd) {
-	SELECT_EPD;
-	EPD_CMD;
-	SPI_Write(cmd);
-	UNSELECT_EPD;
+    SELECT_EPD;
+    EPD_CMD;
+    SPI_Write(cmd);
+    UNSELECT_EPD;
 }
 
 void EPD_SendData(uint8_t data) {
-	SELECT_EPD;
-	EPD_DATA;
-	SPI_Write(data);
-	UNSELECT_EPD;
+    SELECT_EPD;
+    EPD_DATA;
+    SPI_Write(data);
+    UNSELECT_EPD;
 }
 
 void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength)
 {
-	SELECT_EPD;
-	EPD_DATA;
-	//SPI_WriteBuffer(pBuffer,unLength);
-	UNSELECT_EPD;
+    SELECT_EPD;
+    EPD_DATA;
+    //SPI_WriteBuffer(pBuffer,unLength);
+    UNSELECT_EPD;
 }
 
 void EPD_WaitUntilIdle(void)
 {
-	uint32_t timeout = 5000;
-	while (EPD_ISBUSY && timeout--)
-	{
-		osDelay(1);
-	}
-	if (timeout == 0)
-	{
-		SendDebugInfo("BUSY TIMEOUT", 12);
-	}
+    uint32_t timeout = 5000;
+    while (EPD_ISBUSY && timeout--)
+    {
+        osDelay(1);
+    }
+    if (timeout == 0)
+    {
+        SendDebugInfo("BUSY TIMEOUT", 12);
+    }
 }
 
-// ================= µçÔ´¹ÜÀí =================
+// ================= ç”µæºç®¡ç† =================
 void EPD_Wakeup(void) {
-	EPD_SendCommand(0x04); // Power ON
-	EPD_WaitUntilIdle();
+    EPD_SendCommand(EPD_CMD_POWER_ON); // Power ON
+    EPD_WaitUntilIdle();
 }
 
 void EPD_Sleep(void) {
-	EPD_SendCommand(0x02); // Power OFF
-	EPD_SendCommand(0x07); // Deep Sleep
-	EPD_SendData(0xA5);
+    EPD_SendCommand(EPD_CMD_POWER_OFF); // Power OFF
+    EPD_SendCommand(EPD_CMD_DEEP_SLEEP); // Deep Sleep
+    EPD_SendData(0xA5);
 }
 
 void EPD_LoadLUT(const uint8_t* lut, uint8_t is_partial) {
-	if (is_partial) {
-		EPD_SendCommand(0x21);  // ¾ÖË¢ LUT µØÖ·
-	}
-	else {
-		EPD_SendCommand(0x20);  // È«Ë¢ LUT µØÖ·
-	}
+    if (is_partial) {
+        EPD_SendCommand(EPD_CMD_W2W_LUT);  // å±€åˆ· LUT åœ°å€
+    }
+    else {
+        EPD_SendCommand(EPD_CMD_VCOM_LUT);  // å…¨åˆ· LUT åœ°å€
+    }
 
-	for (uint8_t i = 0; i < 42; i++) {
-		EPD_SendData(lut[i]);
-	}
+    for (uint8_t i = 0; i < 42; i++) {
+        EPD_SendData(lut[i]);
+    }
 }
 
-// È«ÆÁË¢ÐÂ
+// å…¨å±åˆ·æ–°
 void EPD_DisplayFull(uint8_t* buffer) {
-	EPD_LoadLUT(lut_full_update, 0);
-	EPD_SendCommand(0x13);
-	for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
-		EPD_SendData(buffer[i]);
-	}
-	EPD_SendCommand(0x12);
+    EPD_LoadLUT(lut_full_update, 0);
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
+        EPD_SendData(buffer[i]);
+    }
+    EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
 }
 
-// ¾Ö²¿Ë¢ÐÂ£¨¿ìËÙ£¬²»ÉÁÆÁ£©
+// å±€éƒ¨åˆ·æ–°ï¼ˆå¿«é€Ÿï¼Œä¸é—ªå±ï¼‰
 void EPD_DisplayPartialBuffer(uint8_t* buffer) {
-	EPD_LoadLUT(lut_partial_update, 1);
+    EPD_LoadLUT(lut_partial_update, 1);
 
-	EPD_SendCommand(0x91); // ½øÈë¾Ö²¿Ä£Ê½
-	EPD_SendCommand(0x13);
-	for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
-		EPD_SendData(buffer[i]);
-	}
-	EPD_SendCommand(0x12);
-	EPD_SendCommand(0x92); // ÍË³ö¾Ö²¿Ä£Ê½
+    EPD_SendCommand(EPD_CMD_PARTIAL_IN); // è¿›å…¥å±€éƒ¨æ¨¡å¼
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
+        EPD_SendData(buffer[i]);
+    }
+    EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
+    EPD_SendCommand(EPD_CMD_PARTIAL_OUT); // é€€å‡ºå±€éƒ¨æ¨¡å¼
 }
 
-// ================= ³õÊ¼»¯ =================
+// ================= åˆå§‹åŒ– =================
 void EPD_Init(void) {
-	// Ó²¸´Î»
-	HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_RESET);
-	osDelay(1);
-	HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_SET);
-	osDelay(1);
-	EPD_WaitUntilIdle();
+    // ç¡¬å¤ä½
+    HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_RESET);
+    osDelay(1);
+    HAL_GPIO_WritePin(RES_GPIO_Port, RES_Pin, GPIO_PIN_SET);
+    osDelay(1);
+    EPD_WaitUntilIdle();
 
 
-	// Power Setting
-	// Ê¹ÄÜÄÚ²¿µçÔ´£¬Éè¶¨ VGH/VGL/VSH/VSL/VDHR
-	//EPD_SendCommand(0x01);
-	//EPD_SendData(0x03);   // VDS_EN=1, VDG_EN=1 (ÄÚ²¿¹©µç)
-	//EPD_SendData(0x10);   // VGH/VGL = ¡À20V
-	//EPD_SendData(0x3F);   // VSH = +15V
-	//EPD_SendData(0x3F);   // VSL = -15V
-	//EPD_SendData(0x0D);   // VDHR = +13V
+    // Power Setting
+    // ä½¿èƒ½å†…éƒ¨ç”µæºï¼Œè®¾å®š VGH/VGL/VSH/VSL/VDHR
+    //EPD_SendCommand(0x01);
+    //EPD_SendData(0x03);   // VDS_EN=1, VDG_EN=1 (å†…éƒ¨ä¾›ç”µ)
+    //EPD_SendData(0x10);   // VGH/VGL = Â±20V
+    //EPD_SendData(0x3F);   // VSH = +15V
+    //EPD_SendData(0x3F);   // VSL = -15V
+    //EPD_SendData(0x0D);   // VDHR = +13V
 
-	// Booster soft start
-	//EPD_SendCommand(0x06);
-	//EPD_SendData(0x17);
-	//EPD_SendData(0x17);
-	//EPD_SendData(0x17);
+    // Booster soft start
+    //EPD_SendCommand(0x06);
+    //EPD_SendData(0x17);
+    //EPD_SendData(0x17);
+    //EPD_SendData(0x17);
 
-	// Panel Setting
-	// Bit: [RES1 RES0 REG KW/R UD SHL SHD_N RST_N]
-	// ÉèÖÃ·Ö±æÂÊÀàÐÍ¡¢É¨Ãè·½Ïò¡¢Booster ON
-	EPD_SendCommand(0x00);
-	EPD_SendData(0x1B);   // 240¡Á416 + ·´ÏòÉ¨Ãè
-	//EPD_SendData(0x8D);
-	//EPD_SendData(0x0F);   // RES=11b ¡ú 480x240 Ä£Ê½£»SHD_N=1£¬Booster ON
-	//EPD_SendData(0x8D);   // ÄÚ²¿ÎÂ¶È´«¸ÐÆ÷¡¢VCOM×Ô¶¯¸¡¿Õ
+    // Panel Setting
+    // Bit: [RES1 RES0 REG KW/R UD SHL SHD_N RST_N]
+    // è®¾ç½®åˆ†è¾¨çŽ‡ç±»åž‹ã€æ‰«ææ–¹å‘ã€Booster ON
+    EPD_SendCommand(EPD_CMD_PANEL_SETTING);
+    EPD_SendData(0x1B);   // 240Ã—416 + åå‘æ‰«æ
+    //EPD_SendData(0x8D);
+    //EPD_SendData(0x0F);   // RES=11b â†’ 480x240 æ¨¡å¼ï¼›SHD_N=1ï¼ŒBooster ON
+    //EPD_SendData(0x8D);   // å†…éƒ¨æ¸©åº¦ä¼ æ„Ÿå™¨ã€VCOMè‡ªåŠ¨æµ®ç©º
 
-	// ·Ö±æÂÊÉèÖÃ (0x61)
-	// Êý¾Ý¸ñÊ½: HRES[7:0], HRES[15:8], VRES[7:0], VRES[15:8]
-//	EPD_SendCommand(0x61);
-//	EPD_SendData(0xF0);
+    // åˆ†è¾¨çŽ‡è®¾ç½® (0x61)
+    // æ•°æ®æ ¼å¼: HRES[7:0], HRES[15:8], VRES[7:0], VRES[15:8]
+//    EPD_SendCommand(EPD_CMD_RESOLUTION_SETTING);
+//    EPD_SendData(0xF0);
 //  EPD_SendData(1);
 //  EPD_SendData(0xA0);
 
-	// VCOM ÓëÊý¾Ý¼ä¸ôÉèÖÃ (CDI)
-	//EPD_SendCommand(0x50);
-	//EPD_SendData(0x97);   // ÍÆ¼öÖµ: VBD=11, DDX=01, CDI=0111
+    // VCOM ä¸Žæ•°æ®é—´éš”è®¾ç½® (CDI)
+    //EPD_SendCommand(EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING);
+    //EPD_SendData(0x97);   // æŽ¨èå€¼: VBD=11, DDX=01, CDI=0111
 
-	// Ê¹ÓÃÄÚÖÃÎÂ¶È´«¸ÐÆ÷
-	//EPD_SendCommand(0x41);
-	//EPD_SendData(0x00);
-	
-	//EPD_SendCommand(0x20);
-	
-	//EPD_SendCommand(0xE5);
-	//EPD_SendData(0x5F);
-	EPD_SendCommand(0xE0);
-	EPD_SendData(0x02);
-	EPD_SendCommand(0xE5);
-	EPD_SendData(0x6E);
-	// Power ON
-	EPD_Wakeup();
+    // ä½¿ç”¨å†…ç½®æ¸©åº¦ä¼ æ„Ÿå™¨
+    //EPD_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_SELECTION);
+    //EPD_SendData(0x00);
+    
+    //EPD_SendCommand(0x20);
+    
+    //EPD_SendCommand(0xE5);
+    //EPD_SendData(0x5F);
+    EPD_SendCommand(0xE0);
+    EPD_SendData(0x02);
+    EPD_SendCommand(0xE5);
+    EPD_SendData(0x6E);
+    // Power ON
+    EPD_Wakeup();
 
-	// µÈ´ýÏµÍ³ÎÈ¶¨
-	osDelay(100);
+    // ç­‰å¾…ç³»ç»Ÿç¨³å®š
+    osDelay(100);
 }
 
 extern uint8_t epd_frame[12480];
 void EPD_Display_Clear(void)
 {
-	uint16_t i,j,Width,Height;
-	Width=(EPD_WIDTH%8==0)?(EPD_WIDTH/8):(EPD_WIDTH/8+1);
-	Height=EPD_HEIGHT;
-	EPD_SendCommand(0x10);
-	for (j=0;j<Height;j++) 
-	{
-		for (i=0;i<Width;i++) 
-		{
-			EPD_SendData(epd_frame[i+j*Width]);
-		}
-	}
-	EPD_SendCommand(0x13);
-	for (j=0;j<Height;j++) 
-	{
-		for (i=0;i<Width;i++) 
-		{
-			EPD_SendData(0xFF);
-			epd_frame[i+j*Width]=0xFF;
-		}
-	}
+    uint16_t i,j,Width,Height;
+    Width=(EPD_WIDTH%8==0)?(EPD_WIDTH/8):(EPD_WIDTH/8+1);
+    Height=EPD_HEIGHT;
+    EPD_SendCommand(0x10);
+    for (j=0;j<Height;j++)
+    {
+        for (i=0;i<Width;i++)
+        {
+            EPD_SendData(epd_frame[i+j*Width]);
+        }
+    }
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (j=0;j<Height;j++)
+    {
+        for (i=0;i<Width;i++)
+        {
+            EPD_SendData(0xFF);
+            epd_frame[i+j*Width]=0xFF;
+        }
+    }
 
 }
 
-// ================= ÏÔÊ¾Ïà¹Ø =================
+// ================= æ˜¾ç¤ºç›¸å…³ =================
 void EPD_Clear(void) {
-	uint16_t Width = (EPD_WIDTH % 8 == 0) ? (EPD_WIDTH / 8) : (EPD_WIDTH / 8 + 1);
-	uint16_t Height = EPD_HEIGHT;
-	uint16_t totoal = Width * Height;
-	if(totoal == 12480)
-	{
-		SendDebugInfo("OK", 2);
-	}
 
-	EPD_SendCommand(0x10); // Old data
-	for (uint32_t i = 0; i < Width * Height; i++) {
-		EPD_SendData(EPD_COLOR_WHITE);
-	}
-  uint8_t value=0;
-	EPD_WaitUntilIdle();
-	//EPD_SendCommand(0x11);
-//	if(HAL_OK == HAL_SPI_Receive(&hspi1, &value, 1, 1))
-//	{
-//		if(0 == value){
-//			SendDebugInfo("0", 2);
-//		}
-//	}
+    // é»‘ç™½å±ä¸ºè€æ•°æ®
+    // é»‘ç™½çº¢å±ä¸ºé»‘ç™½æ•°æ®
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+    for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
+        EPD_SendData(EPD_COLOR_WHITE);
+    }
+    EPD_WaitUntilIdle();
 
-	EPD_SendCommand(0x13); // New data
-	for (uint32_t i = 0; i < Width * Height; i++) {
-		EPD_SendData(EPD_COLOR_WHITE);
-	}
-
-	EPD_WaitUntilIdle();
-	//EPD_SendCommand(0x11);
-//	if(HAL_OK == HAL_SPI_Receive(&hspi1, &value, 1, 1))
-//	{
-//		if(0 == value){
-//			SendDebugInfo("0", 2);
-//		}
-//		if(1 == value){
-//			SendDebugInfo("1", 2);
-//		}
-//	}
-	EPD_DisplayFrame();
-	EPD_WaitUntilIdle();
-	osDelay(3000);
-
-	SendDebugInfo("2", 2);
+    // åœ¨é»‘ç™½å±æ­¤å¤„ä¸ºæ–°æ•°æ®ï¼Œé»‘ç™½çº¢ä¸‰è‰²å±æ­¤å¤„ä¸ºçº¢è‰²çš„æ•°æ®
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
+        EPD_SendData(EPD_COLOR_WHITE);
+    }
+    EPD_WaitUntilIdle();
+    
+    // å‘é€åˆ·æ–°å±å¹•å‘½ä»¤
+    EPD_DisplayFrame();
+    EPD_WaitUntilIdle();
 }
 
 void EPD_Display(const uint8_t *image)
 {
-	uint16_t i,j,uWidth,uHeight;
-	uWidth=(EPD_WIDTH%8==0)?(EPD_WIDTH/8):(EPD_WIDTH/8+1);
-	uHeight=EPD_HEIGHT;
-	EPD_SendCommand(0x10);
-	for (j=0;j<uHeight;j++) 
-	{
-		for (i=0;i<uWidth;i++) 
-		{
-			EPD_SendData(epd_frame[i+j*uWidth]);
-		}
-	}
-	EPD_SendCommand(0x13);
-	for (j=0;j<uHeight;j++) 
-	{
-		for (i=0;i<uWidth;i++) 
-		{
-			EPD_SendData(image[i+j*uWidth]);
-			epd_frame[i+j*uWidth]=image[i+j*uWidth];
-		}
-	}
+    uint16_t i,j,uWidth,uHeight;
+    uWidth=(EPD_WIDTH%8==0)?(EPD_WIDTH/8):(EPD_WIDTH/8+1);
+    uHeight=EPD_HEIGHT;
+    EPD_SendCommand(0x10);
+    for (j=0;j<uHeight;j++)
+    {
+        for (i=0;i<uWidth;i++)
+        {
+            EPD_SendData(epd_frame[i+j*uWidth]);
+        }
+    }
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (j=0;j<uHeight;j++)
+    {
+        for (i=0;i<uWidth;i++)
+        {
+            EPD_SendData(image[i+j*uWidth]);
+            epd_frame[i+j*uWidth]=image[i+j*uWidth];
+        }
+    }
 
 }
 
 void EPD_DisplayFrame(void) {
-	EPD_Wakeup();
-	EPD_WaitUntilIdle();
-	EPD_SendCommand(0x12); // DISPLAY REFRESH
-	EPD_WaitUntilIdle();
-	osDelay(10);
+    EPD_Wakeup();
+    EPD_WaitUntilIdle();
+    EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH); // DISPLAY REFRESH
+    EPD_WaitUntilIdle();
+    osDelay(10);
 }
 
-// ================= ¾Ö²¿Ë¢ÐÂ =================
+// ================= å±€éƒ¨åˆ·æ–° =================
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t* data) {
-	if ((x + w) > EPD_WIDTH || (y + h) > EPD_HEIGHT) return;
+    if ((x + w) > EPD_WIDTH || (y + h) > EPD_HEIGHT) return;
 
-	uint16_t x_start = x & 0xFFF8; // ¶ÔÆëµ½8Î»
-	uint16_t x_end = x + w - 1;
-	uint16_t y_start = y;
-	uint16_t y_end = y + h - 1;
+    uint16_t x_start = x & 0xFFF8; // å¯¹é½åˆ°8ä½
+    uint16_t x_end = x + w - 1;
+    uint16_t y_start = y;
+    uint16_t y_end = y + h - 1;
 
-	// ½øÈë²¿·ÖË¢ÐÂÄ£Ê½
-	EPD_SendCommand(0x91); // partial in
+    // è¿›å…¥éƒ¨åˆ†åˆ·æ–°æ¨¡å¼
+    EPD_SendCommand(EPD_CMD_PARTIAL_IN); // partial in
 
-	// ÉèÖÃ´°¿Ú
-	EPD_SendCommand(0x90);
-	EPD_SendData((x_start >> 8) & 0xFF);
-	EPD_SendData(x_start & 0xFF);
-	EPD_SendData((x_end >> 8) & 0xFF);
-	EPD_SendData(x_end & 0xFF);
-	EPD_SendData((y_start >> 8) & 0xFF);
-	EPD_SendData(y_start & 0xFF);
-	EPD_SendData((y_end >> 8) & 0xFF);
-	EPD_SendData(y_end & 0xFF);
-	EPD_SendData(0x01); // enable
+    // è®¾ç½®çª—å£
+    EPD_SendCommand(EPD_CMD_PARTIAL_WINDOW);
+    EPD_SendData((x_start >> 8) & 0xFF);
+    EPD_SendData(x_start & 0xFF);
+    EPD_SendData((x_end >> 8) & 0xFF);
+    EPD_SendData(x_end & 0xFF);
+    EPD_SendData((y_start >> 8) & 0xFF);
+    EPD_SendData(y_start & 0xFF);
+    EPD_SendData((y_end >> 8) & 0xFF);
+    EPD_SendData(y_end & 0xFF);
+    EPD_SendData(0x01); // enable
 
-	// Ð´ÈëÍ¼ÏñÊý¾Ý
-	EPD_SendCommand(0x13);
-	for (uint32_t i = 0; i < (w * h) / 8; i++) {
-		EPD_SendData(data[i]);
-	}
+    // å†™å…¥å›¾åƒæ•°æ®
+    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+    for (uint32_t i = 0; i < (w * h) / 8; i++) {
+        EPD_SendData(data[i]);
+    }
 
-	// Ë¢ÐÂ¸ÃÇøÓò
-	EPD_SendCommand(0x12);
+    // åˆ·æ–°è¯¥åŒºåŸŸ
+    EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
 
-	// ÍË³ö²¿·ÖË¢ÐÂÄ£Ê½
-	EPD_SendCommand(0x92);
+    // é€€å‡ºéƒ¨åˆ†åˆ·æ–°æ¨¡å¼
+    EPD_SendCommand(EPD_CMD_PARTIAL_OUT);
 }
