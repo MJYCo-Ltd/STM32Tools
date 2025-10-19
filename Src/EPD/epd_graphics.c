@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include "epd_graphics.h"
+#include "EPD/epd_graphics.h"
 
 uint8_t epd_frame[12480];
 
