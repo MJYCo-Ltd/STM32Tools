@@ -45,7 +45,9 @@ __attribute__((weak)) void SPI_Write(uint8_t data) {
 }
 #endif // NO_SPI_
 __attribute__((weak)) void SPI_WriteBuffer(const unsigned char *pBuffer,
-                                           uint16_t unLength) {}
+                                           uint16_t unLength) {
+  HAL_SPI_Transmit(&hspi1, pBuffer, unLength, HAL_MAX_DELAY);
+}
 
 /// 根据手册RST_N拉低50us以上
 __attribute__((weak)) void EPD_Rest() {

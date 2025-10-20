@@ -29,6 +29,16 @@ void EPD_Sleep(void);
 void EPD_Clear(EPD_COLOR color);
 void EPD_Done(void);
 
+/**
+ * @brief 绘制一个像素颜色
+ * @param x
+ * @param y
+ * @param color
+ */
+void EPD_InitDrawBuffer(EPD_COLOR color);
+void EPD_DrawPixel(uint16_t x, uint16_t y, EPD_COLOR color);
+void EPD_ShowBuffer();
+
 // 局部刷新接口
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *data);
 

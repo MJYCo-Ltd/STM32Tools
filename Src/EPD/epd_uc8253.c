@@ -1,4 +1,5 @@
 #include "EPD/epd_uc8253.h"
+#include <string.h>
 
 #define EPD_COLOR_WHITE 0xFF
 #define EPD_COLOR_BLACK 0x00
@@ -38,22 +39,13 @@
 #define EPD_CMD_PARTIAL_OUT 0x92
 
 ///!设置命令
-
-// ===================== LUT 全刷新 =====================
-static const uint8_t lut_full_update[] = {
-    0x80, 0x48, 0x40, 0x00, 0x00, 0x00, 0x40, 0x48, 0x80, 0x00, 0x00,
-    0x00, 0x80, 0x48, 0x40, 0x00, 0x00, 0x00, 0x40, 0x48, 0x80, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F, 0x0F,
-    0x00, 0x00, 0x00, 0x0F, 0x0F, 0x0F, 0x00, 0x00, 0x00};
-
-// ===================== LUT 局部刷新 =====================
-static const uint8_t lut_partial_update[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 0x00, 0x00, 0x00,
-    0x00, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x10, 0x10, 0x00, 0x00,
-    0x00, 0x00, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x13, 0x11, 0x00,
-    0x00, 0x00, 0x00, 0x13, 0x11, 0x00, 0x00, 0x00, 0x00};
-
 #include "EPD/epd_uc8253_User.c"
+
+/**
+ * @brief epd_WBframe 黑白像素
+ * @brief epd_RFrame  红色像素
+ */
+uint8_t epd_WBframe[EPD_BUFFER_SIZE], epd_Rframe[EPD_BUFFER_SIZE];
 // ================= 低层通信函数 =================
 void EPD_SendCommand(uint8_t cmd) {
   SELECT_EPD;
@@ -94,27 +86,50 @@ void EPD_LoadLUT(const uint8_t *lut, uint8_t is_partial) {
   }
 }
 
-// 全屏刷新
-void EPD_DisplayFull(uint8_t *buffer) {
-  EPD_LoadLUT(lut_full_update, 0);
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
-    EPD_SendData(buffer[i]);
+/// 初始化显存
+void EPD_InitDrawBuffer(EPD_COLOR color) {
+  if (EPD_RED == color) {
+    memset(epd_WBframe, EPD_COLOR_WHITE, EPD_BUFFER_SIZE);
+    memset(epd_Rframe, EPD_COLOR_RED, EPD_BUFFER_SIZE);
+  } else {
+    memset(epd_Rframe, EPD_COLOR_ALPHA, EPD_BUFFER_SIZE);
+    if (EPD_BLACK == color) {
+      memset(epd_WBframe, EPD_COLOR_BLACK, EPD_BUFFER_SIZE);
+    } else {
+      memset(epd_WBframe, EPD_COLOR_WHITE, EPD_BUFFER_SIZE);
+    }
   }
-  EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
 }
 
-// 局部刷新（快速，不闪屏）
-void EPD_DisplayPartialBuffer(uint8_t *buffer) {
-  EPD_LoadLUT(lut_partial_update, 1);
-
-  EPD_SendCommand(EPD_CMD_PARTIAL_IN); // 进入局部模式
+void EPD_ShowBuffer() {
+  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+  EPD_SendBuffer(epd_WBframe, EPD_BUFFER_SIZE);
+  EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  for (uint32_t i = 0; i < (EPD_WIDTH * EPD_HEIGHT) / 8; i++) {
-    EPD_SendData(buffer[i]);
+  EPD_SendBuffer(epd_Rframe, EPD_BUFFER_SIZE);
+  EPD_WaitUntilIdle();
+  EPD_Done();
+}
+
+/// 给每个像素上颜色
+void EPD_DrawPixel(uint16_t x, uint16_t y, EPD_COLOR color) {
+  if (x >= EPD_WIDTH || y >= EPD_HEIGHT)
+    return;
+
+  uint32_t index = x + y * EPD_WIDTH;
+  uint32_t byte_index = index / 8;
+  uint8_t bit_mask = 0x80 >> (index % 8);
+
+  if (color == EPD_RED) {
+    epd_Rframe[byte_index] &= ~bit_mask;
+  } else {
+    epd_Rframe[byte_index] |= bit_mask;
+    if (color == EPD_BLACK) {
+      epd_WBframe[byte_index] &= ~bit_mask;
+    } else {
+      epd_WBframe[byte_index] |= bit_mask;
+    }
   }
-  EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
-  EPD_SendCommand(EPD_CMD_PARTIAL_OUT); // 退出局部模式
 }
 
 // ================= 初始化 =================
