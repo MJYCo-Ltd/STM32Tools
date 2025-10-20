@@ -61,3 +61,27 @@ __attribute__((weak)) void EPD_WaitUntilIdle() {
     osDelay(1);
   }
 }
+
+/// 获取内部温度
+__attribute__((weak)) uint8_t EPD_GetInnerTemp() {
+  EPD_SendCommand(EPD_CMD_POWER_ON);
+  EPD_WaitUntilIdle();
+  EPD_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
+  EPD_WaitUntilIdle();
+
+  uint8_t data;
+  HAL_SPI_Receive(&hspi1, &data, 1, HAL_MAX_DELAY);
+
+  EPD_Sleep();
+  return (data);
+}
+
+/// 检查面板玻璃
+__attribute__((weak)) uint8_t EPD_IsOk() {
+  EPD_SendCommand(EPD_CMD_PANEL_GLASS_CHECK);
+  EPD_WaitUntilIdle();
+
+  uint8_t data;
+  HAL_SPI_Receive(&hspi1, &data, 1, HAL_MAX_DELAY);
+  return (data);
+}

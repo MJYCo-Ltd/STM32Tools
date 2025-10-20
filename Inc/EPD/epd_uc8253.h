@@ -15,6 +15,11 @@ void EPD_WaitUntilIdle();
 ///!跟硬件密切相关的，需要根据硬件修改
 
 // 初始化与基本操作
+/**
+ * @brief EPD_IsOk
+ * @return 1 表示良好 0 表示损坏
+ */
+uint8_t EPD_IsOk(void);
 void EPD_Init(void);
 void EPD_Sleep(void);
 /**

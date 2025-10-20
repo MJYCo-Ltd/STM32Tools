@@ -1,41 +1,41 @@
 #include "EPD/epd_uc8253.h"
-#include "EPD/epd_uc8253_User.c"
 
 #define EPD_COLOR_WHITE 0xFF
 #define EPD_COLOR_BLACK 0x00
 #define EPD_COLOR_RED 0x00
 #define EPD_COLOR_ALPHA 0xFF
 
-///设置命令
+/// 设置命令
 // UC8253 Command Table
-#define EPD_CMD_PANEL_SETTING                     0x00
-#define EPD_CMD_POWER_SETTING                     0x01
-#define EPD_CMD_POWER_OFF                         0x02
-#define EPD_CMD_POWER_ON                          0x04
-#define EPD_CMD_BOOSTER_SOFT_START                0x06
-#define EPD_CMD_DEEP_SLEEP                        0x07
-#define EPD_CMD_DATA_START_TRANSMISSION_1         0x10
-#define EPD_CMD_DATA_STOP                         0x11
-#define EPD_CMD_DISPLAY_REFRESH                   0x12
-#define EPD_CMD_DATA_START_TRANSMISSION_2         0x13
-#define EPD_CMD_AUTO_SEQUENCE                     0x17
-#define EPD_CMD_VCOM_LUT                          0x20
-#define EPD_CMD_W2W_LUT                           0x21
-#define EPD_CMD_B2W_LUT                           0x22
-#define EPD_CMD_W2B_LUT                           0x23
-#define EPD_CMD_B2B_LUT                           0x24
-#define EPD_CMD_PLL_CONTROL                       0x30
-#define EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION    0x40
-#define EPD_CMD_TEMPERATURE_SENSOR_SELECTION      0x41
-#define EPD_CMD_TEMPERATURE_SENSOR_WRITE          0x42
-#define EPD_CMD_TEMPERATURE_SENSOR_READ           0x43
-#define EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING    0x50
-#define EPD_CMD_TCON_SETTING                      0x60
-#define EPD_CMD_RESOLUTION_SETTING                0x61
-#define EPD_CMD_VCM_DC_SETTING                    0x82
-#define EPD_CMD_PARTIAL_WINDOW                    0x90
-#define EPD_CMD_PARTIAL_IN                        0x91
-#define EPD_CMD_PARTIAL_OUT                       0x92
+#define EPD_CMD_PANEL_SETTING 0x00
+#define EPD_CMD_POWER_SETTING 0x01
+#define EPD_CMD_POWER_OFF 0x02
+#define EPD_CMD_POWER_ON 0x04
+#define EPD_CMD_BOOSTER_SOFT_START 0x06
+#define EPD_CMD_DEEP_SLEEP 0x07
+#define EPD_CMD_DATA_START_TRANSMISSION_1 0x10
+#define EPD_CMD_DATA_STOP 0x11
+#define EPD_CMD_DISPLAY_REFRESH 0x12
+#define EPD_CMD_DATA_START_TRANSMISSION_2 0x13
+#define EPD_CMD_AUTO_SEQUENCE 0x17
+#define EPD_CMD_VCOM_LUT 0x20
+#define EPD_CMD_W2W_LUT 0x21
+#define EPD_CMD_B2W_LUT 0x22
+#define EPD_CMD_W2B_LUT 0x23
+#define EPD_CMD_B2B_LUT 0x24
+#define EPD_CMD_PLL_CONTROL 0x30
+#define EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION 0x40
+#define EPD_CMD_TEMPERATURE_SENSOR_SELECTION 0x41
+#define EPD_CMD_TEMPERATURE_SENSOR_WRITE 0x42
+#define EPD_CMD_TEMPERATURE_SENSOR_READ 0x43
+#define EPD_CMD_PANEL_GLASS_CHECK 0x44
+#define EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING 0x50
+#define EPD_CMD_TCON_SETTING 0x60
+#define EPD_CMD_RESOLUTION_SETTING 0x61
+#define EPD_CMD_VCM_DC_SETTING 0x82
+#define EPD_CMD_PARTIAL_WINDOW 0x90
+#define EPD_CMD_PARTIAL_IN 0x91
+#define EPD_CMD_PARTIAL_OUT 0x92
 
 ///!设置命令
 
@@ -53,6 +53,7 @@ static const uint8_t lut_partial_update[] = {
     0x00, 0x00, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x13, 0x11, 0x00,
     0x00, 0x00, 0x00, 0x13, 0x11, 0x00, 0x00, 0x00, 0x00};
 
+#include "EPD/epd_uc8253_User.c"
 // ================= 低层通信函数 =================
 void EPD_SendCommand(uint8_t cmd) {
   SELECT_EPD;
@@ -127,7 +128,6 @@ void EPD_Init(void) {
 
 // ================= 显示相关 =================
 void EPD_Clear(EPD_COLOR color) {
-
   // 黑白屏为老数据
   // 黑白红屏为黑白数据
   switch (color) {
@@ -147,11 +147,6 @@ void EPD_Clear(EPD_COLOR color) {
     break;
   case EPD_RED:
     // 在黑白屏此处为新数据，黑白红三色屏此处为红色的数据
-    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
-    for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-      EPD_SendData(EPD_COLOR_BLACK);
-    }
-    EPD_WaitUntilIdle();
     EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
     for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
       EPD_SendData(EPD_COLOR_RED);
@@ -159,6 +154,7 @@ void EPD_Clear(EPD_COLOR color) {
     break;
   }
   EPD_WaitUntilIdle();
+  EPD_Done();
 }
 
 void EPD_Done(void) {
@@ -174,11 +170,8 @@ void EPD_Done(void) {
   EPD_WaitUntilIdle();
 
   EPD_Sleep();
-
-  osDelay(10);
 }
 
-uint8_t EPD_GetInnerTemp() { return (0x19); }
 // ================= 局部刷新 =================
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                         const uint8_t *data) {
@@ -187,33 +180,37 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
 
   uint16_t x_start = x & 0xFFF8; // 对齐到8位
   uint16_t x_end = x + w - 1;
-  uint16_t y_start = y;
   uint16_t y_end = y + h - 1;
 
   // 进入部分刷新模式
-  EPD_SendCommand(EPD_CMD_PARTIAL_IN); // partial in
+  EPD_SendCommand(EPD_CMD_PARTIAL_IN);
 
   // 设置窗口
   EPD_SendCommand(EPD_CMD_PARTIAL_WINDOW);
-  EPD_SendData((x_start >> 8) & 0xFF);
-  EPD_SendData(x_start & 0xFF);
-  EPD_SendData((x_end >> 8) & 0xFF);
-  EPD_SendData(x_end & 0xFF);
-  EPD_SendData((y_start >> 8) & 0xFF);
-  EPD_SendData(y_start & 0xFF);
+  EPD_SendData(x_start);
+  EPD_SendData(x_end);
+  EPD_SendData((y >> 8) & 0xFF);
+  EPD_SendData(y & 0xFF);
   EPD_SendData((y_end >> 8) & 0xFF);
   EPD_SendData(y_end & 0xFF);
-  EPD_SendData(0x01); // enable
+  EPD_SendData(0x00);
 
   // 写入图像数据
+  // EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+  // for (uint16_t i = 0; i < (w * h) / 8; i++) {
+  //   EPD_SendData(EPD_COLOR_BLACK);
+  // }
+  // EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  for (uint32_t i = 0; i < (w * h) / 8; i++) {
-    EPD_SendData(data[i]);
+  for (uint16_t i = 0; i < (w * h) / 8; i++) {
+    EPD_SendData(EPD_COLOR_RED);
   }
+  EPD_WaitUntilIdle();
+  EPD_SendCommand(EPD_CMD_POWER_ON);
+  EPD_WaitUntilIdle();
 
-  // 刷新该区域
   EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
-
-  // 退出部分刷新模式
+  EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_PARTIAL_OUT);
+  EPD_Sleep();
 }
