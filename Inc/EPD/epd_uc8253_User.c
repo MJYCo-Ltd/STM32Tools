@@ -50,7 +50,7 @@ __attribute__((weak)) void SPI_WriteBuffer(const unsigned char *pBuffer,
 }
 
 /// 根据手册RST_N拉低50us以上
-__attribute__((weak)) void EPD_Rest() {
+__attribute__((weak)) void EPD_Rest(void) {
   HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
   osDelay(10);
   HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_SET);
@@ -58,23 +58,23 @@ __attribute__((weak)) void EPD_Rest() {
 }
 
 /// 根据手册BUSY_N 高电平为空闲
-__attribute__((weak)) void EPD_WaitUntilIdle() {
+__attribute__((weak)) void EPD_WaitUntilIdle(void) {
   while (HAL_GPIO_ReadPin(BUSY_GPIO_Port, BUSY_Pin) == GPIO_PIN_RESET) {
     osDelay(1);
   }
 }
 
 /// 获取内部温度
-__attribute__((weak)) uint8_t EPD_GetInnerTemp() {
-  EPD_SendCommand(EPD_CMD_POWER_ON);
-  EPD_WaitUntilIdle();
+__attribute__((weak)) uint8_t EPD_GetInnerTemp(void) {
+  EPD_PowerOn();
+
   EPD_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
   EPD_WaitUntilIdle();
 
   uint8_t data;
   HAL_SPI_Receive(&hspi1, &data, 1, HAL_MAX_DELAY);
 
-  EPD_Sleep();
+  EPD_PowerOff();
   return (data);
 }
 

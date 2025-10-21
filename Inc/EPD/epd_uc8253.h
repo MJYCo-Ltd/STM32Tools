@@ -13,12 +13,24 @@ typedef enum{
     EPD_BLACK, /// 黑色
     EPD_RED    /// 红色
 } EPD_COLOR;
-///跟引脚密切相关的，需要根据硬件修改
-void EPD_Rest(void); ///RST_N对应的引脚
-void EPD_WaitUntilIdle();
-///!跟硬件密切相关的，需要根据硬件修改
 
-// 初始化与基本操作
+typedef struct
+{
+    uint16_t x;
+    uint16_t y;
+    EPD_COLOR color;
+}EPD_Pixel;///墨水屏的像素值
+
+///DeepSleep之后所有寄存器配置（LUT、Panel Setting、分辨率等）都会被清空
+///需要调用Rest才能唤醒
+void EPD_Rest(void);
+void EPD_DeepSleep(void);
+
+/// 开/关机
+/// 不开关机写入数据不能刷新
+void EPD_PowerOn(void);
+void EPD_PowerOff(void);
+
 /**
  * @brief 使用出厂模式更新模式
  * @param model 模式需要跟板子匹配，不能把三色屏强制设置EPD_TWO_COLOR模式
@@ -31,13 +43,15 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh);
  * @return 1 表示良好 0 表示损坏
  */
 uint8_t EPD_IsOk(void);
-void EPD_Sleep(void);
+/// 获取内部温度
+uint8_t EPD_GetInnerTemp(void);
+
 /**
  * @brief 清除屏幕
  * @param 要清屏的颜色
  */
 void EPD_Clear(EPD_COLOR color);
-void EPD_Done(void);
+void EPD_Update(void);
 
 /**
  * @brief 绘制一个像素颜色
@@ -46,8 +60,8 @@ void EPD_Done(void);
  * @param color
  */
 void EPD_InitDrawBuffer(EPD_COLOR color);
-void EPD_DrawPixel(uint16_t x, uint16_t y, EPD_COLOR color);
-void EPD_ShowBuffer();
+void EPD_DrawPixel(const EPD_Pixel* pPixel);
+void EPD_ShowBuffer(void);
 
 // 局部刷新接口
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *data);
@@ -56,8 +70,5 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const ui
 void EPD_SendCommand(uint8_t cmd);
 void EPD_SendData(uint8_t data);
 void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength);
-
-/// 获取内部温度
-uint8_t EPD_GetInnerTemp();
 
 #endif
