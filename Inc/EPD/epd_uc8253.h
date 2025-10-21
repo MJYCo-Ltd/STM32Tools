@@ -4,11 +4,15 @@
 #include <stdint.h>
 
 typedef enum{
-    EPD_WHITE, // 白色
-    EPD_BLACK, // 黑色
-    EPD_RED    // 红色
-} EPD_COLOR;
+    EPD_TWO_COLOR,  ///黑白双色模式
+    EPD_THREE_COLOR ///黑白红三色模式
+}EPD_MODEL;///墨水屏模式
 
+typedef enum{
+    EPD_WHITE, /// 白色
+    EPD_BLACK, /// 黑色
+    EPD_RED    /// 红色
+} EPD_COLOR;
 ///跟引脚密切相关的，需要根据硬件修改
 void EPD_Rest(void); ///RST_N对应的引脚
 void EPD_WaitUntilIdle();
@@ -16,11 +20,17 @@ void EPD_WaitUntilIdle();
 
 // 初始化与基本操作
 /**
+ * @brief 使用出厂模式更新模式
+ * @param model 模式需要跟板子匹配，不能把三色屏强制设置EPD_TWO_COLOR模式
+ * @param fast 0表示默认刷新 非0值表示快速刷新
+ */
+void EPD_Init(EPD_MODEL model, uint8_t fastFresh);
+
+/**
  * @brief EPD_IsOk
  * @return 1 表示良好 0 表示损坏
  */
 uint8_t EPD_IsOk(void);
-void EPD_Init(void);
 void EPD_Sleep(void);
 /**
  * @brief 清除屏幕
