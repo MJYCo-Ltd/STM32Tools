@@ -51,24 +51,29 @@ uint8_t EPD_GetInnerTemp(void);
  * @param 要清屏的颜色
  */
 void EPD_Clear(EPD_COLOR color);
+/**
+ * @brief 刷新屏幕
+ * @attention EPD_Clear、EPD_ShowBuffer之后
+ * 如果不调用该函数将无法将更改刷新到屏幕上
+ * @attention 此函数需要在 EPD_PowerOn()之后才能生效
+ */
 void EPD_Update(void);
 
 /**
- * @brief 绘制一个像素颜色
- * @param x
- * @param y
- * @param color
+ * @brief 初始化内存的buffer
  */
 void EPD_InitDrawBuffer(EPD_COLOR color);
 void EPD_DrawPixel(const EPD_Pixel* pPixel);
 void EPD_ShowBuffer(void);
 
-// 局部刷新接口
-void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *data);
-
-// 底层 SPI 通信
-void EPD_SendCommand(uint8_t cmd);
-void EPD_SendData(uint8_t data);
-void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength);
+/**
+ * @brief 局刷接口，内部会自动更新，不需要调用EPD_Update了
+ * @param x 像素位置
+ * @param y 像素位置
+ * @param w 像素宽度
+ * @param h 像素高度
+ * @param data 像素数据
+ */
+void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const EPD_Pixel *data);
 
 #endif

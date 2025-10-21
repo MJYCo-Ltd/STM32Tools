@@ -66,6 +66,11 @@ static const uint8_t FAST_LUTBW[57] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+// 底层 SPI 通信
+void EPD_SendCommand(uint8_t cmd);
+void EPD_SendData(uint8_t data);
+void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength);
+
 #include "EPD/epd_uc8253_User.c"
 
 void EPD_LoadFastLUT(void) {
@@ -156,7 +161,6 @@ void EPD_ShowBuffer(void) {
   EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
   EPD_SendBuffer(EPD_THREE_COLOR == g_model ? epd_Rframe : epd_WBframe,
                  EPD_BUFFER_SIZE);
-  EPD_Update();
 }
 
 /// 给每个像素上颜色
@@ -252,7 +256,6 @@ void EPD_Clear(EPD_COLOR color) {
     }
   }
   EPD_WaitUntilIdle();
-  EPD_Update();
 }
 
 void EPD_Update(void) {
@@ -262,12 +265,13 @@ void EPD_Update(void) {
 
 // ================= 局部刷新 =================
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                        const uint8_t *data) {
+                        const EPD_Pixel *data) {
   if ((x + w) > EPD_WIDTH || (y + h) > EPD_HEIGHT)
     return;
 
   uint16_t x_start = x & 0xFFF8; // 对齐到8位
-  uint16_t x_end = x + w - 1;
+  uint16_t end = x + w - 1;
+  uint16_t x_end = end % 8 == 0 ? (end + 7) : end;
   uint16_t y_end = y + h - 1;
 
   // 进入部分刷新模式
@@ -290,16 +294,11 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
   // }
   // EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  for (uint16_t i = 0; i < (w * h) / 8; i++) {
+  for (uint16_t i = 0; i < ((x_end - x_start) * h) / 8; i++) {
     EPD_SendData(EPD_COLOR_RED);
   }
   EPD_WaitUntilIdle();
-  EPD_SendCommand(EPD_CMD_POWER_ON);
-  EPD_WaitUntilIdle();
-
-  EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
-  EPD_WaitUntilIdle();
+  EPD_Update();
   /// 退出局部模式
   EPD_SendCommand(EPD_CMD_PARTIAL_OUT);
-  EPD_PowerOff();
 }
