@@ -38,6 +38,8 @@ uint8_t g_model = EPD_THREE_COLOR;
 #define EPD_CMD_PARTIAL_WINDOW 0x90
 #define EPD_CMD_PARTIAL_IN 0x91
 #define EPD_CMD_PARTIAL_OUT 0x92
+#define EPD_CMD_CASCADE_SETTING 0xE0
+#define EPD_CMD_FORCE_TEMPERATURE 0xE5
 ///!设置命令
 
 /// EPD_CMD_PANEL_SETTING 对应的参数
@@ -48,7 +50,7 @@ uint8_t g_model = EPD_THREE_COLOR;
 /// ---------- 快速刷新 LUT（参考 UC8253.pdf） ----------
 /// 说明：此 LUT 经过简化，用于快刷（降低闪烁 / 提速）
 /// 每个 LUT 对应不同的灰阶转换（W2W, K2W, W2K, K2K）
-
+#ifndef GOOD_DISPLAY
 // ---- Minimal working fast LUT (可显、对比度低但有反应) ----
 static const uint8_t FAST_LUTC[57] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Frame time
@@ -65,7 +67,7 @@ static const uint8_t FAST_LUTBW[57] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
+#endif
 // 底层 SPI 通信
 void EPD_SendCommand(uint8_t cmd);
 void EPD_SendData(uint8_t data);
@@ -74,6 +76,13 @@ void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength);
 #include "EPD/epd_uc8253_User.c"
 
 void EPD_LoadFastLUT(void) {
+#ifdef GOOD_DISPLAY
+  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
+  EPD_SendData(0x02);
+
+  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
+  EPD_SendData(0x5F); // 0x5F--1.5s
+#else
   EPD_SendCommand(EPD_CMD_VCOM_LUT);
   EPD_SendBuffer(FAST_LUTC, sizeof(FAST_LUTC));
   EPD_WaitUntilIdle();
@@ -89,6 +98,7 @@ void EPD_LoadFastLUT(void) {
   EPD_SendCommand(EPD_CMD_B2B_LUT);
   EPD_SendBuffer(FAST_LUTBW, sizeof(FAST_LUTBW));
   EPD_WaitUntilIdle();
+#endif
 }
 /**
  * @brief epd_WBframe 黑白像素
@@ -295,7 +305,7 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
   // EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
   for (uint16_t i = 0; i < ((x_end - x_start) * h) / 8; i++) {
-    EPD_SendData(EPD_COLOR_RED);
+    EPD_SendData(EPD_COLOR_BLACK);
   }
   EPD_WaitUntilIdle();
   EPD_Update();
