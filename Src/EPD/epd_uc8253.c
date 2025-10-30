@@ -71,7 +71,7 @@ static const uint8_t FAST_LUTBW[57] = {
 // 底层 SPI 通信
 void EPD_SendCommand(uint8_t cmd);
 void EPD_SendData(uint8_t data);
-void EPD_SendBuffer(const unsigned char* pBuffer,uint16_t unLength);
+void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength);
 
 #include "EPD/epd_uc8253_User.c"
 
@@ -209,16 +209,27 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
   if (EPD_TWO_COLOR == g_model) {
     panelSetting |= PANEL_SETTING_KW;
   }
+#ifndef GOOD_DISPLAY
   if (0 != fastFresh) {
     panelSetting |= PANEL_SETTING_REG;
   }
+#endif
   EPD_SendData(panelSetting);
   EPD_WaitUntilIdle();
+
   if (0 != fastFresh) {
     EPD_SendCommand(EPD_CMD_POWER_ON);
     EPD_WaitUntilIdle();
     EPD_LoadFastLUT();
   }
+#ifdef GOOD_DISPLAY
+  else {
+    EPD_SendCommand(EPD_CMD_POWER_ON);
+    EPD_WaitUntilIdle();
+    EPD_SendCommand(EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING);
+    EPD_SendData(0x97);
+  }
+#endif
 }
 
 // ================= 显示相关 =================
@@ -257,12 +268,13 @@ void EPD_Clear(EPD_COLOR color) {
     uint8_t colorBuffer =
         EPD_WHITE == color ? EPD_COLOR_WHITE : EPD_COLOR_BLACK;
     for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-      EPD_SendData(colorBuffer);
+      EPD_SendData(epd_WBframe[i]);
     }
     EPD_WaitUntilIdle();
     EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
     for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
       EPD_SendData(colorBuffer);
+      epd_WBframe[i] = colorBuffer;
     }
   }
   EPD_WaitUntilIdle();
