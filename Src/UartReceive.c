@@ -102,12 +102,15 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
       if (pUartInfo->pReceive - pUartInfo->pBuffer >= UART_BUFFER_LENGTH) {
         pUartInfo->pReceive -= UART_BUFFER_LENGTH;
       }
+      HAL_UARTEx_ReceiveToIdle_DMA(pUartInfo->pHUart, pUartInfo->pReceive,
+                                   UART_BUFFER_LENGTH);
     }
   }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
   huart->gState = HAL_UART_STATE_READY;
+  huart->RxState = HAL_UART_STATE_READY;
 }
 
 /// 定时处理数据
