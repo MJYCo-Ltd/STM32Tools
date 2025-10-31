@@ -2,6 +2,7 @@
 #include <string.h>
 
 uint8_t g_model = EPD_THREE_COLOR;
+uint8_t g_fast = 0;
 #define EPD_COLOR_WHITE 0xFF
 #define EPD_COLOR_BLACK 0x00
 #define EPD_COLOR_RED 0x00
@@ -47,9 +48,11 @@ uint8_t g_model = EPD_THREE_COLOR;
 #define PANEL_SETTING_KW (1 << 4) // 黑白两色
 ///!EPD_CMD_PANEL_SETTING
 
-/// ---------- 快速刷新 LUT（参考 UC8253.pdf） ----------
-/// 说明：此 LUT 经过简化，用于快刷（降低闪烁 / 提速）
-/// 每个 LUT 对应不同的灰阶转换（W2W, K2W, W2K, K2K）
+// 底层 SPI 通信
+void EPD_SendCommand(uint8_t cmd);
+void EPD_SendData(uint8_t data);
+void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength);
+
 #ifdef GOOD_DISPLAY
 #define EPD_OPEN_TSFIX 0x02
 
@@ -64,7 +67,38 @@ uint8_t g_model = EPD_THREE_COLOR;
 #define GD_WB_VBDW 0x97 // 让白粒子下降一点（形成灰）
 #define GD_WB_VBDB 0x57 // 让黑粒子上来
 ///// end EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING 参数////
+
+void GD_PartFresh(void) {
+  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
+  EPD_SendData(EPD_OPEN_TSFIX);
+
+  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
+  EPD_SendData(GD_PART_REFRESH);
+
+  EPD_SendCommand(EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING);
+  EPD_SendData(GD_WB_VBDF);
+}
+
+void GD_FastFresh(void) {
+  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
+  EPD_SendData(EPD_OPEN_TSFIX);
+
+  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
+  EPD_SendData(GD_QUICK_REFRESH); // 0x5F--1.5s快刷
+}
+
+void GD_Reset(void) {
+  if (0 != g_fast) {
+    GD_FastFresh();
+  } else {
+    EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
+    EPD_SendData(0x00);
+  }
+}
 #else
+/// ---------- 快速刷新 LUT（参考 UC8253.pdf） ----------
+/// 说明：此 LUT 经过简化，用于快刷（降低闪烁 / 提速）
+/// 每个 LUT 对应不同的灰阶转换（W2W, K2W, W2K, K2K）
 // ---- Minimal working fast LUT (可显、对比度低但有反应) ----
 static const uint8_t FAST_LUTC[57] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Frame time
@@ -82,21 +116,12 @@ static const uint8_t FAST_LUTBW[57] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 #endif
-// 底层 SPI 通信
-void EPD_SendCommand(uint8_t cmd);
-void EPD_SendData(uint8_t data);
-void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength);
 
 #include "EPD/epd_uc8253_User.c"
 
 void EPD_LoadFastLUT(void) {
 #ifdef GOOD_DISPLAY
-  // gooddisplay直接通过外部温度控制快刷
-  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
-  EPD_SendData(EPD_OPEN_TSFIX);
-
-  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
-  EPD_SendData(GD_QUICK_REFRESH); // 0x5F--1.5s快刷
+  GD_FastFresh();
 #else
   EPD_SendCommand(EPD_CMD_VCOM_LUT);
   EPD_SendBuffer(FAST_LUTC, sizeof(FAST_LUTC));
@@ -165,13 +190,11 @@ void EPD_InitDrawBuffer(EPD_COLOR color) {
   if (EPD_TWO_COLOR == g_model && EPD_RED == color) {
     return;
   }
+
   if (EPD_RED == color) {
-    memset(epd_WBframe, EPD_COLOR_WHITE, EPD_BUFFER_SIZE);
     memset(epd_Rframe, EPD_COLOR_RED, EPD_BUFFER_SIZE);
   } else {
-    if (EPD_THREE_COLOR == g_model) {
-      memset(epd_Rframe, EPD_COLOR_ALPHA, EPD_BUFFER_SIZE);
-    }
+    memset(epd_Rframe, EPD_COLOR_ALPHA, EPD_BUFFER_SIZE);
     if (EPD_BLACK == color) {
       memset(epd_WBframe, EPD_COLOR_BLACK, EPD_BUFFER_SIZE);
     } else {
@@ -188,6 +211,24 @@ void EPD_ShowBuffer(void) {
                  EPD_BUFFER_SIZE);
 }
 
+void EPD_ShowPartBuffer(uint16_t nXStart, uint16_t nYStart, uint16_t nXEnd,
+                        uint16_t nYEnd) {
+  uint16_t nPixelWidth = (nXEnd - nXStart + 1) >> 3;
+
+  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+  for (uint16_t nIndex = nYStart; nIndex < nYEnd; ++nIndex) {
+    EPD_SendBuffer(epd_WBframe + ((nXStart + nIndex * EPD_WIDTH) >> 3),
+                   nPixelWidth);
+  }
+  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+  const unsigned char *pBuffer =
+      EPD_THREE_COLOR == g_model ? epd_Rframe : epd_WBframe;
+  for (uint16_t nIndex = nYStart; nIndex < nYEnd; ++nIndex) {
+    EPD_SendBuffer(pBuffer + ((nXStart + nIndex * EPD_WIDTH) >> 3),
+                   nPixelWidth);
+  }
+  memcpy(epd_Rframe, epd_WBframe, EPD_BUFFER_SIZE);
+}
 /// 给每个像素上颜色
 void EPD_DrawPixel(const EPD_Pixel *pPixel) {
   if (pPixel->x >= EPD_WIDTH || pPixel->y >= EPD_HEIGHT) {
@@ -198,7 +239,7 @@ void EPD_DrawPixel(const EPD_Pixel *pPixel) {
   }
 
   uint32_t index = pPixel->x + pPixel->y * EPD_WIDTH;
-  uint32_t byte_index = index / 8;
+  uint32_t byte_index = index >> 3;
   uint8_t bit_mask = 0x80 >> (index % 8);
   if (pPixel->color == EPD_RED) {
     epd_Rframe[byte_index] &= ~bit_mask;
@@ -218,6 +259,7 @@ void EPD_DrawPixel(const EPD_Pixel *pPixel) {
 void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
   // 硬复位
   g_model = model;
+  g_fast = fastFresh;
   EPD_Rest();
 
   // 设置板子的模式
@@ -227,14 +269,14 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
     panelSetting |= PANEL_SETTING_KW;
   }
 #ifndef GOOD_DISPLAY
-  if (0 != fastFresh) {
+  if (0 != g_fast) {
     panelSetting |= PANEL_SETTING_REG;
   }
 #endif
   EPD_SendData(panelSetting);
   EPD_WaitUntilIdle();
 
-  if (0 != fastFresh) {
+  if (0 != g_fast) {
     EPD_SendCommand(EPD_CMD_POWER_ON);
     EPD_WaitUntilIdle();
     EPD_LoadFastLUT();
@@ -243,48 +285,8 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
 
 // ================= 显示相关 =================
 void EPD_Clear(EPD_COLOR color) {
-  // 黑白屏为老数据
-  // 黑白红屏为黑白数据
-  if (EPD_TWO_COLOR == g_model && EPD_RED == color) {
-    return;
-  }
-  if (EPD_THREE_COLOR == g_model) {
-    switch (color) {
-    case EPD_WHITE:
-    case EPD_BLACK:
-      EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
-      uint8_t colorBuffer =
-          EPD_WHITE == color ? EPD_COLOR_WHITE : EPD_COLOR_BLACK;
-      for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-        EPD_SendData(colorBuffer);
-      }
-      EPD_WaitUntilIdle();
-      EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-      for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-        EPD_SendData(EPD_COLOR_ALPHA);
-      }
-      break;
-    case EPD_RED:
-      // 在黑白屏此处为新数据，黑白红三色屏此处为红色的数据
-      EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-      for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-        EPD_SendData(EPD_COLOR_RED);
-      }
-      break;
-    }
-  } else {
-    uint8_t colorBuffer =
-        EPD_WHITE == color ? EPD_COLOR_WHITE : EPD_COLOR_BLACK;
-    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
-    for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-      EPD_SendData(colorBuffer);
-    }
-    EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-    for (uint16_t i = 0; i < EPD_BUFFER_SIZE; i++) {
-      EPD_SendData(colorBuffer);
-    }
-  }
-  EPD_WaitUntilIdle();
+  EPD_InitDrawBuffer(color);
+  EPD_ShowBuffer();
 }
 
 void EPD_Update(void) {
@@ -293,14 +295,15 @@ void EPD_Update(void) {
 }
 
 // ================= 局部刷新 =================
-void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                        const EPD_Pixel *data) {
+void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
   if ((x + w) > EPD_WIDTH || (y + h) > EPD_HEIGHT)
     return;
+#ifdef GOOD_DISPLAY
+  GD_PartFresh();
+#endif
 
-  uint16_t x_start = x & 0xFFF8; // 对齐到8位
-  uint16_t end = x + w - 1;
-  uint16_t x_end = end % 8 == 0 ? (end + 7) : end;
+  uint16_t x_start = x & ~0x7; // 对齐到8位
+  uint16_t x_end = ((x + w + 7) & ~0x7) - 1;
   uint16_t y_end = y + h - 1;
 
   // 进入部分刷新模式
@@ -310,19 +313,18 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
   EPD_SendCommand(EPD_CMD_PARTIAL_WINDOW);
   EPD_SendData(x_start);
   EPD_SendData(x_end);
-  EPD_SendData((y >> 8) & 0xFF);
-  EPD_SendData(y & 0xFF);
-  EPD_SendData((y_end >> 8) & 0xFF);
-  EPD_SendData(y_end & 0xFF);
-  EPD_SendData(0x00);
+  EPD_SendData(y >> 8);
+  EPD_SendData(y & 0x00FF);
+  EPD_SendData(y_end >> 8);
+  EPD_SendData(y_end & 0x00FF);
+  EPD_SendData(0x0);
 
-  // 写入图像数据
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  for (uint16_t i = 0; i < ((x_end - x_start) * h) / 8; i++) {
-    EPD_SendData(data->color);
-  }
+  EPD_ShowPartBuffer(x_start, y, x_end, y_end);
   EPD_WaitUntilIdle();
   EPD_Update();
   /// 退出局部模式
   EPD_SendCommand(EPD_CMD_PARTIAL_OUT);
+#ifdef GOOD_DISPLAY
+  GD_Reset();
+#endif
 }

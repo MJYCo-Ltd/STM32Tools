@@ -68,12 +68,11 @@ void EPD_ShowBuffer(void);
 
 /**
  * @brief 局刷接口，内部会自动更新，不需要调用EPD_Update了
- * @param x 像素位置
- * @param y 像素位置
+ * @param x 起始像素位置
+ * @param y 起始像素位置
  * @param w 像素宽度
  * @param h 像素高度
- * @param data 像素数据
  */
-void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const EPD_Pixel *data);
+void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 #endif
