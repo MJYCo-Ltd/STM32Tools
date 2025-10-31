@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file           : Auxiliary.h
  * @brief          : Header for Auxiliary.c file.
- *                   ´ËÎÄ¼şÎªSTM32µÄ¸¨Öú¹¤¾ß
+ *                   æ­¤æ–‡ä»¶ä¸ºSTM32çš„è¾…åŠ©å·¥å…·
  ******************************************************************************
  *
  *  Created on: Apr 12, 2024
@@ -10,7 +10,8 @@
  */
 #ifndef __YTY_AUXILIARY_H_
 #define __YTY_AUXILIARY_H_
-#include "stm32f1xx_hal.h"
+#include <stddef.h>
+#include <stdint.h>
 
 typedef enum
 {
@@ -19,47 +20,47 @@ typedef enum
 
 typedef struct
 {
-	uint8_t unRamTotal;     /// ram×Ü¿Õ¼ä
-	uint8_t unRamFree;      /// ramÊ£Óà¿Õ¼ä
-	uint8_t unCPURate;      /// CPUÊ¹ÓÃÂÊ
-	uint8_t unCPUFrequency; /// CPUÖ÷Æµ
+	uint8_t unRamTotal;     /// ramæ€»ç©ºé—´
+	uint8_t unRamFree;      /// ramå‰©ä½™ç©ºé—´
+	uint8_t unCPURate;      /// CPUä½¿ç”¨ç‡
+	uint8_t unCPUFrequency; /// CPUä¸»é¢‘
 }STMSTATUS;
 
-///½ÓÊÕÊı¾İ
+///æ¥æ”¶æ•°æ®
 typedef struct
 {
-	uint64_t unReciveCount; /// ½ÓÊÕµ½µÄÊı¾İ×ÜÊı (×Ö½Ú)
-	uint64_t unSendCount;   /// ·¢ËÍµÄÊı¾İ×ÜÊı (×Ö½Ú)
-	uint64_t unDealCount;   /// ´¦ÀíµÄÊı¾İ×ÜÊı (×Ö½Ú)
+	uint64_t unReciveCount; /// æ¥æ”¶åˆ°çš„æ•°æ®æ€»æ•° (å­—èŠ‚)
+	uint64_t unSendCount;   /// å‘é€çš„æ•°æ®æ€»æ•° (å­—èŠ‚)
+	uint64_t unDealCount;   /// å¤„ç†çš„æ•°æ®æ€»æ•° (å­—èŠ‚)
 }IOInfo;
 
 /**
- * ·¢ËÍµ÷ÊÔĞÅÏ¢
- *@pragma pData   Òª´òÓ¡µÄ×Ö·û´®
- *@pragma unLength Òª´òÓ¡µÄ×Ö·û´®³¤¶È
+ * å‘é€è°ƒè¯•ä¿¡æ¯
+ *@pragma pData   è¦æ‰“å°çš„å­—ç¬¦ä¸²
+ *@pragma unLength è¦æ‰“å°çš„å­—ç¬¦ä¸²é•¿åº¦
  */
 void SendDebugInfo(const unsigned char* pData, uint16_t unLength);
 
 /**
- * ÇëÇóĞÂµÄ¿Õ¼ä
- *@pragma unSize Òª¿ª±Ù¿Õ¼äµÄ×Ö½Ú´óĞ¡
- *@return Èç¹ûÊ£Óà¿Õ¼ä´óĞ¡Ğ¡ÓÚÉêÇëµÄ¿Õ¼ä·µ»ØNULL
- *@attention ·µ»ØµÄ¿Õ¼ä¶¼½øĞĞÁËÖÃÁã²Ù×÷
+ * è¯·æ±‚æ–°çš„ç©ºé—´
+ *@pragma unSize è¦å¼€è¾Ÿç©ºé—´çš„å­—èŠ‚å¤§å°
+ *@return å¦‚æœå‰©ä½™ç©ºé—´å¤§å°å°äºç”³è¯·çš„ç©ºé—´è¿”å›NULL
+ *@attention è¿”å›çš„ç©ºé—´éƒ½è¿›è¡Œäº†ç½®é›¶æ“ä½œ
  */
 void* RequestSpace(size_t unSize);
 
 /**
- * »ØÊÕ¿Õ¼ä
+ * å›æ”¶ç©ºé—´
  */
 void RecycleSpace(void* pBuffer);
 
 /**
- *¸ü¸Äµ¥Æ¬»ú×´Ì¬
+ *æ›´æ”¹å•ç‰‡æœºçŠ¶æ€
  */
 void ChangeMode(STM_BOARD_STATE emState);
 
 /**
- *»ñÈ¡µ¥Æ¬»ú×´Ì¬
+ *è·å–å•ç‰‡æœºçŠ¶æ€
  */
 STMSTATUS GetStatus(void);
 #endif//__YTY_AUXILIARY_H
