@@ -18,11 +18,11 @@ typedef struct _Uart_Info {
   IOInfo stAllIOInfo;            /// 串口收发数据统计
 } Uart_Info;
 
-Uart_Info **pUartInfoArray = NULL;
+static Uart_Info **pUartInfoArray = NULL;
 const uint16_t UART_BUFFER_LENGTH = 200;
-uint8_t *pLocalBuffer = NULL;
+static uint8_t *pLocalBuffer = NULL;
 
-uint8_t uUartIndex = 0;
+static uint8_t uUartIndex = 0;
 
 /// 初始化串口数量
 void InitUartCount(uint8_t unMaxUartSize) {
@@ -108,11 +108,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
   }
 }
 
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-  huart->gState = HAL_UART_STATE_READY;
-  huart->RxState = HAL_UART_STATE_READY;
-}
-
 /// 定时处理数据
 void ProcessUart(void) {
   static UartQueueInfo LOCAL_QUEUE_INFO;
@@ -148,13 +143,12 @@ void ProcessUart(void) {
 
 /// 获取串口接收数据信息
 const IOInfo *GetUartIOInfo(uint8_t uId) {
-  if (uId <= uUartIndex) {
-    Uart_Info *pUartInfo = pUartInfoArray[uId];
+  if (uId >= 1 && uId <= uUartIndex) {
+    Uart_Info *pUartInfo = pUartInfoArray[uId - 1];
     if (NULL != pUartInfo) {
       return (&pUartInfo->stAllIOInfo);
     }
   }
-
   return (NULL);
 }
 

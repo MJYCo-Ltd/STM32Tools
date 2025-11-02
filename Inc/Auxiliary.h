@@ -13,17 +13,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef enum
-{
-	SLEEP_YTY
-}STM_BOARD_STATE;
-
 typedef struct
 {
 	uint8_t unRamTotal;     /// ram总空间
-	uint8_t unRamFree;      /// ram剩余空间
+    uint8_t unRamFree;      /// ram剩余空间
 	uint8_t unCPURate;      /// CPU使用率
-	uint8_t unCPUFrequency; /// CPU主频
+    uint8_t unCPUFrequency; /// CPU主频 MHZ
 }STMSTATUS;
 
 ///接收数据
@@ -53,11 +48,6 @@ void* RequestSpace(size_t unSize);
  * 回收空间
  */
 void RecycleSpace(void* pBuffer);
-
-/**
- *更改单片机状态
- */
-void ChangeMode(STM_BOARD_STATE emState);
 
 /**
  *获取单片机状态
