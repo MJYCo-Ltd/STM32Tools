@@ -16,19 +16,20 @@ void SendDebugInfo(const unsigned char *pData, uint16_t uLength) {
   if (GetUartCount() < 1)
     return;
   UART_HandleTypeDef *pHUart = GetUart(1);
-  while (HAL_OK != HAL_UART_Transmit_DMA(pHUart, pData, uLength)){
+  while (HAL_OK != HAL_UART_Transmit_DMA(pHUart, pData, uLength)) {
     osDelay(1);
   }
   UpdateUartSendInfo(pHUart, uLength);
 }
 
+unsigned long g_TotalTime = 0;
 void configureTimerForRunTimeStats(void) {
-  __HAL_TIM_SET_COUNTER(&htim10, 0);
-  HAL_TIM_Base_Start(&htim10);
+  HAL_TIM_Base_Start_IT(&htim10);
+  g_TotalTime = 0;
 }
 
 unsigned long getRunTimeCounterValue(void) {
-  return __HAL_TIM_GET_COUNTER(&htim10);
+  return (g_TotalTime + __HAL_TIM_GET_COUNTER(&htim10));
 }
 
 /// 请求空间

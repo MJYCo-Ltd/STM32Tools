@@ -35,7 +35,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-static char statsBuf[512] = {};
+static char statsBuf[200] = {};
+extern unsigned long g_TotalTime;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -296,7 +297,7 @@ static void MX_TIM10_Init(void)
 
   /* USER CODE END TIM10_Init 1 */
   htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 15;
+  htim10.Init.Prescaler = 74;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim10.Init.Period = 65535;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -469,30 +470,30 @@ void StartDefaultTask(void *argument)
   uint8_t test = 0;
 
   for (;;) {
-    // EPD_Init(EPD_THREE_COLOR, 1);
-    // EPD_PowerOn();
-    // EPD_Clear(EPD_WHITE);
-    // EPD_Update();
+    EPD_Init(EPD_THREE_COLOR, 1);
+    EPD_PowerOn();
+    EPD_Clear(EPD_WHITE);
+    EPD_Update();
 
-    // EPD_InitDrawBuffer(EPD_WHITE);
-    // EPD_DrawRect(10, 10, 100, 60, EPD_BLACK);
-    // EPD_DrawFilledRect(130, 10, 50, 50, EPD_BLACK);
-    // EPD_DrawCircle(120, 200, 40, EPD_BLACK);
-    // EPD_DrawFilledCircle(60, 200, 25, EPD_BLACK);
-    // EPD_DrawLine(0, 0, 239, 415, EPD_BLACK);
-    // EPD_DrawString(0, 300, "##$$ !$#", EPD_BLACK);
-    // EPD_ShowBuffer();
-    // EPD_Update();
+    EPD_InitDrawBuffer(EPD_WHITE);
+    EPD_DrawRect(10, 10, 100, 60, EPD_BLACK);
+    EPD_DrawFilledRect(130, 10, 50, 50, EPD_BLACK);
+    EPD_DrawCircle(120, 200, 40, EPD_BLACK);
+    EPD_DrawFilledCircle(60, 200, 25, EPD_BLACK);
+    EPD_DrawLine(0, 0, 239, 415, EPD_BLACK);
+    EPD_DrawString(0, 300, "##$$ !$#", EPD_BLACK);
+    EPD_ShowBuffer();
+    EPD_Update();
 
-    // for (uint8_t index = 0; index < 10; ++index) {
-    //   EPD_InitDrawBuffer(EPD_BLACK);
-    //   EPD_DrawFilledCircle(40 + index * 10, 104 + index * 10, 10, EPD_WHITE);
-    //   EPD_DisplayPartial(40, 104, 120, 216);
-    //   osDelay(2000);
-    // }
+    for (uint8_t index = 0; index < 10; ++index) {
+      EPD_InitDrawBuffer(EPD_BLACK);
+      EPD_DrawFilledCircle(40 + index * 10, 104 + index * 10, 10, EPD_WHITE);
+      EPD_DisplayPartial(40, 104, 120, 216);
+      osDelay(2000);
+    }
 
-    // EPD_PowerOff();
-    // EPD_DeepSleep();
+    EPD_PowerOff();
+    EPD_DeepSleep();
     osDelay(2000);
     HAL_GPIO_WritePin(TEST_GPIO_Port, TEST_Pin,
                       test % 2 == 0 ? GPIO_PIN_RESET : GPIO_PIN_SET);
@@ -515,7 +516,9 @@ void StartDelUsart(void *argument)
   /* Infinite loop */
   BeginReceiveUartInfo(AddUart(&huart2, ReciveUartData));
   BeginReceiveUartInfo(AddUart(&huart1, ReciveUartData));
-  osTimerStart(sendTaskInfoHandle, 1000);
+  if (osOK != osTimerStart(sendTaskInfoHandle, 10000)) {
+    SendDebugInfo("error", 6);
+  }
   for (;;) {
     ProcessUart();
     osDelay(1);
@@ -550,7 +553,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if (TIM10 == htim->Instance) {
+    g_TotalTime += 0x10000UL;
+  }
   /* USER CODE END Callback 1 */
 }
 
@@ -561,6 +566,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  SendDebugInfo("error happend", 13);
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1) {
