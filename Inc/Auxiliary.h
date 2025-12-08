@@ -50,7 +50,37 @@ void* RequestSpace(size_t unSize);
 void RecycleSpace(void* pBuffer);
 
 /**
+ * @brief 向Flash中写入数据
+ * @param pData 写入数据开始指针
+ * @param unLength 写入数据长度（小于 1024）
+ * @return 0 表示失败 1表示成功
+ */
+uint8_t SaveFlash(const uint8_t* pData, uint16_t unLength);
+
+/**
+ * @brief 获取flash
+ * @return
+ */
+const uint8_t* ReadFlash();
+
+/**
  *获取单片机状态
  */
 STMSTATUS GetStatus(void);
+
+/**
+ * @brief 计算CRC值
+ * @param buffer
+ * @param len
+ * @return
+ */
+uint16_t CalCRC(const uint8_t *buffer, uint16_t len);
+
+/**
+ * @brief 判断接收的 modbus数据是否有效
+ * @param pBuffer
+ * @param unLen
+ * @return
+ */
+uint8_t JudgeModbus(const uint8_t* pBuffer, uint16_t unLen);
 #endif//__YTY_AUXILIARY_H

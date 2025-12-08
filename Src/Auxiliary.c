@@ -9,19 +9,20 @@
 #include "main.h"
 #include <string.h>
 // TickType_t g_base;
-extern TIM_HandleTypeDef htim10;
+#define FLASH_PARAM_PAGE_ADDR 0x0800FC00 // 最后一页
 STMSTATUS G_LOCAL = {0, 0, 0, 0};
 /// 发送信息给串口
 void SendDebugInfo(const unsigned char *pData, uint16_t uLength) {
   if (GetUartCount() < 1)
     return;
   UART_HandleTypeDef *pHUart = GetUart(1);
-  while (HAL_OK != HAL_UART_Transmit_DMA(pHUart, pData, uLength)) {
+  while (HAL_OK != HAL_UART_Transmit(pHUart, pData, uLength, 30)) {
     osDelay(1);
   }
   UpdateUartSendInfo(pHUart, uLength);
 }
 
+extern TIM_HandleTypeDef htim10;
 unsigned long g_TotalTime = 0;
 void configureTimerForRunTimeStats(void) {
   HAL_TIM_Base_Start_IT(&htim10);
@@ -45,9 +46,78 @@ void *RequestSpace(size_t unSize) {
 /// 回收空间
 void RecycleSpace(void *pBuffer) { vPortFree(pBuffer); }
 
+/// 保存数据到flash中
+uint8_t SaveFlash(const uint8_t *pData, uint16_t unLength) {
+  FLASH_EraseInitTypeDef EraseInitStruct;
+  uint32_t PageError = 0;
+
+  // Step 1：解锁 Flash
+  HAL_FLASH_Unlock();
+
+  // Step 2：擦除
+  EraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
+  EraseInitStruct.PageAddress = FLASH_PARAM_PAGE_ADDR;
+  EraseInitStruct.NbPages = 1;
+
+  if (HAL_FLASHEx_Erase(&EraseInitStruct, &PageError) != HAL_OK) {
+    // 擦除失败
+    HAL_FLASH_Lock();
+    return (0);
+  }
+
+  // Step 3：写入
+  for (uint16_t i = 0; i < unLength; i += 2) {
+    static uint16_t word;
+    memcpy(&word, &pData[i], sizeof(word));
+
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, FLASH_PARAM_PAGE_ADDR + i,
+                          word) != HAL_OK) {
+      HAL_FLASH_Lock();
+      return (0);
+    }
+  }
+
+  // Step 4：锁定
+  HAL_FLASH_Lock();
+  return (1);
+}
+
 /// 获取状态
 STMSTATUS GetStatus(void) {
   G_LOCAL.unRamFree = xPortGetFreeHeapSize();
   //	S_LOCAL.unCPURate = GetCPUUsage();
   return (G_LOCAL);
+}
+
+/// 计算CRC
+uint16_t CalCRC(const uint8_t *buffer, uint16_t len) {
+  uint16_t wcrc = 0XFFFF;
+  uint8_t temp;
+  static uint16_t i = 0, j = 0;
+  for (i = 0; i < len; i++) {
+    temp = *buffer & 0X00FF;
+    buffer++;
+    wcrc ^= temp;
+    for (j = 0; j < 8; j++) {
+      if (wcrc & 0X0001) {
+        wcrc >>= 1;
+        wcrc ^= 0XA001;
+      } else {
+        wcrc >>= 1;
+      }
+    }
+  }
+  return wcrc;
+}
+
+/// 判断modbus的数据校验
+uint8_t JudgeModbus(const uint8_t *pBuffer, uint16_t unLen) {
+  static uint16_t sLocalCRC;
+  const uint8_t *pU8Data = (const uint8_t *)(&sLocalCRC);
+  sLocalCRC = CalCRC(pBuffer, unLen - 2);
+  if (pBuffer[unLen - 2] == pU8Data[0] && pBuffer[unLen - 1] == pU8Data[1]) {
+    return (1);
+  } else {
+    return (0);
+  }
 }
