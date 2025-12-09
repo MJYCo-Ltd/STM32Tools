@@ -12,7 +12,7 @@
 
 // TickType_t g_base;
 #define FLASH_PARAM_PAGE_ADDR 0x0800FC00 // 最后一页
-static HALF_WORD_DATA gJudgeEndian = {1};
+static HALF_WORD_DATA gJudgeEndian = {1}; /// 如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
 
 STMSTATUS G_LOCAL = {0, 0, 0, 0};
 
@@ -148,133 +148,97 @@ uint8_t JudgeCRC16(const uint8_t *pBuffer, uint16_t unLen,
 }
 
 void ConvertBigEndian2Double(const uint8_t* pData,DOUBLE_DATA* pDoubleOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pData, pDoubleOut->u8Data, sizeof(DOUBLE_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pDoubleOut, pData, sizeof(DOUBLE_DATA));
   }
 }
 
 void ConvertBigEndian2Word(const uint8_t* pData,WORD_DATA* pWordOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pData, pWordOut->u8Data, sizeof(WORD_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pWordOut, pData, sizeof(WORD_DATA));
   }
 }
 
 void ConvertBigEndian2HalfWord(const uint8_t* pData,HALF_WORD_DATA* pHalfWordOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pData, pHalfWordOut->u8Data, sizeof(HALF_WORD_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pHalfWordOut, pData, sizeof(HALF_WORD_DATA));
   }
 }
 
 void ConvertDouble2BigEndian(const DOUBLE_DATA* pDoubleData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pDoubleData->u8Data, pOutData, sizeof(DOUBLE_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pOutData, pDoubleData, sizeof(DOUBLE_DATA));
   }
 }
 
 void ConvertWord2BigEndian(const WORD_DATA* pWordData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pWordData->u8Data, pOutData, sizeof(WORD_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pOutData, pWordData, sizeof(WORD_DATA));
   }
 }
 
 void ConvertHalfWord2BigEndian(const HALF_WORD_DATA* pHalfWordData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pHalfWordData->u8Data, pOutData, sizeof(HALF_WORD_DATA));
   } else {
-    // 大端系统：字节序一致，直接复制
     memcpy(pOutData, pHalfWordData, sizeof(HALF_WORD_DATA));
   }
 }
 
 void ConvertLittleEndian2Double(const uint8_t* pData,DOUBLE_DATA* pDoubleOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pDoubleOut, pData, sizeof(DOUBLE_DATA));
   } else {
-    // 大端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pData, pDoubleOut->u8Data, sizeof(DOUBLE_DATA));
   }
 }
 
 void ConvertLittleEndian2Word(const uint8_t* pData,WORD_DATA* pWordOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pWordOut, pData, sizeof(WORD_DATA));
   } else {
-    // 大端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pData, pWordOut->u8Data, sizeof(WORD_DATA));
   }
 }
 
 void ConvertLittleEndian2HalfWord(const uint8_t* pData,HALF_WORD_DATA* pHalfWordOut) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pHalfWordOut, pData, sizeof(HALF_WORD_DATA));
   } else {
-    // 大端系统：需要将小端字节序转换为大端
     ReverseByteOrder(pData, pHalfWordOut->u8Data, sizeof(HALF_WORD_DATA));
   }
 }
 
 void ConvertDouble2LittleEndian(const DOUBLE_DATA* pDoubleData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pOutData, pDoubleData, sizeof(DOUBLE_DATA));
   } else {
-    // 大端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pDoubleData->u8Data, pOutData, sizeof(DOUBLE_DATA));
   }
 }
 
 void ConvertWord2LitteleEndian(const WORD_DATA* pWordData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pOutData, pWordData, sizeof(WORD_DATA));
   } else {
-    // 大端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pWordData->u8Data, pOutData, sizeof(WORD_DATA));
   }
 }
 
 void ConvertHalfWord2LitteleEndian(const HALF_WORD_DATA* pHalfWordData,uint8_t* pOutData) {
-  // 判断系统字节序：如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
   if (gJudgeEndian.u8Data[0] == 1) {
-    // 小端系统：字节序一致，直接复制
     memcpy(pOutData, pHalfWordData, sizeof(HALF_WORD_DATA));
   } else {
-    // 大端系统：需要将大端字节序转换为小端
     ReverseByteOrder(pHalfWordData->u8Data, pOutData, sizeof(HALF_WORD_DATA));
   }
 }
