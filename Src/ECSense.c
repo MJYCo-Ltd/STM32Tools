@@ -4,14 +4,17 @@
  *  Created on: Dec 8, 2025
  *      Author: yty
  */
-#include "ECSense.h"
-#include "Auxiliary.h"
 #include <string.h>
+#include <stdio.h>
+#include "Common.h"
+#include "ECSense.h"
 
-/// 传感器类型有效范围定义
-#define ECSENSE_MIN_VALUE 0x17    ///< 最小有效值 (ECSENSE_HCHO)
-#define ECSENSE_MAX_VALUE 0x57    ///< 最大有效值 (ECSENSE_PID_VOCS)
-#define ECSENSE_OTHERS_VALUE 0xD0 ///< OTHERS 特殊值
+/// 指令类型枚举
+typedef enum {
+  ECSENSE_DS4_CMD_READ = 0x03,                   /// 读取实时寄存器中的数据
+  ECSENSE_DS4_CMD_WRITE = 0x10,                  /// 向寄存器中写入数据
+  ECSENSE_DS4_CMD_MODIFY_ADDR_RESP_PREFIX = 0xFF ///< 修改Modbus地址指令
+} ECSense_DS4_CMD_Type;                          /// 传感器返回类型
 
 /// Modbus地址修改相关定义
 #define MODBUS_ADDR_MIN 0x01     ///< 最小Modbus地址
@@ -38,6 +41,12 @@ static const uint8_t s_ModifyAddrRespHeader[] = {
 
 static const uint8_t s_ReadCmdHeader[] = {MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_READ,0x20,0x00,0x00,0x08};
 #define READ_CMD_HEADER_SIZE (sizeof(s_ReadCmdHeader))
+
+static const uint8_t s_SleepCmd[]={MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_WRITE,0x20,0x60,0x00,0x01,0x02,0x00,0x01};
+#define SLEEP_HEADER_SIZE (sizeof(s_SleepCmd))
+
+static const uint8_t s_WakeUpCmd[]={MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_WRITE,0x20,0x70,0x00,0x02,0x04,0x00,0x01,0x00,0x01};
+#define WAKEUP_HEADER_SIZE (sizeof(s_WakeUpCmd))
 
 static const char* s_csUnKnow="UNKNOWN";
 /// 传感器类型到气体字符串的查找表
@@ -231,7 +240,7 @@ uint8_t ReadDS4ValueResponse(const uint8_t *pResponse, uint16_t uResponseLen,
     return (0);
   }
 
-  if (0 == JudgeCRC16(pResponse, 19, 1)) {
+  if (0 == JudgeCRC16(pResponse, 21, 1)) {
     return (0); // CRC校验失败
   }
 
@@ -251,4 +260,46 @@ uint8_t ReadDS4ValueResponse(const uint8_t *pResponse, uint16_t uResponseLen,
   pEcsValue->fRealValue = data.fData;
 
   return (1);
+}
+
+uint16_t DS4Sleep(uint8_t nAddr,uint8_t* pOutBuffer){
+  if (nAddr < MODBUS_ADDR_MIN || nAddr > MODBUS_ADDR_MAX) {
+    return 0;
+  }
+
+  memcpy(pOutBuffer, s_SleepCmd, SLEEP_HEADER_SIZE);
+  uint16_t index = SLEEP_HEADER_SIZE + 2;
+  pOutBuffer[0] = nAddr;
+  AddCRC16(pOutBuffer, index, 1);
+
+  return (index);
+}
+
+uint16_t DS4Wakeup(uint8_t nAddr,uint8_t* pOutBuffer){
+  if (nAddr < MODBUS_ADDR_MIN || nAddr > MODBUS_ADDR_MAX) {
+    return 0;
+  }
+
+  memcpy(pOutBuffer, s_WakeUpCmd, WAKEUP_HEADER_SIZE);
+  uint16_t index = WAKEUP_HEADER_SIZE + 2;
+  pOutBuffer[0] = pOutBuffer[8] = nAddr;
+  AddCRC16(pOutBuffer, index, 1);
+
+  return (index);
+}
+
+/// 将数据转换成可读的信息
+uint16_t GetShowInfo(const ECSense_DS4_Value *pDS4Value, char *pBuffer) {
+  static int nScale = 1000;
+  return sprintf(pBuffer,
+                 "Addr: %d;Gas: %s;SValue: %d.%d%s;MaxValue: %d;Health: "
+                 "%d;RValue: %d.%d%s",
+                 pDS4Value->uAddr, ECSense_GetGasString(pDS4Value->emGasType),
+                 (int)(pDS4Value->fSmoothValue * nScale) / nScale,
+                 (int)(pDS4Value->fSmoothValue * nScale) % nScale,
+                 ECSense_GetUnitString(pDS4Value->emUnitType),
+                 pDS4Value->uMaxRange, pDS4Value->uHealth,
+                 (int)(pDS4Value->fRealValue * nScale) / nScale,
+                 (int)(pDS4Value->fRealValue * nScale) % nScale,
+                 ECSense_GetUnitString(pDS4Value->emUnitType));
 }

@@ -90,12 +90,6 @@ typedef enum{
     ECSENSE_VOL=0x08
 }ECSense_DS4_Unit;
 
-/// 指令类型枚举
-typedef enum {
-  ECSENSE_DS4_CMD_READ = 0x03,           /// 读取实时寄存器中的数
-  ECSENSE_DS4_CMD_MODIFY_ADDR_RESP_PREFIX = 0xFF     ///< 修改Modbus地址指令
-} ECSense_DS4_RecvType; /// 传感器返回类型
-
 /// 传感器数据
 typedef struct{
     uint8_t uAddr;              /// 传感器地址
@@ -131,6 +125,15 @@ uint8_t ModifyAddrResponse(const uint8_t* pResponse, uint16_t uResponseLen, uint
  * @return 命令长度，如果地址无效返回0
  */
 uint16_t ReadDS4Value(uint8_t nAddr,uint8_t* pOutBuffer);
+
+/**
+ * @brief 构建传感器睡眠、醒来的数据
+ * @param nAddr
+ * @param pOutBuffer
+ * @return
+ */
+uint16_t DS4Sleep(uint8_t nAddr,uint8_t* pOutBuffer);
+uint16_t DS4Wakeup(uint8_t nAddr,uint8_t* pOutBuffer);
 /**
  * @brief 读取数据命令
  * @param pHeader 输出缓冲区，用于存储响应头
@@ -139,5 +142,13 @@ uint16_t ReadDS4Value(uint8_t nAddr,uint8_t* pOutBuffer);
  * @return 1表示成功，0表示失败
  */
 uint8_t ReadDS4ValueResponse(const uint8_t *pResponse, uint16_t uResponseLen, ECSense_DS4_Value* pEcsValue);
+
+/**
+ * @brief 将数据变成可读的信息
+ * @param pDS4Value
+ * @param pBuffer
+ * @return 转换的字符长度，如果转换失败返回0
+ */
+uint16_t GetShowInfo(const ECSense_DS4_Value* pDS4Value,char* pBuffer);
 
 #endif//__YTY_ECSENSE_H_
