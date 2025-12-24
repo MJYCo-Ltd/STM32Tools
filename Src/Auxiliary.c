@@ -70,12 +70,12 @@ uint8_t SaveFlash(const uint8_t *pData, uint16_t unLength) {
   }
 
   // Step 3：写入
-  for (uint16_t i = 0; i < unLength; i += 2) {
-    static uint16_t halfWord;
-    memcpy(&halfWord, &pData[i], sizeof(halfWord));
+  for (uint16_t i = 0; i < unLength; i += 4) {
+    static uint32_t word;
+    memcpy(&word, &pData[i], sizeof(word));
 
-    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, FLASH_PARAM_PAGE_ADDR + i,
-                          halfWord) != HAL_OK) {
+    if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_PARAM_PAGE_ADDR + i,
+                          word) != HAL_OK) {
       HAL_FLASH_Lock();
       return (0);
     }
