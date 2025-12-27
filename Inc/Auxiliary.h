@@ -64,4 +64,16 @@ const uint8_t *ReadFlash();
  *获取单片机状态
  */
 STMSTATUS GetStatus(void);
+
+/**
+ * @brief 获取随机地址
+ * @param start 起始地址
+ * @param end   结束地址
+ * @param align 对齐方式
+ * @attention range: [start, end)
+ * @return
+ */
+uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align);
+
+void enter_stop_until_5min(void);
 #endif //__YTY_AUXILIARY_H

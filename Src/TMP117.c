@@ -4,7 +4,7 @@
  *  Created on: Dec 24, 2025
  *      Author: yty
  */
-#include "cmsis_os.h"
+#include "Base.h"
 #include "tmp117.h"
 
 // Internal: I2C write 16-bit MSB first (spec: MSB first)
@@ -13,16 +13,16 @@ static HAL_StatusTypeDef tmp117_tx_u16(tmp117_t *dev, uint8_t reg, uint16_t val)
     buf[0] = reg;
     buf[1] = (uint8_t)(val >> 8);
     buf[2] = (uint8_t)(val & 0xFF);
-    return HAL_I2C_Master_Transmit(dev->hi2c, dev->i2c_addr7 << 1, buf, 3, HAL_MAX_DELAY);
+    return HAL_SMBUS_Master_Transmit_IT(dev->hi2c, dev->i2c_addr7 << 1, buf, 3, HAL_MAX_DELAY);
 }
 
 // Internal: I2C read 16-bit MSB first: write pointer then read (Read Word timing)
 static HAL_StatusTypeDef tmp117_rx_u16(tmp117_t *dev, uint8_t reg, uint16_t *val) {
     HAL_StatusTypeDef st;
-    st = HAL_I2C_Master_Transmit(dev->hi2c, dev->i2c_addr7 << 1, &reg, 1, HAL_MAX_DELAY);
+    st = HAL_SMBUS_Master_Transmit_IT(dev->hi2c, dev->i2c_addr7 << 1, &reg, 1, HAL_MAX_DELAY);
     if (st != HAL_OK) return st;
     uint8_t data[2];
-    st = HAL_I2C_Master_Receive(dev->hi2c, dev->i2c_addr7 << 1, data, 2, HAL_MAX_DELAY);
+    st = HAL_SMBUS_Master_Receive_IT(dev->hi2c, dev->i2c_addr7 << 1, data, 2, HAL_MAX_DELAY);
     if (st != HAL_OK) return st;
     *val = ((uint16_t)data[0] << 8) | data[1];
     return HAL_OK;
@@ -153,7 +153,7 @@ HAL_StatusTypeDef tmp117_write_eeprom_gp(tmp117_t *dev, uint8_t ee_reg_05_06_08,
         if (st != HAL_OK) return st;
         if (!busy) break;
         if ((HAL_GetTick() - start) > 100) break; // guard
-        osDelay(2);
+        YTY_DELAY_MS(2);
     }
     // Lock happens automatically after general call reset; issue GC reset:
     st = tmp117_general_call_reset(dev->hi2c);
@@ -167,24 +167,24 @@ HAL_StatusTypeDef tmp117_soft_reset(tmp117_t *dev) {
     if (st != HAL_OK) return st;
     cfg |= (1U << TMP117_CFG_SOFT_RESET_Pos);
     st = tmp117_write_config(dev, cfg);
-    osDelay(3); // allow reset complete
+    YTY_DELAY_MS(3); // allow reset complete
     return st;
 }
 
-HAL_StatusTypeDef tmp117_general_call_reset(I2C_HandleTypeDef *hi2c) {
+HAL_StatusTypeDef tmp117_general_call_reset(SMBUS_HandleTypeDef *hi2c) {
     // GC address 0x00, then second byte 0x06 per spec timing diagram
     uint8_t gc_addr = 0x00; // 7-bit general call
     uint8_t cmd[2] = {0x00, 0x06};
     // Two bytes following GC address; many HALs require addressing as 0x00<<1
-    HAL_StatusTypeDef st = HAL_I2C_Master_Transmit(hi2c, gc_addr << 1, cmd, 2, HAL_MAX_DELAY);
-    osDelay(2); // device reset ~1.5 ms (spec)
+    HAL_StatusTypeDef st = HAL_SMBUS_Master_Transmit_IT(hi2c, gc_addr << 1, cmd, 2, HAL_MAX_DELAY);
+    YTY_DELAY_MS(2); // device reset ~1.5 ms (spec)
     return st;
 }
 
 void TMP117_Init_Axilla(tmp117_t* pDev) {
   // 1. General Call Reset，确保加载EEPROM 配置
   tmp117_general_call_reset(pDev->hi2c);
-  osDelay(2);
+  YTY_DELAY_MS(2);
   // 2. 配置为一次转换模式 + 8 次平均
   uint16_t cfg;
   tmp117_read_config(pDev, &cfg);
@@ -213,7 +213,7 @@ void TMP117_Read_Axilla(tmp117_t* pDev,float* pTc) {
   bool dr = false;
   do {
     tmp117_read_status_flags(pDev, NULL, NULL, &dr, NULL);
-    osDelay(100);
+    YTY_DELAY_MS(100);
   } while (!dr);
   // 读取温度（读取后自动清除 DataReady）
   tmp117_read_temperature_c(pDev, pTc);

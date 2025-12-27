@@ -79,7 +79,7 @@ typedef enum {
 } tmp117_mode_t;
 
 typedef struct {
-    I2C_HandleTypeDef *hi2c;
+    SMBUS_HandleTypeDef *hi2c;
     uint16_t i2c_addr7; // 7-bit address: 0x48..0x4B
 } tmp117_t;
 
@@ -108,7 +108,7 @@ HAL_StatusTypeDef tmp117_eeprom_busy(tmp117_t *dev, bool *busy);
 HAL_StatusTypeDef tmp117_write_eeprom_gp(tmp117_t *dev, uint8_t ee_reg_05_06_08, uint16_t data);
 
 HAL_StatusTypeDef tmp117_soft_reset(tmp117_t *dev);
-HAL_StatusTypeDef tmp117_general_call_reset(I2C_HandleTypeDef *hi2c);
+HAL_StatusTypeDef tmp117_general_call_reset(SMBUS_HandleTypeDef *hi2c);
 
 void TMP117_Init_Axilla(tmp117_t*);
 void TMP117_Read_Axilla(tmp117_t*,float*);

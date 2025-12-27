@@ -5,13 +5,17 @@
  *      Author: yty
  */
 #include <string.h>
+#include <stdlib.h>
 #include "UartReceive.h"
-#include "cmsis_os.h"
+#include "Base.h"
 #include "main.h"
 #include "Auxiliary.h"
 
+volatile uint16_t rtc_sec_cnt = 0;
+volatile uint8_t rtc_5min_flag = 0;
+void SystemClock_Config(void);
+
 // TickType_t g_base;
-#define FLASH_PARAM_PAGE_ADDR 0x0800FC00 // 最后一页
 
 STMSTATUS G_LOCAL = {0, 0, 0, 0};
 
@@ -21,7 +25,7 @@ void SendDebugInfo(const uint8_t *pData, uint16_t uLength) {
     return;
   UART_HandleTypeDef *pHUart = GetUart(1);
   while (HAL_OK != HAL_UART_Transmit(pHUart, pData, uLength, 30)) {
-    osDelay(1);
+    YTY_DELAY_MS(1);
   }
   UpdateUartSendInfo(pHUart, uLength);
 }
@@ -39,7 +43,7 @@ unsigned long getRunTimeCounterValue(void) {
 
 /// 请求空间
 void *RequestSpace(size_t unSize) {
-  void *pBuffer = pvPortMalloc(unSize);
+  void *pBuffer = YTY_MALLOC(unSize);
   if (NULL != pBuffer) {
     memset(pBuffer, 0, unSize);
   }
@@ -48,8 +52,9 @@ void *RequestSpace(size_t unSize) {
 }
 
 /// 回收空间
-void RecycleSpace(void *pBuffer) { vPortFree(pBuffer); }
+void RecycleSpace(void *pBuffer) { YTY_FREE(pBuffer); }
 
+#define FLASH_PARAM_PAGE_ADDR 0x0800FC00 // 最后一页
 /// 保存数据到flash中
 uint8_t SaveFlash(const uint8_t *pData, uint16_t unLength) {
   FLASH_EraseInitTypeDef EraseInitStruct;
@@ -88,7 +93,37 @@ uint8_t SaveFlash(const uint8_t *pData, uint16_t unLength) {
 
 /// 获取状态
 STMSTATUS GetStatus(void) {
+#ifdef USE_FREERTOS
   G_LOCAL.unRamFree = xPortGetFreeHeapSize();
   //	S_LOCAL.unCPURate = GetCPUUsage();
+#endif
   return (G_LOCAL);
+}
+
+/// 获取范围
+uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align) {
+  // align 必须是 2 的幂（2,4,8...）
+  uint32_t first = (start + align - 1) & ~(align - 1);
+  uint32_t last = (end - 1) & ~(align - 1);
+
+  if (first > last) {
+    return first; // 或者 assert / error
+  }
+
+  uint32_t count = (last - first) / align + 1;
+  uint32_t idx = rand() % count;
+
+  return first + idx * align;
+}
+
+void enter_stop_until_5min(void) {
+  rtc_5min_flag = 0;
+
+  HAL_SuspendTick(); // 关闭 SysTick 避免唤醒
+  while (!rtc_5min_flag) {
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    // RTC 中断唤醒 MCU 执行到这里
+    SystemClock_Config(); // 必须重配时钟
+  }
+  HAL_ResumeTick();
 }

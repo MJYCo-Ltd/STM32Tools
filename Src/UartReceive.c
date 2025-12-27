@@ -5,7 +5,7 @@
  *      Author: yty
  */
 #include <string.h>
-#include "cmsis_os.h"
+#include "Base.h"
 #include "UartReceive.h"
 
 /// 定义串口数据结构体
@@ -14,7 +14,9 @@ typedef struct _Uart_Info {
   ReceiveUartCallback pCallback; /// 串口回调
   uint8_t *pBuffer;              /// 串口缓冲区
   uint8_t *pReceive;             /// 串口接收地址
+#ifdef USE_FREERTOS
   osMessageQueueId_t hQueueId;   /// 串口获取消息队列
+#endif
   IOInfo stAllIOInfo;            /// 串口收发数据统计
 } Uart_Info;
 
@@ -46,7 +48,9 @@ uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
   if (NULL == pUartInfo) {
     return (0);
   } else {
+#ifdef USE_FREERTOS
     pUartInfo->hQueueId = osMessageQueueNew(10, sizeof(UartQueueInfo), NULL);
+#endif
     /// 绑定
     pUartInfo->pHUart = pHUart;
     pUartInfo->pCallback = pCallback;
@@ -92,9 +96,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
     if (pHUart == pUartInfo->pHUart) {
       LOCAL_QUEUE_INFO.pBuffer = pUartInfo->pReceive;
       LOCAL_QUEUE_INFO.nLength = nSize; // 获取DMA中传输的数据个数
-
+#ifdef USE_FREERTOS
       if (osOK ==
-          osMessageQueuePut(pUartInfo->hQueueId, &LOCAL_QUEUE_INFO, 0, 0)) {
+          osMessageQueuePut(pUartInfo->hQueueId, &LOCAL_QUEUE_INFO, 0, 0))
+#endif
+      {
         pUartInfo->stAllIOInfo.unReciveCount += nSize;
       }
 
@@ -110,6 +116,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
 
 /// 定时处理数据
 void ProcessUart(void) {
+#ifdef USE_FREERTOS
   static UartQueueInfo LOCAL_QUEUE_INFO;
   for (uint8_t index = 0; index < uUartIndex; ++index) {
     Uart_Info *pUartInfo = pUartInfoArray[index];
@@ -139,6 +146,7 @@ void ProcessUart(void) {
       }
     }
   }
+#endif
 }
 
 /// 获取串口接收数据信息
