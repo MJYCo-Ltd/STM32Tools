@@ -4,7 +4,7 @@
  * @brief          : 此文件为通用函数的定义的辅助工具
  ******************************************************************************
  *
- *  Created on: Apr 12, 2024
+ *  Created on: Dec 10, 2025
  *      Author: yty
  */
 #ifndef __YTY_COMMON_H_
@@ -94,5 +94,15 @@ void ConvertLittleEndian2HalfWord(const uint8_t* pData,HALF_WORD_DATA* pHalfWord
 void ConvertDouble2LittleEndian(const DOUBLE_DATA* pDoubleData,uint8_t* pOutData);
 void ConvertWord2LitteleEndian(const WORD_DATA* pWordData,uint8_t* pOutData);
 void ConvertHalfWord2LitteleEndian(const HALF_WORD_DATA* pHalfWordData,uint8_t* pOutData);
+
+/**
+ * @brief 获取随机地址
+ * @param start 起始地址
+ * @param end   结束地址
+ * @param align 对齐方式
+ * @attention range: [start, end)
+ * @return
+ */
+uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align);
 
 #endif //__YTY_COMMON_H_

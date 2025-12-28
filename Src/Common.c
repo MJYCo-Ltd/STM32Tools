@@ -5,6 +5,7 @@
  *      Author: yty
  */
 #include <string.h>
+#include <stdlib.h>
 #include "Common.h"
 static HALF_WORD_DATA gJudgeEndian = {1}; /// 如果 gJudgeEndian.u8Data[0] == 1，说明是小端系统
 /// 将输入字节数组逆序复制到输出缓冲区
@@ -165,4 +166,20 @@ void ConvertHalfWord2LitteleEndian(const HALF_WORD_DATA* pHalfWordData,uint8_t* 
   } else {
     ReverseByteOrder(pHalfWordData->u8Data, pOutData, sizeof(HALF_WORD_DATA));
   }
+}
+
+/// 获取范围
+uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align) {
+  // align 必须是 2 的幂（2,4,8...）
+  uint32_t first = (start + align - 1) & ~(align - 1);
+  uint32_t last = (end - 1) & ~(align - 1);
+
+  if (first > last) {
+    return first; // 或者 assert / error
+  }
+
+  uint32_t count = (last - first) / align + 1;
+  uint32_t idx = rand() % count;
+
+  return first + idx * align;
 }

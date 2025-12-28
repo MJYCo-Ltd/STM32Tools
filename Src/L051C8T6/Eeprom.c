@@ -14,10 +14,9 @@
  */
 
 #include "L051C8T6/Eeprom.h"
-#include "Auxiliary.h"
 #include "main.h"
 #include <string.h>
-
+#include "Common.h"
 #define EEPROM_START_ADDRESS DATA_EEPROM_BASE
 #define EEPROM_END_ADDRESS (DATA_EEPROM_END + 1)
 
