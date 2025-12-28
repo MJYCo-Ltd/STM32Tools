@@ -45,4 +45,19 @@ bool MX22_IsConnected(void);
 /* ===== 透传数据 ===== */
 mx22_status_t MX22_SendData(uint8_t *data, uint16_t len);
 
+/* ===== 配对相关 ===== */
+
+/* 是否开启配对码 */
+mx22_status_t MX22_EnablePairing(bool enable);
+
+/* 设置配对 PIN（最长 16 字节） */
+mx22_status_t MX22_SetPairingPin(const char *pin);
+
+/* 查询当前配对 PIN */
+mx22_status_t MX22_GetPairingPin(char *buf, uint16_t len);
+
+/* 阻塞等待配对 / 连接完成（超时） */
+mx22_status_t MX22_WaitForConnection(uint32_t timeout_ms);
+
+
 #endif //* __MX22_H */

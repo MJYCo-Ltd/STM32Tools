@@ -190,3 +190,52 @@ mx22_status_t MX22_SendData(uint8_t *data, uint16_t len) {
 
   return MX22_OK;
 }
+
+/* 是否开启配对码 */
+mx22_status_t MX22_EnablePairing(bool enable) {
+  char cmd[32];
+
+  snprintf(cmd, sizeof(cmd), "AT+PINE=%d\r\n", enable ? 1 : 0);
+
+  MX22_EnterCommandMode();
+  return mx22_send_at_ok(cmd);
+}
+
+mx22_status_t MX22_SetPairingPin(const char *pin) {
+  char cmd[48];
+
+  if (!pin || strlen(pin) == 0 || strlen(pin) > 16)
+    return MX22_ERROR;
+
+  snprintf(cmd, sizeof(cmd), "AT+PIN=%s\r\n", pin);
+
+  MX22_EnterCommandMode();
+  return mx22_send_at_ok(cmd);
+}
+
+mx22_status_t MX22_GetPairingPin(char *buf, uint16_t len) {
+  MX22_EnterCommandMode();
+  mx22_uart_send_str("AT+PIN?\r\n");
+
+  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
+    return MX22_TIMEOUT;
+
+  if (strstr(rx_buf, "+PIN:") == NULL)
+    return MX22_ERROR;
+
+  strncpy(buf, rx_buf, len - 1);
+  return MX22_OK;
+}
+
+mx22_status_t MX22_WaitForConnection(uint32_t timeout_ms) {
+  uint32_t start = HAL_GetTick();
+
+  while ((HAL_GetTick() - start) < timeout_ms) {
+    if (MX22_IsConnected())
+      return MX22_OK;
+
+    HAL_Delay(20);
+  }
+
+  return MX22_TIMEOUT;
+}
