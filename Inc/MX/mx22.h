@@ -20,6 +20,15 @@ typedef enum {
     MX22_NOT_READY,
 } mx22_status_t;
 
+/* ===== SPP / BLE 控制 ===== */
+
+typedef enum {
+    MX22_RADIO_SPP,
+    MX22_RADIO_BLE,
+    MX22_RADIO_SPP_AND_BLE,
+    MX22_RADIO_OFF
+} mx22_radio_mode_t;
+
 /* ===== 初始化 ===== */
 mx22_status_t MX22_Init(void);
 
@@ -28,7 +37,6 @@ void MX22_EnterCommandMode(void);
 void MX22_EnterDataMode(void);
 
 /* ===== AT 基础 ===== */
-mx22_status_t MX22_Test(void); // AT
 mx22_status_t MX22_GetVersion(char *buf, uint16_t len);
 
 /* ===== 蓝牙参数 ===== */
@@ -40,6 +48,15 @@ mx22_status_t MX22_SetBLEName(const char *name);
 mx22_status_t MX22_SetBaudrate(uint32_t baud);
 
 /* ===== 连接状态 ===== */
+/* 设置无线工作模式 */
+mx22_status_t MX22_SetRadioMode(mx22_radio_mode_t mode);
+
+/* 单独控制 */
+mx22_status_t MX22_EnableSPP(bool enable);
+mx22_status_t MX22_EnableBLE(bool enable);
+
+/* 主动断开当前连接 */
+mx22_status_t MX22_Disconnect(void);
 bool MX22_IsConnected(void);
 
 /* ===== 透传数据 ===== */
@@ -58,6 +75,5 @@ mx22_status_t MX22_GetPairingPin(char *buf, uint16_t len);
 
 /* 阻塞等待配对 / 连接完成（超时） */
 mx22_status_t MX22_WaitForConnection(uint32_t timeout_ms);
-
 
 #endif //* __MX22_H */

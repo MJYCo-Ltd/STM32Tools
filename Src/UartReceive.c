@@ -42,9 +42,7 @@ uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
   if (NULL == pUartInfoArray) {
     return (0);
   }
-
   Uart_Info *pUartInfo = RequestSpace(sizeof(*pUartInfo));
-
   if (NULL == pUartInfo) {
     return (0);
   } else {

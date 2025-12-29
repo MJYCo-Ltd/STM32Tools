@@ -47,14 +47,6 @@ void *RequestSpace(size_t unSize);
 void RecycleSpace(void *pBuffer);
 
 /**
- * @brief 向Flash中写入数据
- * @param pData 写入数据开始指针
- * @param unLength 写入数据长度（小于 1024）
- * @return 0 表示失败 1表示成功
- */
-uint8_t SaveFlash(const uint8_t *pData, uint16_t unLength);
-
-/**
  * @brief 获取flash
  * @return
  */

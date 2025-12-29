@@ -82,11 +82,6 @@ mx22_status_t MX22_Init(void) {
 
 /* ================= 基础 AT ================= */
 
-mx22_status_t MX22_Test(void) {
-  MX22_EnterCommandMode();
-  return mx22_send_at_ok("AT\r\n");
-}
-
 mx22_status_t MX22_GetVersion(char *buf, uint16_t len) {
   MX22_EnterCommandMode();
   mx22_uart_send_str("AT+VER?\r\n");
@@ -238,4 +233,60 @@ mx22_status_t MX22_WaitForConnection(uint32_t timeout_ms) {
   }
 
   return MX22_TIMEOUT;
+}
+
+mx22_status_t MX22_SetRadioMode(mx22_radio_mode_t mode) {
+  mx22_status_t ret;
+
+  MX22_EnterCommandMode();
+
+  switch (mode) {
+  case MX22_RADIO_SPP:
+    ret = MX22_EnableBLE(false);
+    ret |= MX22_EnableSPP(true);
+    break;
+
+  case MX22_RADIO_BLE:
+    ret = MX22_EnableSPP(false);
+    ret |= MX22_EnableBLE(true);
+    break;
+
+  case MX22_RADIO_SPP_AND_BLE:
+    ret = MX22_EnableSPP(true);
+    ret |= MX22_EnableBLE(true);
+    break;
+
+  case MX22_RADIO_OFF:
+    ret = MX22_EnableSPP(false);
+    ret |= MX22_EnableBLE(false);
+    break;
+
+  default:
+    return MX22_ERROR;
+  }
+
+  return ret == MX22_OK ? MX22_OK : MX22_ERROR;
+}
+
+mx22_status_t MX22_EnableBLE(bool enable) {
+  char cmd[24];
+
+  snprintf(cmd, sizeof(cmd), "AT+BLE=%d\r\n", enable ? 1 : 0);
+
+  MX22_EnterCommandMode();
+  return mx22_send_at_ok(cmd);
+}
+
+mx22_status_t MX22_EnableSPP(bool enable) {
+  char cmd[24];
+
+  snprintf(cmd, sizeof(cmd), "AT+SPP=%d\r\n", enable ? 1 : 0);
+
+  MX22_EnterCommandMode();
+  return mx22_send_at_ok(cmd);
+}
+
+mx22_status_t MX22_Disconnect(void) {
+  MX22_EnterCommandMode();
+  return mx22_send_at_ok("AT+DISC=1\r\n");
 }

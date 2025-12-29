@@ -7,9 +7,10 @@
 - 使用pvMalloc需要在开启任务循环后才能进行，如果直接在系统初始化之后，结果未可知。最好在一个任务进入任务循环之前进行空间开辟
 # 串口通信
 ## cubemx中的设置
-- 在DMA Settings 选项下增加 USART_RX 和 USART_TX
+- 在DMA Settings 选项下增加 USART_RX
 - 在NVIC Settings 选项下开启 global interrupt
 - 开辟一个新的Task用于处理 ProcessUart();如果在DefaultTask中调用，会因为执行其他代码而阻塞
+- 如果启用了BeginReceiveUartInfo，将一直调用 HAL_UARTEx_ReceiveToIdle_DMA，RxState 将一直处于 HAL_UART_STATE_BUSY_RX状态
 ## 性能
 - 经过测试在目前 每个串口有100个字节的缓存区的情况下，每50毫秒，接收51个字节，不会丢失数据
 
