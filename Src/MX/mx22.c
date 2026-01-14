@@ -71,11 +71,11 @@ mx22_status_t MX22_Init(void) {
   HAL_GPIO_WritePin(MX22_RST_PORT, MX22_RST_PIN, GPIO_PIN_SET);
 
   /* 等待 READY */
-  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
-    return MX22_TIMEOUT;
+  // if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
+  //   return MX22_TIMEOUT;
 
-  if (strstr(rx_buf, "READY") == NULL)
-    return MX22_NOT_READY;
+  // if (strstr(rx_buf, "READY") == NULL)
+  //   return MX22_NOT_READY;
 
   return MX22_OK;
 }

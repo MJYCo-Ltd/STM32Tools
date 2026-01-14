@@ -13,9 +13,9 @@
 #include "main.h" // 按你的芯片系列修改
 
 /* ===== UART 句柄 ===== */
-extern UART_HandleTypeDef huart2; // MX-22 UART
+extern UART_HandleTypeDef huart1; // MX-22 UART
 
-#define MX22_UART huart2
+#define MX22_UART huart1
 #define MX22_UART_TIMEOUT 5000 // ms
 
 /* ===== 控制引脚（可选，但文档强烈建议接） ===== */
