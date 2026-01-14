@@ -53,9 +53,13 @@ void RecycleSpace(void *pBuffer);
 const uint8_t *ReadFlash();
 
 /**
+ * @brief 进入低功耗模式，直到5分钟
+ * @note 此函数会进入低功耗模式，直到5分钟，然后唤醒MCU
+ */
+void EnterStopUntil5min(void);
+
+/**
  *获取单片机状态
  */
 STMSTATUS GetStatus(void);
-
-void enter_stop_until_5min(void);
 #endif //__YTY_AUXILIARY_H

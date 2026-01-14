@@ -10,7 +10,6 @@
 #include "main.h"
 #include <string.h>
 
-volatile uint16_t rtc_sec_cnt = 0;
 volatile uint8_t rtc_5min_flag = 0;
 void SystemClock_Config(void);
 
@@ -40,7 +39,6 @@ unsigned long getRunTimeCounterValue(void) {
   return (g_TotalTime + __HAL_TIM_GET_COUNTER(&htim10));
 }
 
-extern UART_HandleTypeDef huart1;
 /// 请求空间
 void *RequestSpace(size_t unSize) {
   void *pBuffer = YTY_MALLOC(unSize);
@@ -63,7 +61,8 @@ STMSTATUS GetStatus(void) {
   return (G_LOCAL);
 }
 
-void enter_stop_until_5min(void) {
+// 进入低功耗模式，直到5分钟
+void EnterStopUntil5min(void) {
   rtc_5min_flag = 0;
 
   HAL_SuspendTick(); // 关闭 SysTick 避免唤醒

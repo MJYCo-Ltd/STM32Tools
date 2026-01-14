@@ -16,6 +16,7 @@
 #define YTY_MALLOC(size) pvPortMalloc(size)
 #define YTY_FREE(ptr) vPortFree(ptr)
 #else
+#include <stdlib.h>
 #define YTY_DELAY_MS(ms) HAL_Delay(ms)
 #define YTY_MALLOC(size) malloc(size)
 #define YTY_FREE(ptr) free(ptr)
