@@ -62,11 +62,11 @@ typedef enum {
 // 获取温度值
 TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp) {
     if (temp == NULL) {
-        return TMP117_ERR_I2C;
+        return TMP117_ERR_RANGE;
     }
     
     uint16_t val;
-    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_TEMP_RES, &val);
+    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_TEMP_RES, &val,1);
     if (status != TMP117_OK) {
         return status;
     }
@@ -84,7 +84,7 @@ TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp) {
 TMP117_Status TMP117_SetWorkMode(uint8_t addr7, TMP117_Mode workMode) {
     // 读取当前配置寄存器
     uint16_t config_raw;
-    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_CONFIGURATION, &config_raw);
+    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_CONFIGURATION, &config_raw,1);
     if (status != TMP117_OK) {
         return status;
     }
@@ -96,7 +96,7 @@ TMP117_Status TMP117_SetWorkMode(uint8_t addr7, TMP117_Mode workMode) {
     config_raw |= ((uint16_t)workMode << TMP117_CFG_MOD0_Pos);
 
     // 写回配置寄存器
-    status = TMP117_I2C_Write(addr7, TMP117_REG_CONFIGURATION, config_raw);
+    status = TMP117_I2C_Write(addr7, TMP117_REG_CONFIGURATION, config_raw,0);
     if (status != TMP117_OK) {
         return status;
     }

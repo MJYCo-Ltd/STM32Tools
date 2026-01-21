@@ -25,7 +25,8 @@
 // 状态码定义
 typedef enum {
     TMP117_OK = 0,
-    TMP117_ERR_I2C,
+    TMP117_ERR_WRITE_I2C,
+    TMP117_ERR_READ_I2C,
     TMP117_ERR_TIMEOUT,
     TMP117_ERR_RANGE,
     TMP117_ERR_NOT_READY,
@@ -44,6 +45,7 @@ typedef struct {
     bool  valid;      // 是否在医学有效区间
 } TMP117_Temp;
 
+////////////////// 阻塞式 //////////////////////////
 /**
  * @brief 获取 TMP117 温度值
  * @param addr7 I2C 7位地址（可使用 TMP117_ADDR_GND、TMP117_ADDR_VDD 等宏定义）
@@ -54,12 +56,16 @@ typedef struct {
 TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp);
 
 /**
- * @brief 设置 TMP117 工作模式
+ * @brief 阻塞式 设置 TMP117 工作模式
  * @param addr7 I2C 7位地址（可使用 TMP117_ADDR_GND、TMP117_ADDR_VDD 等宏定义）
  * @param workMode 工作模式（TMP117_MODE_CONTINUOUS、TMP117_MODE_SHUTDOWN、TMP117_MODE_ONE_SHOT）
  * @return TMP117_Status 状态码，TMP117_OK 表示成功
  * @note 此函数会读取当前配置寄存器，修改模式位后写回
  */
 TMP117_Status TMP117_SetWorkMode(uint8_t addr7, TMP117_Mode workMode);
+////////////////// 阻塞式 end //////////////////////////
 
+/////////////////// 非阻塞式 //////////////////////////
+
+/////////////////// 非阻塞式 end //////////////////////
 #endif // __TMP117_H__

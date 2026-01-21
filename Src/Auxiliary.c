@@ -65,11 +65,10 @@ STMSTATUS GetStatus(void) {
 void EnterStopUntil5min(void) {
   rtc_5min_flag = 0;
 
-  HAL_SuspendTick(); // 关闭 SysTick 避免唤醒
-  while (!rtc_5min_flag) {
+  while (0 == rtc_5min_flag) {
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    // RTC 中断唤醒 MCU 执行到这里
-    SystemClock_Config(); // 必须重配时钟
   }
-  HAL_ResumeTick();
+
+  // RTC 中断唤醒 MCU 执行到这里
+  SystemClock_Config(); // 必须重配时钟
 }
