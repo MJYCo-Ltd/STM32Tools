@@ -12,6 +12,13 @@
 #define __YTY_AUXILIARY_H_
 #include <stddef.h>
 #include <stdint.h>
+
+typedef enum
+{
+    LP_MODE_STOP=0,
+    LP_MODE_STANDBY
+} LOW_POWER_MODE;
+
 typedef struct {
     uint8_t unRamTotal;     /// ram总空间
     uint8_t unRamFree;      /// ram剩余空间
@@ -53,10 +60,13 @@ void RecycleSpace(void *pBuffer);
 const uint8_t *ReadFlash();
 
 /**
- * @brief 进入低功耗模式，直到5分钟
- * @note 此函数会进入低功耗模式，直到5分钟，然后唤醒MCU
+ * @brief 进入低功耗模式
+ * @param 低功耗模式
+ * @param WakeUpCounter 定时个数
+ * @param WakeUpClock  定时周期
  */
-void EnterStopUntil5min(void);
+void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
+                       uint32_t WakeUpClock);
 
 /**
  *获取单片机状态

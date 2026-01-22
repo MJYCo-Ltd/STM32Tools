@@ -61,14 +61,33 @@ STMSTATUS GetStatus(void) {
   return (G_LOCAL);
 }
 
-// 进入低功耗模式，直到5分钟
-void EnterStopUntil5min(void) {
-  rtc_5min_flag = 0;
+extern RTC_HandleTypeDef hrtc;
 
-  while (0 == rtc_5min_flag) {
+void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
+                       uint32_t WakeUpClock) {
+  /* 清除 PWR 唤醒标志 */
+  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+
+  /* 关闭旧的 RTC WakeUp Timer */
+  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+
+  /* 配置 RTC WakeUp Timer */
+  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, WakeUpCounter, WakeUpClock);
+
+  /* 清除 RTC WakeUp 标志 */
+  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+
+  switch (mode) {
+  case LP_MODE_STOP:
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-  }
+    SystemClock_Config();
+    break;
 
-  // RTC 中断唤醒 MCU 执行到这里
-  SystemClock_Config(); // 必须重配时钟
+  case LP_MODE_STANDBY:
+    HAL_PWR_EnterSTANDBYMode();
+    break;
+
+  default:
+    break;
+  }
 }
