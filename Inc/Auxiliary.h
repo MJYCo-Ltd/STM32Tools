@@ -60,6 +60,16 @@ void RecycleSpace(void *pBuffer);
 const uint8_t *ReadFlash();
 
 /**
+ * @brief 进入休眠模式
+ */
+void Enter_Sleep(void);
+
+/**
+ * @brief 进入停止模式
+ */
+void Enter_Stop(void);
+
+/**
  * @brief 进入低功耗模式
  * @param 低功耗模式
  * @param WakeUpCounter 定时个数

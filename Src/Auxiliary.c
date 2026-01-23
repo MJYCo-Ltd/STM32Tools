@@ -61,6 +61,17 @@ STMSTATUS GetStatus(void) {
   return (G_LOCAL);
 }
 
+/// 进入休眠模式
+void Enter_Sleep() {
+  HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+}
+
+/// 进入停止模式
+void Enter_Stop(void) {
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+  SystemClock_Config();
+}
+
 extern RTC_HandleTypeDef hrtc;
 
 void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
@@ -68,19 +79,12 @@ void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
   /* 清除 PWR 唤醒标志 */
   __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
-  /* 关闭旧的 RTC WakeUp Timer */
-  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-
   /* 配置 RTC WakeUp Timer */
   HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, WakeUpCounter, WakeUpClock);
 
-  /* 清除 RTC WakeUp 标志 */
-  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-
   switch (mode) {
   case LP_MODE_STOP:
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    SystemClock_Config();
+    Enter_Stop();
     break;
 
   case LP_MODE_STANDBY:

@@ -1,5 +1,6 @@
 #include "TMP/tmp117.h"
 #include "main.h"
+#include "Auxiliary.h"
 
 // I2C 句柄（用户需要在 main.c 或其他地方定义）
 extern I2C_HandleTypeDef hi2c1;
