@@ -27,7 +27,7 @@ void SendDebugInfo(const uint8_t *pData, uint16_t uLength) {
   }
   UpdateUartSendInfo(pHUart, uLength);
 }
-
+/*
 extern TIM_HandleTypeDef htim10;
 unsigned long g_TotalTime = 0;
 void configureTimerForRunTimeStats(void) {
@@ -38,7 +38,7 @@ void configureTimerForRunTimeStats(void) {
 unsigned long getRunTimeCounterValue(void) {
   return (g_TotalTime + __HAL_TIM_GET_COUNTER(&htim10));
 }
-
+*/
 /// 请求空间
 void *RequestSpace(size_t unSize) {
   void *pBuffer = YTY_MALLOC(unSize);
