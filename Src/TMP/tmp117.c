@@ -4,6 +4,7 @@
  *  Created on: Jan 13, 2026
  *      Author: TMP117 Driver
  */
+#include <stddef.h>
 #include "TMP/tmp117.h"
 
 // ---- Register pointer addresses (spec Table 7-3) ----
@@ -57,7 +58,12 @@ typedef enum {
     TMP117_AVG_64    = 0b11,
 } tmp117_avg_t;
 
+#ifdef PLATFORM_STM32
 #include "TMP/tmp117_User.c"
+#else
+TMP117_Status TMP117_I2C_Write(uint8_t addr7, uint8_t reg, uint16_t val, int type);
+TMP117_Status TMP117_I2C_Read(uint8_t addr7, uint8_t reg, uint16_t *val, int type);
+#endif
 
 // 获取温度值
 TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp) {
@@ -65,14 +71,13 @@ TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp) {
         return TMP117_ERR_RANGE;
     }
     
-    uint16_t val;
-    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_TEMP_RES, &val,1);
+    TMP117_Status status = TMP117_I2C_Read(addr7, TMP117_REG_TEMP_RES, &temp->uValue,1);
     if (status != TMP117_OK) {
         return status;
     }
     
     // 转换为摄氏度 (1 LSB = 0.0078125°C)
-    temp->value = (int16_t)val * 0.0078125f;
+    temp->value = (int16_t)temp->uValue * 0.0078125f;
     
     // 检查是否在医学有效区间（通常为 35-42°C）
     temp->valid = (temp->value >= 35.0f && temp->value <= 42.0f);

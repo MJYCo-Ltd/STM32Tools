@@ -22,4 +22,13 @@
 #define YTY_FREE(ptr) free(ptr)
 #endif
 
+#if defined(STM32F0xx) || defined(STM32F1xx) || defined(STM32F2xx) || \
+    defined(STM32F3xx) || defined(STM32F4xx) || defined(STM32F7xx) || \
+    defined(STM32G0xx) || defined(STM32G4xx) || \
+    defined(STM32H7xx) || \
+    defined(STM32L0xx) || defined(STM32L1xx) || defined(STM32L4xx) || defined(STM32L5xx) || \
+    defined(STM32WBxx) || defined(STM32WLxx)
+
+    #define PLATFORM_STM32
+#endif
 #endif //__YTY_BASE_H_

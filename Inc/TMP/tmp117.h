@@ -41,6 +41,7 @@ typedef enum {
 
 // 温度值结构体
 typedef struct {
+	  uint16_t uValue;  // 原始数据
     float value;      // °C
     bool  valid;      // 是否在医学有效区间
 } TMP117_Temp;
