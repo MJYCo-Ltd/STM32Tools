@@ -28,13 +28,15 @@ static void ST7789_WriteData(uint8_t *buff, size_t buff_size) {
 
   /* HAL 单次传输限制 64K，需分块发送 */
 
-  //SCB_CleanDCache_by_Addr((uint32_t *)buff, buff_size);
+  if (buff == lcd_buffer) {
+    //SCB_CleanDCache_by_Addr((uint32_t *)lcd_buffer, LCD_BUFFER_SIZE);
+  }
   while (buff_size > 0) {
     uint16_t chunk_size = buff_size > 65535 ? 65535 : buff_size;
 #ifdef USE_BUFFER
-    if (16 <= buff_size) {
+    /*if (16 <= buff_size) {
       HAL_SPI_Transmit_DMA(&ST7789_SPI_PORT, buff, chunk_size);
-    } else {
+    } else */{
       HAL_SPI_Transmit(&ST7789_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
     }
 #else

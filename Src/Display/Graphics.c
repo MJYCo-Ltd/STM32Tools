@@ -57,11 +57,11 @@ __attribute__((weak)) void DrawLine(uint16_t x0, uint16_t y0, uint16_t x1,
                                     uint16_t y1, COLOR color) {
 
   if (y0 == y1) {
-    DrawHLine(x0 < x1 ? x0 : x1, y0, abs(x1 - x0) + 1, color);
+    DrawHLine(x0 < x1 ? x0 : x1, y0, x0 < x1 ? x1 : x0, color);
     return;
   }
   if (x0 == x1) {
-    DrawVLine(x0, y0 < y1 ? y0 : y1, abs(y1 - y0) + 1, color);
+    DrawVLine(x0, y0 < y1 ? y0 : y1, y0 < y1 ? y1 : y0, color);
     return;
   }
 
