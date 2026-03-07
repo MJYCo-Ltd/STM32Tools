@@ -7,8 +7,8 @@
 extern SPI_HandleTypeDef ST7789_SPI_PORT;
 
 /* 是否使用 DMA 传输（需 MCU 有足够 RAM） */
-//#define USE_DMA
-
+// #define USE_DMA
+#define USE_BUFFER
 /* 若不需要 CS 片选控制，则定义此项 */
 #define CFG_NO_CS
 /* 若不需要 RST 复位引脚，则定义此项（将使用软件复位） */
@@ -36,9 +36,9 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
   HAL_GPIO_WritePin(LCD_BlackLight_GPIO_Port, LCD_BlackLight_Pin, GPIO_PIN_SET)
 
 /* DC 引脚：低电平=传输指令，高电平=传输数据 */
-#define LCD_SEND_CMD                                                        \
+#define LCD_SEND_CMD                                                           \
   HAL_GPIO_WritePin(ST7789_DC_PORT, ST7789_DC_PIN, GPIO_PIN_RESET)
-#define LCD_SEND_DATA                                                        \
+#define LCD_SEND_DATA                                                          \
   HAL_GPIO_WritePin(ST7789_DC_PORT, ST7789_DC_PIN, GPIO_PIN_SET)
 /*
  * 屏幕尺寸选择（三选一）
@@ -141,6 +141,11 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 
 #endif
 
+#ifdef USE_BUFFER
+#include <string.h>
+#define LCD_BUFFER_SIZE ST7789_WIDTH * ST7789_HEIGHT * 2
+__attribute__((section(".dma_buffer"), aligned(32))) uint8_t lcd_buffer[LCD_BUFFER_SIZE];
+#endif
 /**
  * @brief 预定义颜色（RGB565 格式）
  *        如需自定义颜色，可使用 RGB565 格式，如 0xRRGGBB 转换
@@ -192,22 +197,11 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 #define ST7789_COLMOD 0x3A
 #define ST7789_MADCTL 0x36
 
-/**
- * @brief 显存访问控制寄存器 MADCTL (0x36H)
- *        位映射: D7  D6  D5  D4  D3  D2  D1  D0
- *        参数:   MY  MX  MV  ML  RGB MH  -   -
- */
-#define ST7789_MADCTL_MY 0x80  /* 页地址顺序：0=从上到下，1=相反 */
-#define ST7789_MADCTL_MX 0x40  /* 列地址顺序：0=从左到右，1=相反 */
-#define ST7789_MADCTL_MV 0x20  /* 页/列顺序：0=正常，1=交换 */
-#define ST7789_MADCTL_ML 0x10  /* 行刷新顺序：0=从上到下，1=相反 */
-#define ST7789_MADCTL_RGB 0x00 /* RGB/BGR 顺序：0=RGB，1=BGR */
-
-/* 鹿小班示例 MADCTL 方向值：与 LCD_SetDirection 对应 */
-#define ST7789_MADCTL_VERTICAL     0x00  /* Direction_V 竖屏 */
-#define ST7789_MADCTL_HORIZONTAL  0x70  /* Direction_H 横屏 */
-#define ST7789_MADCTL_H_FLIP      0xA0  /* Direction_H_Flip 横屏翻转 */
-#define ST7789_MADCTL_V_FLIP      0xC0  /* Direction_V_Flip 竖屏翻转 */
+/// MADCTL 方向值：与 LCD_SetDirection 对应
+#define ST7789_MADCTL_VERTICAL 0x00   /* Direction_V 竖屏 */
+#define ST7789_MADCTL_HORIZONTAL 0x70 /* Direction_H 横屏 */
+#define ST7789_MADCTL_H_FLIP 0xA0     /* Direction_H_Flip 横屏翻转 */
+#define ST7789_MADCTL_V_FLIP 0xC0     /* Direction_V_Flip 竖屏翻转 */
 
 #define ST7789_RDID1 0xDA
 #define ST7789_RDID2 0xDB
@@ -234,8 +228,6 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 #define ST7789_Select()
 #define ST7789_UnSelect()
 #endif
-
-#define ABS(x) ((x) > 0 ? (x) : -(x))
 
 #ifndef ST7789_ROTATION
 #error 请至少选择一种显示方向 (ST7789_ROTATION 0-3)

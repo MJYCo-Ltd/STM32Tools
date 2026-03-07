@@ -1,15 +1,10 @@
 #include <cmsis_os.h>
+#include <Common.h>
 #include <Display/LCD/lcd.h>
 #include <Display/LCD/lcd_user.c>
 
-#ifdef USE_DMA
-#include <string.h>
-uint16_t DMA_MIN_SIZE = 16;
-/* 使用 DMA 时需要帧缓冲区。若 MCU RAM 不足请禁用 DMA 或将 HOR_LEN 设为 1。
- * RAM 充足时可增大 HOR_LEN 或设为全分辨率以提升性能。 */
-#define HOR_LEN 5 /* 缓冲区行数，需与屏幕分辨率匹配 */
-uint16_t disp_buf[ST7789_WIDTH * HOR_LEN];
-#endif
+HALF_WORD_DATA tmp_color;
+uint8_t uColorData[2];
 
 /**
  * @brief 向 ST7789 控制器写入指令
@@ -33,15 +28,15 @@ static void ST7789_WriteData(uint8_t *buff, size_t buff_size) {
 
   /* HAL 单次传输限制 64K，需分块发送 */
 
+  //SCB_CleanDCache_by_Addr((uint32_t *)buff, buff_size);
   while (buff_size > 0) {
     uint16_t chunk_size = buff_size > 65535 ? 65535 : buff_size;
-#ifdef USE_DMA
-    if (DMA_MIN_SIZE <= buff_size) {
+#ifdef USE_BUFFER
+    if (16 <= buff_size) {
       HAL_SPI_Transmit_DMA(&ST7789_SPI_PORT, buff, chunk_size);
-      while (ST7789_SPI_PORT.hdmatx->State != HAL_DMA_STATE_READY) {
-      }
-    } else
+    } else {
       HAL_SPI_Transmit(&ST7789_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
+    }
 #else
     HAL_SPI_Transmit(&ST7789_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
 #endif
@@ -124,8 +119,8 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
  *        需在 FreeRTOS 启动后调用（使用 osDelay）
  */
 void LCD_Init(void) {
-#ifdef USE_DMA
-  memset(disp_buf, 0, sizeof(disp_buf));
+#ifdef USE_BUFFER
+  memset(lcd_buffer,LCD_BLACK, sizeof(lcd_buffer));
 #endif
 
   /* 复位：硬件复位或软件复位，完成后需等待至少 5ms 才能发送指令 */
@@ -210,15 +205,11 @@ void LCD_Init(void) {
  * @param color 填充颜色（RGB565）
  */
 void LCD_Clear(uint16_t color) {
-  uint16_t i;
   LCD_SetAddressWindow(0, 0, ST7789_WIDTH - 1, ST7789_HEIGHT - 1);
   ST7789_Select();
 
-#ifdef USE_DMA
-  for (i = 0; i < ST7789_HEIGHT / HOR_LEN; i++) {
-    memset(disp_buf, color, sizeof(disp_buf));
-    ST7789_WriteData(disp_buf, sizeof(disp_buf));
-  }
+#ifdef USE_BUFFER
+    ST7789_WriteData(lcd_buffer, sizeof(lcd_buffer));
 #else
   uint16_t j;
   for (i = 0; i < ST7789_WIDTH; i++)
@@ -230,19 +221,23 @@ void LCD_Clear(uint16_t color) {
   ST7789_UnSelect();
 }
 
-/**
- * @brief 绘制单个像素点
- * @param pPixel 像素坐标及颜色
- */
-void DrawPixel(const Pixel* pPixel) {
-  if ((pPixel->x < 0) || (pPixel->x >= ST7789_WIDTH) || (pPixel->y < 0) || (pPixel->y >= ST7789_HEIGHT))
+/// 实现Display的绘制像素的方法
+void DrawPixel(const Pixel *pPixel) {
+  if ((pPixel->x < 0) || (pPixel->x >= ST7789_WIDTH) || (pPixel->y < 0) ||
+      (pPixel->y >= ST7789_HEIGHT))
     return;
-
+#ifdef USE_BUFFER
+  tmp_color.u16Data = ColorToRGB565(pPixel->color);
+  ConvertHalfWord2BigEndian(&tmp_color, uColorData);
+  memcpy(lcd_buffer+(pPixel->x+pPixel->y*ST7789_WIDTH)*2,uColorData,2);
+#else
   LCD_SetAddressWindow(pPixel->x, pPixel->y, pPixel->x, pPixel->y);
-  uint16_t data = ColorToRGB565(pPixel->color);
+  tmp_color.u16Data = ColorToRGB565(pPixel->color);
   ST7789_Select();
-  ST7789_WriteData((uint8_t*)&data, sizeof(data));
+  ConvertHalfWord2BigEndian(&tmp_color, uColorData);
+  ST7789_WriteData(uColorData, sizeof(uColorData));
   ST7789_UnSelect();
+#endif
 }
 
 /**
