@@ -1,8 +1,7 @@
 /**
  ******************************************************************************
-  * @file           : SpiReceive.h
-  * @brief          : Header for SpiReceive.c file.
-  *                   此文件为接收SPI数据.
+  * @file           : SoftSpi.h
+  * @brief          : 此文件为SPI的系统实现.
   ******************************************************************************
   * @attention
   *
@@ -16,23 +15,18 @@
   *      Author: wshys
   ******************************************************************************
  */
-#ifndef __SPI_RECEIVE_H
-#define __SPI_RECEIVE_H
-#include "stm32f1xx_hal.h"
+#ifndef __SOFT_SPI_H
+#define __SOFT_SPI_H
+#include <stdint.h>
 
-/// 定义串口接收数据量用于调试
-typedef struct _Spi_IO_Info
-{
-	uint64_t unReciveCount;
-	uint64_t unSendCount;
-	uint64_t unDealCount;
-}SpiIOInfo;
+/**
+ * @brief  SPI发送数据函数，用户可以根据自己的需要重写此函数
+ */
+void SPI_Write(uint8_t data);
 
-/// 定义串口传输
-typedef struct _Spi_Queue_Info
-{
-	uint8_t* pBuffer;
-	uint16_t nLength;
-}SpiQueueInfo;
+/**
+ * @brief  SPI发送数据函数，用户可以根据自己的需要重写此函数
+ */
+void SPI_WriteBuffer(const uint8_t *pBuffer, uint16_t unLength);
 
 #endif

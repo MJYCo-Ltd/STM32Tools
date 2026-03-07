@@ -1,0 +1,241 @@
+# STM32Tools 接口说明
+
+本文档说明 `Inc` 目录下各头文件提供的接口及移植适配方式。
+
+---
+
+## 基础类型 (Display/Display.h)
+
+| 类型 | 说明 |
+|------|------|
+| `COLOR` | RGB 颜色 `{uRed, uGreen, uBlue}` |
+| `Pixel` | 像素 `{x, y, color}` |
+| `ROTATION` | 旋转方向 `NO_ROTATION/90/180/270` |
+
+**工具函数**：`COLOR_EQUAL()`, `ColorToRGB565()`
+
+---
+
+## 显示 - LCD (Display/LCD/)
+
+### lcd.h
+
+| 接口 | 说明 |
+|------|------|
+| `LCD_Init()` | 初始化 LCD（需 FreeRTOS 启动后调用） |
+| `LCD_Reset()` | 复位 |
+| `LCD_SetRotation(m)` | 设置旋转方向 |
+| `LCD_SetAddressWindow(x0,y0,x1,y1)` | 设置显存窗口 |
+| `LCD_Clear(color)` | 全屏填充 RGB565 颜色 |
+| `LCD_TearEffect(tear)` | 撕裂效应线开关 |
+| `lcd_st7789_draw_buffer(...)` | 绘制缓冲区到指定区域 |
+
+### 用户配置 (Display/LCD/lcd_user.c)
+
+需在工程中提供或修改：
+
+| 配置项 | 说明 |
+|--------|------|
+| `ST7789_SPI_PORT` | SPI 句柄，如 `hspi4` |
+| `ST7789_DC_PORT/PIN` | DC 引脚（数据/指令选择） |
+| `LCD_BlackLight_GPIO_Port/Pin` | 背光引脚 |
+| `USING_135X240` / `USING_240X240` / `USING_170X320` | 分辨率三选一 |
+| `CFG_NO_CS` | 无硬件 CS 时定义 |
+| `CFG_NO_REST` | 无硬件 RST 时定义 |
+| `USE_DMA` | 使用 DMA 传输时定义（需足够 RAM） |
+
+---
+
+## 显示 - EPD 墨水屏 (Display/EPD/)
+
+### epd.h
+
+| 接口 | 说明 |
+|------|------|
+| `EPD_Init(model, fastFresh)` | 初始化，model: `EPD_TWO_COLOR`/`EPD_THREE_COLOR` |
+| `EPD_PowerOn()` / `EPD_PowerOff()` | 开关机 |
+| `EPD_Rest()` | 复位（DeepSleep 后需调用） |
+| `EPD_DeepSleep()` | 进入深度休眠 |
+| `EPD_Clear(color)` | 清屏 |
+| `EPD_Update()` | 刷新到屏幕 |
+| `EPD_InitDrawBuffer(color)` | 初始化绘图缓冲区 |
+| `EPD_ShowBuffer()` | 将缓冲区内容显示 |
+| `EPD_DisplayPartial(x,y,w,h)` | 局部刷新 |
+| `EPD_IsOk()` | 自检 |
+| `EPD_GetInnerTemp()` | 获取内部温度 |
+
+### 用户配置 (Display/EPD/epd_user.c)
+
+需在工程中提供：
+
+| 配置项 | 说明 |
+|--------|------|
+| `EPD_WIDTH` / `EPD_HEIGHT` | 屏幕尺寸 |
+| `EPD_BUFFER_SIZE` | 缓冲区大小 |
+| `CS_GPIO_Port` / `CS_Pin` | 片选引脚 |
+| `DC_GPIO_Port` / `DC_Pin` | 数据/指令选择 |
+| `RST_GPIO_Port` / `RST_Pin` | 复位引脚 |
+| `BUSY_GPIO_Port` / `BUSY_Pin` | 忙状态引脚 |
+| `EPD_SPI` | SPI 句柄，如 `hspi1` |
+
+**可重写弱函数**：
+
+| 函数 | 默认行为 |
+|------|----------|
+| `SPI_WriteBuffer(buf, len)` | `HAL_SPI_Transmit` |
+| `EPD_Rest()` | 拉低 RST 10ms → 拉高 10ms |
+| `EPD_WaitUntilIdle()` | 轮询 BUSY 直到高电平 |
+
+---
+
+## 绘图 (Display/Graphics.h)
+
+基于 `DrawPixel` 的通用绘图接口，LCD 与 EPD 共用同一套接口，底层由各自 `DrawPixel` 实现区分。
+
+| 接口 | 说明 |
+|------|------|
+| `DrawPixel(pPixel)` | 画点 |
+| `DrawLine(x0,y0,x1,y1,color)` | 直线 |
+| `DrawHLine` / `DrawVLine` | 水平/垂直线 |
+| `DrawRect` / `DrawFilledRect` | 矩形 / 填充矩形 |
+| `DrawCircle` / `DrawFilledCircle` | 圆 / 填充圆 |
+| `DrawTriangle` / `DrawFilledTriangle` | 三角形 / 填充三角形 |
+| `DrawChar(x,y,c,color)` | 单字符（5x7 字体） |
+| `DrawString(x,y,str,color)` | 字符串 |
+
+---
+
+## 通用工具 (Common.h)
+
+| 接口 | 说明 |
+|------|------|
+| `CalCRC16(buffer, len)` | 计算 CRC16 |
+| `AddCRC16(buffer, len, isLittleEndian)` | 在缓冲区末尾添加 CRC |
+| `JudgeCRC16(buffer, len, isLittleEndian)` | 校验 CRC |
+| `ConvertBigEndian2Double/Word/HalfWord` | 大端转本地 |
+| `ConvertDouble/Word/HalfWord2BigEndian` | 本地转大端 |
+| `ConvertLittleEndian2*` / `Convert*2LittleEndian` | 小端转换 |
+| `Rand_range(start, end, align)` | 随机范围 [start, end) |
+| `Swap(a, b)` | 交换两个 uint16_t |
+
+**类型**：`DOUBLE_DATA`, `WORD_DATA`, `HALF_WORD_DATA`
+
+---
+
+## 平台基础 (Base.h)
+
+| 宏 | 说明 |
+|----|------|
+| `YTY_DELAY_MS(ms)` | 延时（FreeRTOS 下为 `osDelay`） |
+| `YTY_MALLOC` / `YTY_FREE` | 内存分配（FreeRTOS 下为 `pvPortMalloc`/`vPortFree`） |
+| `PLATFORM_STM32` | STM32 系列时定义 |
+
+---
+
+## 辅助功能 (Auxiliary.h)
+
+| 接口 | 说明 |
+|------|------|
+| `SendDebugInfo(pData, len)` | 发送调试信息 |
+| `RequestSpace(size)` | 申请空间 |
+| `RecycleSpace(ptr)` | 释放空间 |
+| `ReadFlash()` | 读取 Flash |
+| `Enter_Sleep()` / `Enter_Stop()` | 进入休眠/停止模式 |
+| `EnterLowPowerMode(mode, counter, clock)` | 低功耗模式 |
+| `GetStatus()` | 获取状态（RAM、CPU 等） |
+
+---
+
+## 串口接收 (UartReceive.h)
+
+| 接口 | 说明 |
+|------|------|
+| `InitUartCount(max)` | 初始化串口数量 |
+| `AddUart(huart, callback)` | 添加串口及回调 |
+| `GetUart(id)` | 获取串口句柄 |
+| `GetUartIOInfo(id)` | 获取收发统计 |
+| `BeginReceiveUartInfo(id)` / `StopReceiveUartInfo(id)` | 启停接收 |
+| `ProcessUart()` | 定时处理（需在任务中调用） |
+| `GetUartCount()` | 获取串口数量 |
+
+---
+
+## 软件 SPI (SoftSpi.h)
+
+| 接口 | 说明 |
+|------|------|
+| `SPI_Write(data)` | 发送单字节 |
+| `SPI_WriteBuffer(buf, len)` | 发送缓冲区 |
+
+需用户实现或按硬件 SPI 封装。
+
+---
+
+## TMP117 温度传感器 (TMP/tmp117.h)
+
+| 接口 | 说明 |
+|------|------|
+| `TMP117_GetTemperature(addr7, temp)` | 读取温度 |
+| `TMP117_SetWorkMode(addr7, mode)` | 设置工作模式 |
+
+**地址**：`TMP117_ADDR_GND`(0x48) 等  
+**模式**：`TMP117_MODE_CONTINUOUS` / `SHUTDOWN` / `ONE_SHOT`
+
+---
+
+## MX-22 蓝牙模块 (MX/mx22.h)
+
+| 接口 | 说明 |
+|------|------|
+| `MX22_Init()` | 初始化 |
+| `MX22_EnterCommandMode()` / `MX22_EnterDataMode()` | 模式切换 |
+| `MX22_GetVersion()` | 获取版本 |
+| `MX22_GetMAC()` | 获取 MAC |
+| `MX22_SetSPPName()` / `MX22_SetBLEName()` | 设置名称 |
+| `MX22_SetBaudrate()` | 设置波特率 |
+| `MX22_SetRadioMode()` | 设置无线模式 |
+| `MX22_EnableSPP()` / `MX22_EnableBLE()` | 启用 SPP/BLE |
+| `MX22_Disconnect()` | 断开连接 |
+| `MX22_IsConnected()` | 是否已连接 |
+| `MX22_SendData()` | 发送数据 |
+| `MX22_EnablePairing()` / `MX22_SetPairingPin()` | 配对相关 |
+| `MX22_WaitForConnection(timeout_ms)` | 等待连接 |
+
+---
+
+## 爱氪森传感器 (ECSense.h)
+
+| 接口 | 说明 |
+|------|------|
+| `ModifyAddr(newAddr, buf)` | 构建修改 Modbus 地址命令 |
+| `ModifyAddrResponse()` | 解析修改地址响应 |
+| `ReadDS4Value(addr, buf)` | 构建读取数据命令 |
+| `DS4Sleep()` / `DS4Wakeup()` | 睡眠/唤醒命令 |
+| `ReadDS4ValueResponse()` | 解析传感器数据 |
+| `GetShowInfo()` | 将数据转为可读字符串 |
+
+---
+
+## EEPROM (L051C8T6/Eeprom.h)
+
+仅适用于 STM32L051 内置 EEPROM。
+
+| 接口 | 说明 |
+|------|------|
+| `EEPROM_WriteBytes/HalfWords/Words()` | 写入 |
+| `EEPROM_ReadBytes/HalfWords/Words()` | 读取 |
+| `EEPROM_Erase()` | 擦除 |
+
+---
+
+## RF24L01 (RF24L01.h)
+
+2.4GHz 无线收发，需在工程中定义 `RF24L01_CE_GPIO_Port` / `RF24L01_CE_Pin` 等引脚。
+
+**主要接口**：`RF24L01_Init()`, `NRF24L01_TxPacket()`, `NRF24L01_RxPacket()`, `NRF24L01_Set_Mode()` 等。
+
+---
+
+## nanopb (pb/)
+
+Protocol Buffers 编解码库，详见 `pb_encode.h`、`pb_decode.h`、`pb.h`。

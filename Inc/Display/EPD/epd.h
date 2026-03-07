@@ -1,25 +1,12 @@
-#ifndef __EPD_UC8253_H__
-#define __EPD_UC8253_H__
+#ifndef __EPD_H__
+#define __EPD_H__
 
-#include <stdint.h>
+#include <Display/Display.h>
 
 typedef enum{
     EPD_TWO_COLOR,  ///黑白双色模式
     EPD_THREE_COLOR ///黑白红三色模式
 }EPD_MODEL;///墨水屏模式
-
-typedef enum{
-    EPD_WHITE, /// 白色
-    EPD_BLACK, /// 黑色
-    EPD_RED    /// 红色
-} EPD_COLOR;
-
-typedef struct
-{
-    uint16_t x;
-    uint16_t y;
-    EPD_COLOR color;
-}EPD_Pixel;///墨水屏的像素值
 
 ///DeepSleep之后所有寄存器配置（LUT、Panel Setting、分辨率等）都会被清空
 ///需要调用Rest才能唤醒
@@ -50,7 +37,7 @@ uint8_t EPD_GetInnerTemp(void);
  * @brief 清除屏幕
  * @param 要清屏的颜色
  */
-void EPD_Clear(EPD_COLOR color);
+void EPD_Clear(COLOR color);
 /**
  * @brief 刷新屏幕
  * @attention EPD_Clear、EPD_ShowBuffer之后
@@ -62,8 +49,7 @@ void EPD_Update(void);
 /**
  * @brief 初始化内存的buffer
  */
-void EPD_InitDrawBuffer(EPD_COLOR color);
-void EPD_DrawPixel(const EPD_Pixel* pPixel);
+void EPD_InitDrawBuffer(COLOR color);
 void EPD_ShowBuffer(void);
 
 /**
@@ -75,4 +61,4 @@ void EPD_ShowBuffer(void);
  */
 void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
-#endif
+#endif /// __EPD_H__

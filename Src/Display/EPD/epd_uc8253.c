@@ -1,5 +1,5 @@
-#include "EPD/epd_uc8253.h"
 #include <string.h>
+#include <Display/EPD/EPD.h>
 
 uint8_t g_model = EPD_THREE_COLOR;
 uint8_t g_fast = 0;
@@ -142,26 +142,26 @@ static const uint8_t K2W_LUT[][7] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
 #endif
 
-#include "EPD/epd_uc8253_User.c"
+#include <Display/EPD/epd_user.c>
 
 void EPD_LoadFastLUT(void) {
 #ifdef GOOD_DISPLAY
   GD_FastFresh();
 #else
   EPD_SendCommand(EPD_CMD_VCOM_LUT);
-  EPD_SendBuffer(FAST_LUTC, sizeof(FAST_LUTC));
+  EPD_SendBuffer(VCOM_LUT, sizeof(VCOM_LUT));
   EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_W2W_LUT);
-  EPD_SendBuffer(FAST_LUTBW, sizeof(FAST_LUTBW));
+  EPD_SendBuffer(W2W_LUT, sizeof(W2W_LUT));
   EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_B2W_LUT);
-  EPD_SendBuffer(FAST_LUTBW, sizeof(FAST_LUTBW));
+  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_W2B_LUT);
-  EPD_SendBuffer(FAST_LUTBW, sizeof(FAST_LUTBW));
+  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
   EPD_SendCommand(EPD_CMD_B2B_LUT);
-  EPD_SendBuffer(FAST_LUTBW, sizeof(FAST_LUTBW));
+  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
 #endif
 }
@@ -174,21 +174,21 @@ uint8_t epd_WBframe[EPD_BUFFER_SIZE], epd_Rframe[EPD_BUFFER_SIZE];
 void EPD_SendCommand(uint8_t cmd) {
   SELECT_EPD;
   EPD_CMD;
-  SPI_Write(cmd);
+  HAL_SPI_Transmit(&EPD_SPI, &cmd, 1, HAL_MAX_DELAY);
   UNSELECT_EPD;
 }
 
 void EPD_SendData(uint8_t data) {
   SELECT_EPD;
   EPD_DATA;
-  SPI_Write(data);
+  HAL_SPI_Transmit(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
   UNSELECT_EPD;
 }
 
 void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength) {
   SELECT_EPD;
   EPD_DATA;
-  SPI_WriteBuffer(pBuffer, unLength);
+  HAL_SPI_Transmit(&EPD_SPI, pBuffer, unLength, HAL_MAX_DELAY);
   UNSELECT_EPD;
 }
 
@@ -211,16 +211,16 @@ void EPD_DeepSleep(void) {
 }
 
 /// 初始化显存
-void EPD_InitDrawBuffer(EPD_COLOR color) {
-  if (EPD_TWO_COLOR == g_model && EPD_RED == color) {
+void EPD_InitDrawBuffer(COLOR color) {
+  if (EPD_TWO_COLOR == g_model && COLOR_EQUAL(RED,color)) {
     return;
   }
 
-  if (EPD_RED == color) {
+  if (COLOR_EQUAL(RED,color)) {
     memset(epd_Rframe, EPD_COLOR_RED, EPD_BUFFER_SIZE);
   } else {
     memset(epd_Rframe, EPD_COLOR_ALPHA, EPD_BUFFER_SIZE);
-    if (EPD_BLACK == color) {
+    if (COLOR_EQUAL(BLACK,color)) {
       memset(epd_WBframe, EPD_COLOR_BLACK, EPD_BUFFER_SIZE);
     } else {
       memset(epd_WBframe, EPD_COLOR_WHITE, EPD_BUFFER_SIZE);
@@ -255,24 +255,24 @@ void EPD_ShowPartBuffer(uint16_t nXStart, uint16_t nYStart, uint16_t nXEnd,
   memcpy(epd_Rframe, epd_WBframe, EPD_BUFFER_SIZE);
 }
 /// 给每个像素上颜色
-void EPD_DrawPixel(const EPD_Pixel *pPixel) {
+void DrawPixel(const Pixel *pPixel) {
   if (pPixel->x >= EPD_WIDTH || pPixel->y >= EPD_HEIGHT) {
     return;
   }
-  if (EPD_TWO_COLOR == g_model && EPD_RED == pPixel->color) {
+  if (EPD_TWO_COLOR == g_model && COLOR_EQUAL(RED,pPixel->color)) {
     return;
   }
 
   uint32_t index = pPixel->x + pPixel->y * EPD_WIDTH;
   uint32_t byte_index = index >> 3;
   uint8_t bit_mask = 0x80 >> (index % 8);
-  if (pPixel->color == EPD_RED) {
+  if (COLOR_EQUAL(RED,pPixel->color)) {
     epd_Rframe[byte_index] &= ~bit_mask;
   } else {
     if (EPD_THREE_COLOR == g_model) {
       epd_Rframe[byte_index] |= bit_mask;
     }
-    if (pPixel->color == EPD_BLACK) {
+    if (COLOR_EQUAL(BLACK,pPixel->color)) {
       epd_WBframe[byte_index] &= ~bit_mask;
     } else {
       epd_WBframe[byte_index] |= bit_mask;
@@ -309,7 +309,7 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
 }
 
 // ================= 显示相关 =================
-void EPD_Clear(EPD_COLOR color) {
+void EPD_Clear(COLOR color) {
   EPD_InitDrawBuffer(color);
   EPD_ShowBuffer();
 }
@@ -352,4 +352,28 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
 #ifdef GOOD_DISPLAY
   GD_Reset();
 #endif
+}
+
+/// 获取内部温度
+__attribute__((weak)) uint8_t EPD_GetInnerTemp(void) {
+  EPD_PowerOn();
+
+  EPD_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
+  EPD_WaitUntilIdle();
+
+  uint8_t data;
+  HAL_SPI_Receive(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
+
+  EPD_PowerOff();
+  return (data);
+}
+
+/// 检查面板玻璃
+__attribute__((weak)) uint8_t EPD_IsOk() {
+  EPD_SendCommand(EPD_CMD_PANEL_GLASS_CHECK);
+  EPD_WaitUntilIdle();
+
+  uint8_t data;
+  HAL_SPI_Receive(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
+  return (data);
 }

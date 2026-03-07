@@ -105,4 +105,15 @@ void ConvertHalfWord2LitteleEndian(const HALF_WORD_DATA* pHalfWordData,uint8_t* 
  */
 uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align);
 
+/**
+ * @brief 交换两个 uint16_t 变量的值
+ * @param a 第一个变量的指针
+ * @param b 第二个变量的指针
+ */
+static inline void Swap(uint16_t *a, uint16_t *b) {
+    uint16_t temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 #endif //__YTY_COMMON_H_
