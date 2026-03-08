@@ -2,8 +2,7 @@
   ******************************************************************************
   * @file    ov5640_reg.c
   * @author  MCD Application Team
-  * @brief   This file provides unitary register function to control the OV5640
-  *          Camera driver.
+  * @brief   本文件提供控制 OV5640 摄像头驱动的寄存器单元函数。
   ******************************************************************************
   * @attention
   *
@@ -17,7 +16,7 @@
   ******************************************************************************
   */
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 #include "ov5640_reg.h"
 
 /** @addtogroup BSP
@@ -29,18 +28,17 @@
   */
 
 /** @addtogroup OV5640
-  * @brief     This file provides a set of functions needed to drive the
-  *            OV5640 Camera sensor.
+  * @brief     本文件提供驱动 OV5640 摄像头传感器所需的一组函数。
   * @{
   */
 
 /**
-  * @brief  Read OV5640 component registers
-  * @param  ctx component context
-  * @param  reg Register to read from
-  * @param  pdata Pointer to data buffer
-  * @param  length Number of data to read
-  * @retval Component status
+  * @brief  读取 OV5640 组件寄存器
+  * @param  ctx 组件上下文
+  * @param  reg 要读取的寄存器
+  * @param  pdata 数据缓冲区指针
+  * @param  length 要读取的数据长度
+  * @retval 组件状态
   */
 int32_t ov5640_read_reg(ov5640_ctx_t *ctx, uint16_t reg, uint8_t *pdata, uint16_t length)
 {
@@ -48,12 +46,12 @@ int32_t ov5640_read_reg(ov5640_ctx_t *ctx, uint16_t reg, uint8_t *pdata, uint16_
 }
 
 /**
-  * @brief  Write OV5640 component registers
-  * @param  ctx component context
-  * @param  reg Register to write to
-  * @param  pdata Pointer to data buffer
-  * @param  length Number of data to write
-  * @retval Component status
+  * @brief  写入 OV5640 组件寄存器
+  * @param  ctx 组件上下文
+  * @param  reg 要写入的寄存器
+  * @param  pdata 数据缓冲区指针
+  * @param  length 要写入的数据长度
+  * @retval 组件状态
   */
 int32_t ov5640_write_reg(ov5640_ctx_t *ctx, uint16_t reg, uint8_t *data, uint16_t length)
 {

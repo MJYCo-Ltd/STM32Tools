@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    ov5640.c
   * @author  MCD Application Team
-  * @brief   This file provides the OV5640 camera driver
+  * @brief   本文件提供 OV5640 摄像头驱动
   ******************************************************************************
   * @attention
   *
@@ -16,7 +16,7 @@
   ******************************************************************************
   */
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 #include "ov5640.h"
 
 /** @addtogroup BSP
@@ -28,8 +28,7 @@
   */
 
 /** @addtogroup OV5640
-  * @brief     This file provides a set of functions needed to drive the
-  *            OV5640 Camera module.
+  * @brief     本文件提供驱动 OV5640 摄像头模块所需的一组函数。
   * @{
   */
 
@@ -69,7 +68,7 @@ OV5640_CAMERA_Drv_t   OV5640_CAMERA_Driver =
   * @}
   */
 
-/** @defgroup OV5640_Private_Functions_Prototypes Private Functions Prototypes
+/** @defgroup OV5640_Private_Functions_Prototypes 私有函数原型
   * @{
   */
 static int32_t OV5640_ReadRegWrap(void *handle, uint16_t Reg, uint8_t *Data, uint16_t Length);
@@ -84,9 +83,9 @@ static int32_t OV5640_Delay(OV5640_Object_t *pObj, uint32_t Delay);
   * @{
   */
 /**
-  * @brief  Register component IO bus
-  * @param  Component object pointer
-  * @retval Component status
+  * @brief  注册组件 IO 总线
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int32_t OV5640_RegisterBusIO(OV5640_Object_t *pObj, OV5640_IO_t *pIO)
 {
@@ -123,18 +122,18 @@ int32_t OV5640_RegisterBusIO(OV5640_Object_t *pObj, OV5640_IO_t *pIO)
 }
 
 /**
-  * @brief  Initializes the OV5640 CAMERA component.
-  * @param  pObj  pointer to component object
-  * @param  Resolution  Camera resolution
-  * @param  PixelFormat pixel format to be configured
-  * @retval Component status
+  * @brief  初始化 OV5640 摄像头组件。
+  * @param  pObj  组件对象指针
+  * @param  Resolution  摄像头分辨率
+  * @param  PixelFormat 待配置的像素格式
+  * @retval 组件状态
   */
 int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFormat)
 {
   uint32_t index;
   int32_t ret = OV5640_OK;
 
-  /* Initialization sequence for OV5640 */
+  /* OV5640 初始化序列 */
   static const uint16_t OV5640_Common[][2] =
   {
     {OV5640_SCCB_SYSTEM_CTRL1, 0x11},
@@ -193,7 +192,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
     {OV5640_TIMING_DVPHO_LOW, 0x20},
     {OV5640_TIMING_DVPVO_HIGH, 0x02},
     {OV5640_TIMING_DVPVO_LOW, 0x58},
-    /* For 800x480 resolution: OV5640_TIMING_HTS=0x790, OV5640_TIMING_VTS=0x440 */
+    /* 800x480 分辨率: OV5640_TIMING_HTS=0x790, OV5640_TIMING_VTS=0x440 */
     {OV5640_TIMING_HTS_HIGH, 0x07},
     {OV5640_TIMING_HTS_LOW, 0x90},
     {OV5640_TIMING_VTS_HIGH, 0x04},
@@ -389,7 +388,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
 
   if (pObj->IsInitialized == 0U)
   {
-    /* Check if resolution is supported */
+    /* 检查分辨率是否支持 */
     if ((Resolution > OV5640_R800x480) ||
         ((PixelFormat != OV5640_RGB565) && (PixelFormat != OV5640_YUV422) &&
          (PixelFormat != OV5640_RGB888) && (PixelFormat != OV5640_Y8) &&
@@ -399,7 +398,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
     }
     else
     {
-      /* Set common parameters for all resolutions */
+      /* 为所有分辨率设置通用参数 */
       for (index = 0; index < (sizeof(OV5640_Common) / 4U) ; index++)
       {
         if (ret != OV5640_ERROR)
@@ -415,7 +414,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
 
       if(ret == OV5640_OK)
       {
-        /* Set configuration for Serial Interface */
+        /* 设置串行接口配置 */
         if(pObj->Mode == SERIAL_MODE)
         {
           if(OV5640_EnableMIPIMode(pObj) != OV5640_OK)
@@ -429,7 +428,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
         }
         else
         {
-          /* Set configuration for parallel Interface */
+          /* 设置并行接口配置 */
           if(OV5640_EnableDVPMode(pObj) != OV5640_OK)
           {
             ret = OV5640_ERROR;
@@ -444,15 +443,15 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
 
       if (ret == OV5640_OK)
       {
-        /* Set specific parameters for each resolution */
+        /* 为每种分辨率设置特定参数 */
         if (OV5640_SetResolution(pObj, Resolution) != OV5640_OK)
         {
           ret = OV5640_ERROR;
-        }/* Set specific parameters for each pixel format */
+        }/* 为每种像素格式设置特定参数 */
         else if (OV5640_SetPixelFormat(pObj, PixelFormat) != OV5640_OK)
         {
           ret = OV5640_ERROR;
-        }/* Set PixelClock, Href and VSync Polarity */
+        }/* 设置像素时钟、Href 和 VSync 极性 */
         else if (OV5640_SetPolarities(pObj, OV5640_POLARITY_PCLK_HIGH, OV5640_POLARITY_HREF_HIGH,
                                       OV5640_POLARITY_VSYNC_HIGH) != OV5640_OK)
         {
@@ -470,15 +469,15 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
 }
 
 /**
-  * @brief  De-initializes the camera sensor.
-  * @param  pObj  pointer to component object
-  * @retval Component status
+  * @brief  反初始化摄像头传感器。
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int32_t OV5640_DeInit(OV5640_Object_t *pObj)
 {
   if (pObj->IsInitialized == 1U)
   {
-    /* De-initialize camera sensor interface */
+    /* 反初始化摄像头传感器接口 */
     pObj->IsInitialized = 0U;
   }
 
@@ -486,10 +485,10 @@ int32_t OV5640_DeInit(OV5640_Object_t *pObj)
 }
 
 /**
-  * @brief  Set OV5640 camera Pixel Format.
-  * @param  pObj  pointer to component object
-  * @param  PixelFormat pixel format to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头像素格式。
+  * @param  pObj  组件对象指针
+  * @param  PixelFormat 待配置的像素格式
+  * @retval 组件状态
   */
 int32_t OV5640_SetPixelFormat(OV5640_Object_t *pObj, uint32_t PixelFormat)
 {
@@ -497,57 +496,57 @@ int32_t OV5640_SetPixelFormat(OV5640_Object_t *pObj, uint32_t PixelFormat)
   uint32_t index;
   uint8_t tmp;
 
-  /* Initialization sequence for RGB565 pixel format */
+  /* RGB565 像素格式初始化序列 */
   static const uint16_t OV5640_PF_RGB565[][2] =
   {
-    /*  SET PIXEL FORMAT: RGB565 */
+    /*  设置像素格式: RGB565 */
     {OV5640_FORMAT_CTRL00, 0x6F},
     {OV5640_FORMAT_MUX_CTRL, 0x01},
   };
 
-  /* Initialization sequence for YUV422 pixel format */
+  /* YUV422 像素格式初始化序列 */
   static const uint16_t OV5640_PF_YUV422[][2] =
   {
-    /*  SET PIXEL FORMAT: YUV422 */
+    /*  设置像素格式: YUV422 */
     {OV5640_FORMAT_CTRL00, 0x30},
     {OV5640_FORMAT_MUX_CTRL, 0x00},
   };
 
-  /* Initialization sequence for RGB888 pixel format */
+  /* RGB888 像素格式初始化序列 */
   static const uint16_t OV5640_PF_RGB888[][2] =
   {
-    /*  SET PIXEL FORMAT: RGB888 (RGBRGB)*/
+    /*  设置像素格式: RGB888 (RGBRGB)*/
     {OV5640_FORMAT_CTRL00, 0x23},
     {OV5640_FORMAT_MUX_CTRL, 0x01},
   };
 
-  /* Initialization sequence for Monochrome 8bits pixel format */
+  /* 8 位单色像素格式初始化序列 */
   static const uint16_t OV5640_PF_Y8[][2] =
   {
-    /*  SET PIXEL FORMAT: Y 8bits */
+    /*  设置像素格式: Y 8 位 */
     {OV5640_FORMAT_CTRL00, 0x10},
     {OV5640_FORMAT_MUX_CTRL, 0x00},
   };
 
-  /* Initialization sequence for JPEG format */
+  /* JPEG 格式初始化序列 */
   static const uint16_t OV5640_PF_JPEG[][2] =
   {
-    /*  SET PIXEL FORMAT: JPEG */
+    /*  设置像素格式: JPEG */
     {OV5640_FORMAT_CTRL00, 0x30},
     {OV5640_FORMAT_MUX_CTRL, 0x00},
   };
 
-  /* Check if PixelFormat is supported */
+  /* 检查像素格式是否支持 */
   if ((PixelFormat != OV5640_RGB565) && (PixelFormat != OV5640_YUV422) &&
       (PixelFormat != OV5640_RGB888) && (PixelFormat != OV5640_Y8) &&
       (PixelFormat != OV5640_JPEG))
   {
-    /* Pixel format not supported */
+    /* 不支持的像素格式 */
     ret = OV5640_ERROR;
   }
   else
   {
-    /* Set specific parameters for each PixelFormat */
+    /* 为每种像素格式设置特定参数 */
     switch (PixelFormat)
     {
       case OV5640_YUV422:
@@ -693,10 +692,10 @@ int32_t OV5640_SetPixelFormat(OV5640_Object_t *pObj, uint32_t PixelFormat)
 }
 
 /**
-  * @brief  Set OV5640 camera Pixel Format.
-  * @param  pObj  pointer to component object
-  * @param  PixelFormat pixel format to be configured
-  * @retval Component status
+  * @brief  获取 OV5640 摄像头像素格式。
+  * @param  pObj  组件对象指针
+  * @param  PixelFormat 像素格式指针
+  * @retval 组件状态
   */
 int32_t OV5640_GetPixelFormat(OV5640_Object_t *pObj, uint32_t *PixelFormat)
 {
@@ -707,10 +706,10 @@ int32_t OV5640_GetPixelFormat(OV5640_Object_t *pObj, uint32_t *PixelFormat)
 }
 
 /**
-  * @brief  Get OV5640 camera resolution.
-  * @param  pObj  pointer to component object
-  * @param  Resolution  Camera resolution
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头分辨率。
+  * @param  pObj  组件对象指针
+  * @param  Resolution  摄像头分辨率
+  * @retval 组件状态
   */
 int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
 {
@@ -718,7 +717,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
   uint32_t index;
   uint8_t tmp;
 
-  /* Initialization sequence for WVGA resolution (800x480)*/
+  /* WVGA 分辨率 (800x480) 初始化序列 */
   static const uint16_t OV5640_WVGA[][2] =
   {
     {OV5640_TIMING_DVPHO_HIGH, 0x03},
@@ -727,7 +726,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0xE0},
   };
 
-  /* Initialization sequence for VGA resolution (640x480)*/
+  /* VGA 分辨率 (640x480) 初始化序列 */
   static const uint16_t OV5640_VGA[][2] =
   {
     {OV5640_TIMING_DVPHO_HIGH, 0x02},
@@ -736,7 +735,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0xE0},
   };
 
-  /* Initialization sequence for 480x272 resolution */
+  /* 480x272 分辨率初始化序列 */
   static const uint16_t OV5640_480x272[][2] =
   {
     {OV5640_TIMING_DVPHO_HIGH, 0x01},
@@ -745,7 +744,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0x10},
   };
 
-  /* Initialization sequence for QVGA resolution (320x240) */
+  /* QVGA 分辨率 (320x240) 初始化序列 */
   static const uint16_t OV5640_QVGA[][2] =
   {
     {OV5640_TIMING_DVPHO_HIGH, 0x01},
@@ -754,7 +753,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0xF0},
   };
 
-  /* Initialization sequence for QQVGA resolution (160x120) */
+  /* QQVGA 分辨率 (160x120) 初始化序列 */
   static const uint16_t OV5640_QQVGA[][2] =
   {
     {OV5640_TIMING_DVPHO_HIGH, 0x00},
@@ -763,14 +762,14 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0x78},
   };
 
-  /* Check if resolution is supported */
+  /* 检查分辨率是否支持 */
   if (Resolution > OV5640_R800x480)
   {
     ret = OV5640_ERROR;
   }
   else
   {
-    /* Initialize OV5640 */
+    /* 初始化 OV5640 */
     switch (Resolution)
     {
       case OV5640_R160x120:
@@ -848,10 +847,10 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
 }
 
 /**
-  * @brief  Get OV5640 camera resolution.
-  * @param  pObj  pointer to component object
-  * @param  Resolution  Camera resolution
-  * @retval Component status
+  * @brief  获取 OV5640 摄像头分辨率。
+  * @param  pObj  组件对象指针
+  * @param  Resolution  摄像头分辨率指针
+  * @retval 组件状态
   */
 int32_t OV5640_GetResolution(OV5640_Object_t *pObj, uint32_t *Resolution)
 {
@@ -929,12 +928,12 @@ int32_t OV5640_GetResolution(OV5640_Object_t *pObj, uint32_t *Resolution)
 }
 
 /**
-  * @brief  Set OV5640 camera PCLK, HREF and VSYNC Polarities
-  * @param  pObj  pointer to component object
-  * @param  PclkPolarity Polarity of the PixelClock
-  * @param  HrefPolarity Polarity of the Href
-  * @param  VsyncPolarity Polarity of the Vsync
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头 PCLK、HREF 和 VSYNC 极性。
+  * @param  pObj  组件对象指针
+  * @param  PclkPolarity 像素时钟极性
+  * @param  HrefPolarity Href 极性
+  * @param  VsyncPolarity Vsync 极性
+  * @retval 组件状态
   */
 int32_t OV5640_SetPolarities(OV5640_Object_t *pObj, uint32_t PclkPolarity, uint32_t HrefPolarity,
                              uint32_t VsyncPolarity)
@@ -962,12 +961,12 @@ int32_t OV5640_SetPolarities(OV5640_Object_t *pObj, uint32_t PclkPolarity, uint3
 }
 
 /**
-  * @brief  get OV5640 camera PCLK, HREF and VSYNC Polarities
-  * @param  pObj  pointer to component object
-  * @param  PclkPolarity Polarity of the PixelClock
-  * @param  HrefPolarity Polarity of the Href
-  * @param  VsyncPolarity Polarity of the Vsync
-  * @retval Component status
+  * @brief  获取 OV5640 摄像头 PCLK、HREF 和 VSYNC 极性。
+  * @param  pObj  组件对象指针
+  * @param  PclkPolarity 像素时钟极性指针
+  * @param  HrefPolarity Href 极性指针
+  * @param  VsyncPolarity Vsync 极性指针
+  * @retval 组件状态
   */
 int32_t OV5640_GetPolarities(OV5640_Object_t *pObj, uint32_t *PclkPolarity, uint32_t *HrefPolarity,
                              uint32_t *VsyncPolarity)
@@ -994,20 +993,20 @@ int32_t OV5640_GetPolarities(OV5640_Object_t *pObj, uint32_t *PclkPolarity, uint
 }
 
 /**
-  * @brief  Read the OV5640 Camera identity.
-  * @param  pObj  pointer to component object
-  * @param  Id    pointer to component ID
-  * @retval Component status
+  * @brief  读取 OV5640 摄像头标识。
+  * @param  pObj  组件对象指针
+  * @param  Id    组件 ID 指针
+  * @retval 组件状态
   */
 int32_t OV5640_ReadID(OV5640_Object_t *pObj, uint32_t *Id)
 {
   int32_t ret;
   uint8_t tmp;
 
-  /* Initialize I2C */
+  /* 初始化 I2C */
   pObj->IO.Init();
 
-  /* Prepare the camera to be configured */
+  /* 准备配置摄像头 */
   tmp = 0x80;
   if (ov5640_write_reg(&pObj->Ctx, OV5640_SYSTEM_CTROL0, &tmp, 1) != OV5640_OK)
   {
@@ -1036,15 +1035,15 @@ int32_t OV5640_ReadID(OV5640_Object_t *pObj, uint32_t *Id)
     }
   }
 
-  /* Component status */
+  /* 组件状态 */
   return ret;
 }
 
 /**
-  * @brief  Read the OV5640 Camera Capabilities.
-  * @param  pObj          pointer to component object
-  * @param  Capabilities  pointer to component Capabilities
-  * @retval Component status
+  * @brief  读取 OV5640 摄像头能力。
+  * @param  pObj  组件对象指针
+  * @param  Capabilities  组件能力指针
+  * @retval 组件状态
   */
 int32_t OV5640_GetCapabilities(OV5640_Object_t *pObj, OV5640_Capabilities_t *Capabilities)
 {
@@ -1074,10 +1073,10 @@ int32_t OV5640_GetCapabilities(OV5640_Object_t *pObj, OV5640_Capabilities_t *Cap
 }
 
 /**
-  * @brief  Set the OV5640 camera Light Mode.
-  * @param  pObj  pointer to component object
-  * @param  Effect  Effect to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头光照模式。
+  * @param  pObj  组件对象指针
+  * @param  LightMode 待配置的光照模式
+  * @retval 组件状态
   */
 int32_t OV5640_SetLightMode(OV5640_Object_t *pObj, uint32_t LightMode)
 {
@@ -1085,7 +1084,7 @@ int32_t OV5640_SetLightMode(OV5640_Object_t *pObj, uint32_t LightMode)
   uint32_t index;
   uint8_t tmp;
 
-  /* OV5640 Light Mode setting */
+  /* OV5640 光照模式设置 */
   static const uint16_t OV5640_LightModeAuto[][2] =
   {
     {OV5640_AWB_MANUAL_CONTROL, 0x00},
@@ -1237,10 +1236,10 @@ int32_t OV5640_SetLightMode(OV5640_Object_t *pObj, uint32_t LightMode)
 }
 
 /**
-  * @brief  Set the OV5640 camera Special Effect.
-  * @param  pObj  pointer to component object
-  * @param  Effect  Effect to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头特效。
+  * @param  pObj  组件对象指针
+  * @param  Effect 待配置的特效
+  * @retval 组件状态
   */
 int32_t OV5640_SetColorEffect(OV5640_Object_t *pObj, uint32_t Effect)
 {
@@ -1417,13 +1416,11 @@ int32_t OV5640_SetColorEffect(OV5640_Object_t *pObj, uint32_t Effect)
 }
 
 /**
-  * @brief  Set the OV5640 camera Brightness Level.
-  * @note   The brightness of OV5640 could be adjusted. Higher brightness will
-  *         make the picture more bright. The side effect of higher brightness
-  *         is the picture looks foggy.
-  * @param  pObj  pointer to component object
-  * @param  Level Value to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头亮度等级。
+  * @note   OV5640 亮度可调。较高亮度会使画面更亮，副作用是画面会显得发雾。
+  * @param  pObj  组件对象指针
+  * @param  Level 待配置的等级
+  * @retval 组件状态
   */
 int32_t OV5640_SetBrightness(OV5640_Object_t *pObj, int32_t Level)
 {
@@ -1469,13 +1466,11 @@ int32_t OV5640_SetBrightness(OV5640_Object_t *pObj, int32_t Level)
 }
 
 /**
-  * @brief  Set the OV5640 camera Saturation Level.
-  * @note   The color saturation of OV5640 could be adjusted. High color saturation
-  *         would make the picture looks more vivid, but the side effect is the
-  *         bigger noise and not accurate skin color.
-  * @param  pObj  pointer to component object
-  * @param  Level Value to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头饱和度等级。
+  * @note   OV5640 色彩饱和度可调。高饱和度会使画面更鲜艳，但副作用是噪点更大、肤色不准。
+  * @param  pObj  组件对象指针
+  * @param  Level 待配置的等级
+  * @retval 组件状态
   */
 int32_t OV5640_SetSaturation(OV5640_Object_t *pObj, int32_t Level)
 {
@@ -1516,12 +1511,11 @@ int32_t OV5640_SetSaturation(OV5640_Object_t *pObj, int32_t Level)
 }
 
 /**
-  * @brief  Set the OV5640 camera Contrast Level.
-  * @note   The contrast of OV5640 could be adjusted. Higher contrast will make
-  *         the picture sharp. But the side effect is losing dynamic range.
-  * @param  pObj  pointer to component object
-  * @param  Level Value to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头对比度等级。
+  * @note   OV5640 对比度可调。较高对比度会使画面更锐利，但会损失动态范围。
+  * @param  pObj  组件对象指针
+  * @param  Level 待配置的等级
+  * @retval 组件状态
   */
 int32_t OV5640_SetContrast(OV5640_Object_t *pObj, int32_t Level)
 {
@@ -1561,10 +1555,10 @@ int32_t OV5640_SetContrast(OV5640_Object_t *pObj, int32_t Level)
 }
 
 /**
-  * @brief  Set the OV5640 camera Hue degree.
-  * @param  pObj  pointer to component object
-  * @param  Level Value to be configured
-  * @retval Component status
+  * @brief  设置 OV5640 摄像头色相角度。
+  * @param  pObj  组件对象指针
+  * @param  Degree 待配置的角度
+  * @retval 组件状态
   */
 int32_t OV5640_SetHueDegree(OV5640_Object_t *pObj, int32_t Degree)
 {
@@ -1613,10 +1607,10 @@ int32_t OV5640_SetHueDegree(OV5640_Object_t *pObj, int32_t Degree)
 }
 
 /**
-  * @brief  Control OV5640 camera mirror/vflip.
-  * @param  pObj  pointer to component object
-  * @param  Config To configure mirror, flip, both or none
-  * @retval Component status
+  * @brief  控制 OV5640 摄像头镜像/翻转。
+  * @param  pObj  组件对象指针
+  * @param  Config 配置镜像、翻转、两者或无
+  * @retval 组件状态
   */
 int32_t OV5640_MirrorFlipConfig(OV5640_Object_t *pObj, uint32_t Config)
 {
@@ -1709,10 +1703,10 @@ int32_t OV5640_MirrorFlipConfig(OV5640_Object_t *pObj, uint32_t Config)
 }
 
 /**
-  * @brief  Control OV5640 camera zooming.
-  * @param  pObj  pointer to component object
-  * @param  Zoom  Zoom to be configured
-  * @retval Component status
+  * @brief  控制 OV5640 摄像头变焦。
+  * @param  pObj  组件对象指针
+  * @param  Zoom 待配置的变焦
+  * @retval 组件状态
   */
 int32_t OV5640_ZoomConfig(OV5640_Object_t *pObj, uint32_t Zoom)
 {
@@ -1721,7 +1715,7 @@ int32_t OV5640_ZoomConfig(OV5640_Object_t *pObj, uint32_t Zoom)
   uint32_t zoom;
   uint8_t tmp;
 
-  /* Get camera resolution */
+  /* 获取摄像头分辨率 */
   if (OV5640_GetResolution(pObj, &res) != OV5640_OK)
   {
     ret = OV5640_ERROR;
@@ -1773,10 +1767,10 @@ int32_t OV5640_ZoomConfig(OV5640_Object_t *pObj, uint32_t Zoom)
 }
 
 /**
-  * @brief  Enable/disable the OV5640 camera night mode.
-  * @param  pObj  pointer to component object
-  * @param  Cmd   Enable disable night mode
-  * @retval Component status
+  * @brief  启用/禁用 OV5640 摄像头夜景模式。
+  * @param  pObj  组件对象指针
+  * @param  Cmd 启用或禁用夜景模式
+  * @retval 组件状态
   */
 int32_t OV5640_NightModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
 {
@@ -1785,8 +1779,8 @@ int32_t OV5640_NightModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
 
   if (Cmd == NIGHT_MODE_ENABLE)
   {
-    /* Auto Frame Rate: 15fps ~ 3.75fps night mode for 60/50Hz light environment,
-    24Mhz clock input,24Mhz PCLK*/
+    /* 自动帧率: 60/50Hz 光源环境下 15fps~3.75fps 夜景模式，
+    24MHz 时钟输入，24MHz PCLK */
     ret = ov5640_write_reg(&pObj->Ctx, OV5640_SC_PLL_CONTRL4, &tmp, 1);
     if (ret == OV5640_OK)
     {
@@ -1861,7 +1855,7 @@ int32_t OV5640_NightModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
     {
       ret = OV5640_OK;
       tmp &= 0xFBU;
-      /* Set Bit 2 to 0 */
+      /* 将 bit 2 置 0 */
       if (ov5640_write_reg(&pObj->Ctx, OV5640_AEC_CTRL00, &tmp, 1) != OV5640_OK)
       {
         ret = OV5640_ERROR;
@@ -1872,10 +1866,10 @@ int32_t OV5640_NightModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
   return ret;
 }
 /**
-  * @brief  Configure Embedded Synchronization mode.
-  * @param  pObj  pointer to component object
-  * @param  pSyncCodes  pointer to Embedded Codes
-  * @retval Component status
+  * @brief  配置嵌入式同步模式。
+  * @param  pObj  组件对象指针
+  * @param  pSyncCodes  嵌入式同步码指针
+  * @retval 组件状态
   */
 
 int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *pSyncCodes)
@@ -1883,7 +1877,7 @@ int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *
   uint8_t tmp;
   int32_t ret = OV5640_ERROR;
 
-  /*[7] : SYNC code from reg 0x4732-0x4732, [1]: Enable Clip ,[0]: Enable CCIR656 */
+  /*[7]: 同步码来自 reg 0x4732-0x4732, [1]: 使能裁剪, [0]: 使能 CCIR656 */
   tmp = 0x83;
   if (ov5640_write_reg(&pObj->Ctx, OV5640_CCIR656_CTRL00, &tmp, 1) == OV5640_OK)
   {
@@ -1901,7 +1895,7 @@ int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *
         tmp = pSyncCodes->LineEndCode;
         if (ov5640_write_reg(&pObj->Ctx, OV5640_CCIR656_LE, &tmp, 1) == OV5640_OK)
         {
-          /*Adding 1 dummy line */
+          /* 添加 1 条哑线 */
           tmp = 0x01;
           if (ov5640_write_reg(&pObj->Ctx, OV5640_656_DUMMY_LINE, &tmp, 1) == OV5640_OK)
           {
@@ -1912,7 +1906,7 @@ int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *
     }
   }
 
-  /* max clip value[9:8], to avoid SYNC code clipping */
+  /* 最大裁剪值[9:8]，避免同步码被裁剪 */
   tmp = 0x2;
   if (ret == OV5640_OK)
   {
@@ -1930,10 +1924,10 @@ int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *
   return ret;
 }
 /**
-  * @brief  Enable/disable the OV5640 color bar mode.
-  * @param  pObj  pointer to component object
-  * @param  Cmd   Enable disable colorbar
-  * @retval Component status
+  * @brief  启用/禁用 OV5640 彩条模式。
+  * @param  pObj  组件对象指针
+  * @param  Cmd 启用或禁用彩条
+  * @retval 组件状态
   */
 int32_t OV5640_ColorbarModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
 {
@@ -1972,11 +1966,11 @@ int32_t OV5640_ColorbarModeConfig(OV5640_Object_t *pObj, uint32_t Cmd)
 }
 
 /**
-  * @brief  Set the camera pixel clock
-  * @param  pObj  pointer to component object
-  * @param  ClockValue Can be OV5640_PCLK_48M, OV5640_PCLK_24M, OV5640_PCLK_12M, OV5640_PCLK_9M
-  *                    OV5640_PCLK_8M, OV5640_PCLK_7M
-  * @retval Component status
+  * @brief  设置摄像头像素时钟。
+  * @param  pObj  组件对象指针
+  * @param  ClockValue 可为 OV5640_PCLK_48M、OV5640_PCLK_24M、OV5640_PCLK_12M、OV5640_PCLK_9M、
+  *                    OV5640_PCLK_8M、OV5640_PCLK_7M
+  * @retval 组件状态
   */
 int32_t OV5640_SetPCLK(OV5640_Object_t *pObj, uint32_t ClockValue)
 {
@@ -2033,9 +2027,9 @@ int32_t OV5640_SetPCLK(OV5640_Object_t *pObj, uint32_t ClockValue)
 }
 
 /**
-  * @brief  Enable DVP(Digital Video Port) Mode: Parallel Data Output
-  * @param  pObj  pointer to component object
-  * @retval Component status
+  * @brief  启用 DVP（数字视频端口）模式：并行数据输出。
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int OV5640_EnableDVPMode(OV5640_Object_t *pObj)
 {
@@ -2046,14 +2040,14 @@ int OV5640_EnableDVPMode(OV5640_Object_t *pObj)
 
   static const uint16_t regs[10][2] =
   {
-    /* Configure the IO Pad, output FREX/VSYNC/HREF/PCLK/D[9:2]/GPIO0/GPIO1 */
+    /* 配置 IO 焊盘，输出 FREX/VSYNC/HREF/PCLK/D[9:2]/GPIO0/GPIO1 */
     {OV5640_PAD_OUTPUT_ENABLE01, 0xFF},
     {OV5640_PAD_OUTPUT_ENABLE02, 0xF3},
     {0x302e, 0x00},
-    /* Unknown DVP control configuration */
+    /* 未知 DVP 控制配置 */
     {0x471c, 0x50},
     {OV5640_MIPI_CONTROL00, 0x58},
-    /* Timing configuration */
+    /* 时序配置 */
     {OV5640_SC_PLL_CONTRL0, 0x18},
     {OV5640_SC_PLL_CONTRL1, 0x41},
     {OV5640_SC_PLL_CONTRL2, 0x60},
@@ -2075,9 +2069,9 @@ int OV5640_EnableDVPMode(OV5640_Object_t *pObj)
 }
 
 /**
-  * @brief  Enable MIPI (Mobile Industry Processor Interface) Mode: Serial port
-  * @param  pObj  pointer to component object
-  * @retval Component status
+  * @brief  启用 MIPI（移动产业处理器接口）模式：串口。
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int32_t OV5640_EnableMIPIMode(OV5640_Object_t *pObj)
 {
@@ -2087,13 +2081,13 @@ int32_t OV5640_EnableMIPIMode(OV5640_Object_t *pObj)
 
   static const uint16_t regs[14][2] =
   {
-    /* PAD settings */
+    /* 焊盘设置 */
     {OV5640_PAD_OUTPUT_ENABLE01, 0},
     {OV5640_PAD_OUTPUT_ENABLE02, 0},
     {0x302e, 0x08},
-    /* Pixel clock period */
+    /* 像素时钟周期 */
     {OV5640_PCLK_PERIOD, 0x23},
-    /* Timing configuration */
+    /* 时序配置 */
     {OV5640_SC_PLL_CONTRL0, 0x18},
     {OV5640_SC_PLL_CONTRL1, 0x12},
     {OV5640_SC_PLL_CONTRL2, 0x1C},
@@ -2120,10 +2114,10 @@ int32_t OV5640_EnableMIPIMode(OV5640_Object_t *pObj)
 }
 
 /**
-  * @brief  Set MIPI VirtualChannel
-  * @param  pObj  pointer to component object
-  * @param  vchannel virtual channel for Mipi Mode
-  * @retval Component status
+  * @brief  设置 MIPI 虚拟通道。
+  * @param  pObj  组件对象指针
+  * @param  vchannel MIPI 模式的虚拟通道
+  * @retval 组件状态
   */
 int32_t OV5640_SetMIPIVirtualChannel(OV5640_Object_t *pObj, uint32_t vchannel)
 {
@@ -2148,9 +2142,9 @@ int32_t OV5640_SetMIPIVirtualChannel(OV5640_Object_t *pObj, uint32_t vchannel)
 }
 
 /**
-  * @brief  Start camera
-  * @param  pObj  pointer to component object
-  * @retval Component status
+  * @brief  启动摄像头。
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int32_t OV5640_Start(OV5640_Object_t *pObj)
 {
@@ -2161,9 +2155,9 @@ int32_t OV5640_Start(OV5640_Object_t *pObj)
 }
 
 /**
-  * @brief  Stop camera
-  * @param  pObj  pointer to component object
-  * @retval Component status
+  * @brief  停止摄像头。
+  * @param  pObj  组件对象指针
+  * @retval 组件状态
   */
 int32_t OV5640_Stop(OV5640_Object_t *pObj)
 {
@@ -2179,13 +2173,13 @@ int32_t OV5640_Stop(OV5640_Object_t *pObj)
   * @}
   */
 
-/** @defgroup OV5640_Private_Functions Private Functions
+/** @defgroup OV5640_Private_Functions 私有函数
   * @{
   */
 /**
-  * @brief This function provides accurate delay (in milliseconds)
-  * @param pObj   pointer to component object
-  * @param Delay  specifies the delay time length, in milliseconds
+  * @brief 本函数提供精确延时（单位：毫秒）。
+  * @param pObj  组件对象指针
+  * @param Delay 指定延时时间长度，单位毫秒
   * @retval OV5640_OK
   */
 static int32_t OV5640_Delay(OV5640_Object_t *pObj, uint32_t Delay)
@@ -2199,12 +2193,12 @@ static int32_t OV5640_Delay(OV5640_Object_t *pObj, uint32_t Delay)
 }
 
 /**
-  * @brief  Wrap component ReadReg to Bus Read function
-  * @param  handle  Component object handle
-  * @param  Reg  The target register address to write
-  * @param  pData  The target register value to be written
-  * @param  Length  buffer size to be written
-  * @retval error status
+  * @brief  将组件 ReadReg 封装为总线读函数。
+  * @param  handle  组件对象句柄
+  * @param  Reg  要读取的目标寄存器地址
+  * @param  pData  要读取的数据缓冲区
+  * @param  Length  要读取的数据长度
+  * @retval 错误状态
   */
 static int32_t OV5640_ReadRegWrap(void *handle, uint16_t Reg, uint8_t *pData, uint16_t Length)
 {
@@ -2214,12 +2208,12 @@ static int32_t OV5640_ReadRegWrap(void *handle, uint16_t Reg, uint8_t *pData, ui
 }
 
 /**
-  * @brief  Wrap component WriteReg to Bus Write function
-  * @param  handle  Component object handle
-  * @param  Reg  The target register address to write
-  * @param  pData  The target register value to be written
-  * @param  Length  buffer size to be written
-  * @retval error status
+  * @brief  将组件 WriteReg 封装为总线写函数。
+  * @param  handle  组件对象句柄
+  * @param  Reg  要写入的目标寄存器地址
+  * @param  pData  要写入的寄存器值
+  * @param  Length  要写入的数据长度
+  * @retval 错误状态
   */
 static int32_t OV5640_WriteRegWrap(void *handle, uint16_t Reg, uint8_t *pData, uint16_t Length)
 {

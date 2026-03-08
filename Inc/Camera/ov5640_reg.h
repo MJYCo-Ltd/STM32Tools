@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    ov5640_reg.h
   * @author  MCD Application Team
-  * @brief   Header of ov5640_reg.c
+  * @brief   ov5640_reg.c 的头文件
   *
   ******************************************************************************
   * @attention
@@ -17,7 +17,7 @@
   ******************************************************************************
   */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* 防止重复包含 -------------------------------------*/
 #ifndef OV5640_REG_H
 #define OV5640_REG_H
 
@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 /** @addtogroup BSP
   * @{
   */
@@ -53,13 +53,13 @@ extern "C" {
   */
 
 /**
-  * @brief  OV5640 ID
+  * @brief  OV5640 器件 ID
   */
 #define  OV5640_ID                                 0x5640U
 /**
-  * @brief  OV5640 Registers
+  * @brief  OV5640 寄存器
   */
-/* system and IO pad control [0x3000 ~ 0x3052]        */
+/* 系统和 IO 焊盘控制 [0x3000 ~ 0x3052]        */
 #define OV5640_SYSREM_RESET00                      0x3000U
 #define OV5640_SYSREM_RESET01                      0x3001U
 #define OV5640_SYSREM_RESET02                      0x3002U
@@ -98,13 +98,13 @@ extern "C" {
 #define OV5640_IO_PAD_VALUE01                      0x3051U
 #define OV5640_IO_PAD_VALUE02                      0x3052U
 
-/* SCCB control [0x3100 ~ 0x3108]                       */
+/* SCCB 控制 [0x3100 ~ 0x3108]                       */
 #define OV5640_SCCB_ID                             0x3100U
 #define OV5640_SCCB_SYSTEM_CTRL0                   0x3102U
 #define OV5640_SCCB_SYSTEM_CTRL1                   0x3103U
 #define OV5640_SYSTEM_ROOT_DIVIDER                 0x3108U
 
-/* SRB control [0x3200 ~ 0x3213]                        */
+/* SRB 控制 [0x3200 ~ 0x3213]                        */
 #define OV5640_GROUP_ADDR0                         0x3200U
 #define OV5640_GROUP_ADDR1                         0x3201U
 #define OV5640_GROUP_ADDR2                         0x3202U
@@ -112,7 +112,7 @@ extern "C" {
 #define OV5640_SRM_GROUP_ACCESS                    0x3212U
 #define OV5640_SRM_GROUP_STATUS                    0x3213U
 
-/* AWB gain control [0x3400 ~ 0x3406]                   */
+/* AWB 增益控制 [0x3400 ~ 0x3406]                   */
 #define OV5640_AWB_R_GAIN_MSB                      0x3400U
 #define OV5640_AWB_R_GAIN_LSB                      0x3401U
 #define OV5640_AWB_G_GAIN_MSB                      0x3402U
@@ -121,7 +121,7 @@ extern "C" {
 #define OV5640_AWB_B_GAIN_LSB                      0x3405U
 #define OV5640_AWB_MANUAL_CONTROL                  0x3406U
 
-/* AEC/AGC control [0x3500 ~ 0x350D]                    */
+/* AEC/AGC 控制 [0x3500 ~ 0x350D]                    */
 #define OV5640_AEC_PK_EXPOSURE_19_16               0x3500U
 #define OV5640_AEC_PK_EXPOSURE_HIGH                0x3501U
 #define OV5640_AEC_PK_EXPOSURE_LOW                 0x3502U
@@ -131,14 +131,14 @@ extern "C" {
 #define OV5640_AEC_PK_VTS_HIGH                     0x350CU
 #define OV5640_AEC_PK_VTS_LOW                      0x350DU
 
-/* VCM control [0x3600 ~ 0x3606]                        */
+/* VCM 控制 [0x3600 ~ 0x3606]                        */
 #define OV5640_VCM_CONTROL_0                       0x3602U
 #define OV5640_VCM_CONTROL_1                       0x3603U
 #define OV5640_VCM_CONTROL_2                       0x3604U
 #define OV5640_VCM_CONTROL_3                       0x3605U
 #define OV5640_VCM_CONTROL_4                       0x3606U
 
-/* timing control [0x3800 ~ 0x3821]                    */
+/* 时序控制 [0x3800 ~ 0x3821]                    */
 #define OV5640_TIMING_HS_HIGH                      0x3800U
 #define OV5640_TIMING_HS_LOW                       0x3801U
 #define OV5640_TIMING_VS_HIGH                      0x3802U
@@ -168,7 +168,7 @@ extern "C" {
 #define OV5640_TIMING_TC_REG20                     0x3820U
 #define OV5640_TIMING_TC_REG21                     0x3821U
 
-/* AEC/AGC power down domain control [0x3A00 ~ 0x3A25] */
+/* AEC/AGC 掉电域控制 [0x3A00 ~ 0x3A25] */
 #define OV5640_AEC_CTRL00                          0x3A00U
 #define OV5640_AEC_CTRL01                          0x3A01U
 #define OV5640_AEC_CTRL02                          0x3A02U
@@ -203,7 +203,7 @@ extern "C" {
 #define OV5640_AEC_CTRL21                          0x3A21U
 #define OV5640_AEC_CTRL25                          0x3A25U
 
-/* strobe control [0x3B00 ~ 0x3B0C]                      */
+/* 闪光灯控制 [0x3B00 ~ 0x3B0C]                      */
 #define OV5640_STROBE_CTRL                         0x3B00U
 #define OV5640_FREX_EXPOSURE02                     0x3B01U
 #define OV5640_FREX_SHUTTER_DLY01                  0x3B02U
@@ -218,7 +218,7 @@ extern "C" {
 #define OV5640_STROBE_WIDTH_HIGH                   0x3B0BU
 #define OV5640_STROBE_WIDTH_LOW                    0x3B0CU
 
-/* 50/60Hz detector control [0x3C00 ~ 0x3C1E]            */
+/* 50/60Hz 检测控制 [0x3C00 ~ 0x3C1E]            */
 #define OV5640_5060HZ_CTRL00                       0x3C00U
 #define OV5640_5060HZ_CTRL01                       0x3C01U
 #define OV5640_5060HZ_CTRL02                       0x3C02U
@@ -251,9 +251,9 @@ extern "C" {
 #define OV5640_LIGHTMETER_OUTPUT_BYTE1             0x3C1DU
 #define OV5640_SUM_THRESHOLD                       0x3C1EU
 
-/* OTP control [0x3D00 ~ 0x3D21]                         */
-/* MC control [0x3F00 ~ 0x3F0D]                          */
-/* BLC control [0x4000 ~ 0x4033]                         */
+/* OTP 控制 [0x3D00 ~ 0x3D21]                         */
+/* MC 控制 [0x3F00 ~ 0x3F0D]                          */
+/* BLC 控制 [0x4000 ~ 0x4033]                         */
 #define OV5640_BLC_CTRL00                          0x4000U
 #define OV5640_BLC_CTRL01                          0x4001U
 #define OV5640_BLC_CTRL02                          0x4002U
@@ -261,11 +261,11 @@ extern "C" {
 #define OV5640_BLC_CTRL04                          0x4004U
 #define OV5640_BLC_CTRL05                          0x4005U
 
-/* frame control [0x4201 ~ 0x4202]                       */
+/* 帧控制 [0x4201 ~ 0x4202]                       */
 #define OV5640_FRAME_CTRL01                        0x4201U
 #define OV5640_FRAME_CTRL02                        0x4202U
 
-/* format control [0x4300 ~ 0x430D]                      */
+/* 格式控制 [0x4300 ~ 0x430D]                      */
 #define OV5640_FORMAT_CTRL00                       0x4300U
 #define OV5640_FORMAT_CTRL01                       0x4301U
 #define OV5640_YMAX_VAL_HIGH                       0x4302U
@@ -281,7 +281,7 @@ extern "C" {
 #define OV5640_VMIN_VAL_HIGH                       0x430CU
 #define OV5640_VMIN_VAL_LOW                        0x430DU
 
-/* JPEG control [0x4400 ~ 0x4431]                        */
+/* JPEG 控制 [0x4400 ~ 0x4431]                        */
 #define OV5640_JPEG_CTRL00                         0x4400U
 #define OV5640_JPEG_CTRL01                         0x4401U
 #define OV5640_JPEG_CTRL02                         0x4402U
@@ -304,7 +304,7 @@ extern "C" {
 #define OV5640_JPEG_LENGTH_BYTE1                   0x4416U
 #define OV5640_JFIFO_OVERFLOW                      0x4417U
 
-/* VFIFO control [0x4600 ~ 0x460D]                       */
+/* VFIFO 控制 [0x4600 ~ 0x460D]                       */
 #define OV5640_VFIFO_CTRL00                        0x4600U
 #define OV5640_VFIFO_HSIZE_HIGH                    0x4602U
 #define OV5640_VFIFO_HSIZE_LOW                     0x4603U
@@ -313,7 +313,7 @@ extern "C" {
 #define OV5640_VFIFO_CTRL0C                        0x460CU
 #define OV5640_VFIFO_CTRL0D                        0x460DU
 
-/* DVP control [0x4709 ~ 0x4745]                         */
+/* DVP 控制 [0x4709 ~ 0x4745]                         */
 #define OV5640_DVP_VSYNC_WIDTH0                    0x4709U
 #define OV5640_DVP_VSYNC_WIDTH1                    0x470AU
 #define OV5640_DVP_VSYNC_WIDTH2                    0x470BU
@@ -341,7 +341,7 @@ extern "C" {
 #define OV5640_TEST_PATTERN                        0x4741U
 #define OV5640_DATA_ORDER                          0x4745U
 
-/* MIPI control [0x4800 ~ 0x4837]                        */
+/* MIPI 控制 [0x4800 ~ 0x4837]                        */
 #define OV5640_MIPI_CTRL00                         0x4800U
 #define OV5640_MIPI_CTRL01                         0x4801U
 #define OV5640_MIPI_CTRL05                         0x4805U
@@ -375,11 +375,11 @@ extern "C" {
 #define OV5640_MIN_HS_EXIT_UI                      0x4832U
 #define OV5640_PCLK_PERIOD                         0x4837U
 
-/* ISP frame control [0x4901 ~ 0x4902]                   */
+/* ISP 帧控制 [0x4901 ~ 0x4902]                   */
 #define OV5640_ISP_FRAME_CTRL01                    0x4901U
 #define OV5640_ISP_FRAME_CTRL02                    0x4902U
 
-/* ISP top control [0x5000 ~ 0x5063]                     */
+/* ISP 顶层控制 [0x5000 ~ 0x5063]                     */
 #define OV5640_ISP_CONTROL00                       0x5000U
 #define OV5640_ISP_CONTROL01                       0x5001U
 #define OV5640_ISP_CONTROL03                       0x5003U
@@ -397,9 +397,9 @@ extern "C" {
 #define OV5640_DRAW_WINDOW_TOP_CTRL_LOW            0x502DU
 #define OV5640_DRAW_WINDOW_BOTTOM_CTRL_HIGH        0x502EU
 #define OV5640_DRAW_WINDOW_BOTTOM_CTRL_LOW         0x502FU
-#define OV5640_DRAW_WINDOW_HBW_CTRL_HIGH           0x5030U          /* HBW: Horizontal Boundary Width */
+#define OV5640_DRAW_WINDOW_HBW_CTRL_HIGH           0x5030U          /* HBW: 水平边界宽度 */
 #define OV5640_DRAW_WINDOW_HBW_CTRL_LOW            0x5031U
-#define OV5640_DRAW_WINDOW_VBW_CTRL_HIGH           0x5032U          /* VBW: Vertical Boundary Width */
+#define OV5640_DRAW_WINDOW_VBW_CTRL_HIGH           0x5032U          /* VBW: 垂直边界宽度 */
 #define OV5640_DRAW_WINDOW_VBW_CTRL_LOW            0x5033U
 #define OV5640_DRAW_WINDOW_Y_CTRL                  0x5034U
 #define OV5640_DRAW_WINDOW_U_CTRL                  0x5035U
@@ -409,14 +409,14 @@ extern "C" {
 #define OV5640_ISP_SENSOR_GAIN1_I                  0x5062U
 #define OV5640_ISP_SENSOR_GAIN2_I                  0x5063U
 
-/* AWB control [0x5180 ~ 0x51D0]                         */
+/* AWB 控制 [0x5180 ~ 0x51D0]                         */
 #define OV5640_AWB_CTRL00                          0x5180U
 #define OV5640_AWB_CTRL01                          0x5181U
 #define OV5640_AWB_CTRL02                          0x5182U
 #define OV5640_AWB_CTRL03                          0x5183U
 #define OV5640_AWB_CTRL04                          0x5184U
 #define OV5640_AWB_CTRL05                          0x5185U
-#define OV5640_AWB_CTRL06                          0x5186U     /* Advanced AWB control registers: 0x5186 ~ 0x5190 */
+#define OV5640_AWB_CTRL06                          0x5186U     /* 高级 AWB 控制寄存器: 0x5186 ~ 0x5190 */
 #define OV5640_AWB_CTRL07                          0x5187U
 #define OV5640_AWB_CTRL08                          0x5188U
 #define OV5640_AWB_CTRL09                          0x5189U
@@ -452,7 +452,7 @@ extern "C" {
 #define OV5640_AWB_AVERAGE_B                       0x51A7U
 #define OV5640_AWB_CTRL74                          0x5180U
 
-/* CIP control [0x5300 ~ 0x530F]                         */
+/* CIP 控制 [0x5300 ~ 0x530F]                         */
 #define OV5640_CIP_SHARPENMT_TH1                   0x5300U
 #define OV5640_CIP_SHARPENMT_TH2                   0x5301U
 #define OV5640_CIP_SHARPENMT_OFFSET1               0x5302U
@@ -470,7 +470,7 @@ extern "C" {
 #define OV5640_CIP_DNS_TH_AUTO                     0x530EU
 #define OV5640_CIP_SHARPEN_TH_AUTO                 0x530FU
 
-/* CMX control [0x5380 ~ 0x538B]                         */
+/* CMX 控制 [0x5380 ~ 0x538B]                         */
 #define OV5640_CMX_CTRL                            0x5380U
 #define OV5640_CMX1                                0x5381U
 #define OV5640_CMX2                                0x5382U
@@ -484,7 +484,7 @@ extern "C" {
 #define OV5640_CMXSIGN_HIGH                        0x538AU
 #define OV5640_CMXSIGN_LOW                         0x538BU
 
-/* gamma control [0x5480 ~ 0x5490]                       */
+/* 伽马控制 [0x5480 ~ 0x5490]                       */
 #define OV5640_GAMMA_CTRL00                        0x5480U
 #define OV5640_GAMMA_YST00                         0x5481U
 #define OV5640_GAMMA_YST01                         0x5482U
@@ -503,7 +503,7 @@ extern "C" {
 #define OV5640_GAMMA_YST0E                         0x548FU
 #define OV5640_GAMMA_YST0F                         0x5490U
 
-/* SDE control [0x5580 ~ 0x558C]                         */
+/* SDE 控制 [0x5580 ~ 0x558C]                         */
 #define OV5640_SDE_CTRL0                           0x5580U
 #define OV5640_SDE_CTRL1                           0x5581U
 #define OV5640_SDE_CTRL2                           0x5582U
@@ -518,7 +518,7 @@ extern "C" {
 #define OV5640_SDE_CTRL11                          0x558BU
 #define OV5640_SDE_CTRL12                          0x558CU
 
-/* scale control [0x5600 ~ 0x5606]                       */
+/* 缩放控制 [0x5600 ~ 0x5606]                       */
 #define OV5640_SCALE_CTRL0                         0x5600U
 #define OV5640_SCALE_CTRL1                         0x5601U
 #define OV5640_SCALE_CTRL2                         0x5602U
@@ -528,7 +528,7 @@ extern "C" {
 #define OV5640_SCALE_CTRL6                         0x5606U
 
 
-/* AVG control [0x5680 ~ 0x56A2]                         */
+/* AVG 控制 [0x5680 ~ 0x56A2]                         */
 #define OV5640_X_START_HIGH                        0x5680U
 #define OV5640_X_START_LOW                         0x5681U
 #define OV5640_Y_START_HIGH                        0x5682U
@@ -565,7 +565,7 @@ extern "C" {
 #define OV5640_AVG_READOUT                         0x56A1U
 #define OV5640_AVG_WEIGHT_SUM                      0x56A2U
 
-/* LENC control [0x5800 ~ 0x5849]                        */
+/* LENC 控制 [0x5800 ~ 0x5849]                        */
 #define OV5640_GMTRX00                             0x5800U
 #define OV5640_GMTRX01                             0x5801U
 #define OV5640_GMTRX02                             0x5802U
@@ -641,7 +641,7 @@ extern "C" {
 #define OV5640_G_VSCALE_HIGH                       0x5848U
 #define OV5640_G_VSCALE_LOW                        0x5849U
 
-/* AFC control [0x6000 ~ 0x603F]                         */
+/* AFC 控制 [0x6000 ~ 0x603F]                         */
 #define OV5640_AFC_CTRL00                          0x6000U
 #define OV5640_AFC_CTRL01                          0x6001U
 #define OV5640_AFC_CTRL02                          0x6002U
@@ -724,10 +724,10 @@ typedef struct
 } ov5640_ctx_t;
 
 /*******************************************************************************
-  * Register      : Generic - All
-  * Address       : Generic - All
-  * Bit Group Name: None
-  * Permission    : W
+  * 寄存器      : 通用 - 全部
+  * 地址       : 通用 - 全部
+  * 位组名称   : 无
+  * 权限       : W
   *******************************************************************************/
 int32_t ov5640_write_reg(ov5640_ctx_t *ctx, uint16_t reg, uint8_t *pdata, uint16_t length);
 int32_t ov5640_read_reg(ov5640_ctx_t *ctx, uint16_t reg, uint8_t *pdata, uint16_t length);

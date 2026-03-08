@@ -2,8 +2,7 @@
   ******************************************************************************
   * @file    ov5640.h
   * @author  MCD Application Team
-  * @brief   This file contains all the functions prototypes for the ov5640.c
-  *          driver.
+  * @brief   本文件包含 ov5640.c 驱动的所有函数原型。
   ******************************************************************************
   * @attention
   *
@@ -17,7 +16,7 @@
   ******************************************************************************
   */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* 防止重复包含 -------------------------------------*/
 #ifndef OV5640_H
 #define OV5640_H
 
@@ -25,7 +24,7 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 #include "ov5640_reg.h"
 #include <stddef.h>
 
@@ -74,10 +73,10 @@ typedef struct
 
 typedef struct
 {
-  uint8_t FrameStartCode; /*!< Specifies the code of the frame start delimiter. */
-  uint8_t LineStartCode;  /*!< Specifies the code of the line start delimiter.  */
-  uint8_t LineEndCode;    /*!< Specifies the code of the line end delimiter.    */
-  uint8_t FrameEndCode;   /*!< Specifies the code of the frame end delimiter.   */
+  uint8_t FrameStartCode; /*!< 帧起始分隔符代码。 */
+  uint8_t LineStartCode;  /*!< 行起始分隔符代码。  */
+  uint8_t LineEndCode;    /*!< 行结束分隔符代码。    */
+  uint8_t FrameEndCode;   /*!< 帧结束分隔符代码。   */
 
 } OV5640_SyncCodes_t;
 
@@ -125,79 +124,79 @@ typedef struct
 #define OV5640_OK                      (0)
 #define OV5640_ERROR                   (-1)
 /**
-  * @brief  OV5640 Features Parameters
+  * @brief  OV5640 特性参数
   */
-/* Camera resolutions */
-#define OV5640_R160x120                 0x00U   /* QQVGA Resolution           */
-#define OV5640_R320x240                 0x01U   /* QVGA Resolution            */
-#define OV5640_R480x272                 0x02U   /* 480x272 Resolution         */
-#define OV5640_R640x480                 0x03U   /* VGA Resolution             */
-#define OV5640_R800x480                 0x04U   /* WVGA Resolution            */
+/* 摄像头分辨率 */
+#define OV5640_R160x120                 0x00U   /* QQVGA 分辨率           */
+#define OV5640_R320x240                 0x01U   /* QVGA 分辨率            */
+#define OV5640_R480x272                 0x02U   /* 480x272 分辨率         */
+#define OV5640_R640x480                 0x03U   /* VGA 分辨率             */
+#define OV5640_R800x480                 0x04U   /* WVGA 分辨率            */
 
-/* Camera Pixel Format */
-#define OV5640_RGB565                   0x00U   /* Pixel Format RGB565        */
-#define OV5640_RGB888                   0x01U   /* Pixel Format RGB888        */
-#define OV5640_YUV422                   0x02U   /* Pixel Format YUV422        */
-#define OV5640_Y8                       0x07U   /* Pixel Format Y8            */
-#define OV5640_JPEG                     0x08U   /* Compressed format JPEG          */
+/* 摄像头像素格式 */
+#define OV5640_RGB565                   0x00U   /* 像素格式 RGB565        */
+#define OV5640_RGB888                   0x01U   /* 像素格式 RGB888        */
+#define OV5640_YUV422                   0x02U   /* 像素格式 YUV422        */
+#define OV5640_Y8                       0x07U   /* 像素格式 Y8            */
+#define OV5640_JPEG                     0x08U   /* 压缩格式 JPEG          */
 
-/* Polarity */
-#define OV5640_POLARITY_PCLK_LOW        0x00U /* Signal Active Low          */
-#define OV5640_POLARITY_PCLK_HIGH       0x01U /* Signal Active High         */
-#define OV5640_POLARITY_HREF_LOW        0x00U /* Signal Active Low          */
-#define OV5640_POLARITY_HREF_HIGH       0x01U /* Signal Active High         */
-#define OV5640_POLARITY_VSYNC_LOW       0x01U /* Signal Active Low          */
-#define OV5640_POLARITY_VSYNC_HIGH      0x00U /* Signal Active High         */
+/* 极性 */
+#define OV5640_POLARITY_PCLK_LOW        0x00U /* 信号低有效          */
+#define OV5640_POLARITY_PCLK_HIGH       0x01U /* 信号高有效         */
+#define OV5640_POLARITY_HREF_LOW        0x00U /* 信号低有效          */
+#define OV5640_POLARITY_HREF_HIGH       0x01U /* 信号高有效         */
+#define OV5640_POLARITY_VSYNC_LOW       0x01U /* 信号低有效          */
+#define OV5640_POLARITY_VSYNC_HIGH      0x00U /* 信号高有效         */
 
-/* Mirror/Flip */
-#define OV5640_MIRROR_FLIP_NONE         0x00U   /* Set camera normal mode     */
-#define OV5640_FLIP                     0x01U   /* Set camera flip config     */
-#define OV5640_MIRROR                   0x02U   /* Set camera mirror config   */
-#define OV5640_MIRROR_FLIP              0x03U   /* Set camera mirror and flip */
+/* 镜像/翻转 */
+#define OV5640_MIRROR_FLIP_NONE         0x00U   /* 设置摄像头正常模式     */
+#define OV5640_FLIP                     0x01U   /* 设置摄像头翻转配置     */
+#define OV5640_MIRROR                   0x02U   /* 设置摄像头镜像配置   */
+#define OV5640_MIRROR_FLIP              0x03U   /* 设置摄像头镜像并翻转 */
 
-/* Zoom */
-#define OV5640_ZOOM_x8                  0x00U   /* Set zoom to x8             */
-#define OV5640_ZOOM_x4                  0x11U   /* Set zoom to x4             */
-#define OV5640_ZOOM_x2                  0x22U   /* Set zoom to x2             */
-#define OV5640_ZOOM_x1                  0x44U   /* Set zoom to x1             */
+/* 变焦 */
+#define OV5640_ZOOM_x8                  0x00U   /* 变焦 x8             */
+#define OV5640_ZOOM_x4                  0x11U   /* 变焦 x4             */
+#define OV5640_ZOOM_x2                  0x22U   /* 变焦 x2             */
+#define OV5640_ZOOM_x1                  0x44U   /* 变焦 x1             */
 
-/* Special Effect */
-#define OV5640_COLOR_EFFECT_NONE        0x00U   /* No effect                  */
-#define OV5640_COLOR_EFFECT_BLUE        0x01U   /* Blue effect                */
-#define OV5640_COLOR_EFFECT_RED         0x02U   /* Red effect                 */
-#define OV5640_COLOR_EFFECT_GREEN       0x04U   /* Green effect               */
-#define OV5640_COLOR_EFFECT_BW          0x08U   /* Black and White effect     */
-#define OV5640_COLOR_EFFECT_SEPIA       0x10U   /* Sepia effect               */
-#define OV5640_COLOR_EFFECT_NEGATIVE    0x20U   /* Negative effect            */
+/* 特效 */
+#define OV5640_COLOR_EFFECT_NONE        0x00U   /* 无效果                  */
+#define OV5640_COLOR_EFFECT_BLUE        0x01U   /* 蓝色效果                */
+#define OV5640_COLOR_EFFECT_RED         0x02U   /* 红色效果                 */
+#define OV5640_COLOR_EFFECT_GREEN       0x04U   /* 绿色效果               */
+#define OV5640_COLOR_EFFECT_BW          0x08U   /* 黑白效果     */
+#define OV5640_COLOR_EFFECT_SEPIA       0x10U   /* 棕褐色效果               */
+#define OV5640_COLOR_EFFECT_NEGATIVE    0x20U   /* 负片效果            */
 
 
-/* Light Mode */
-#define OV5640_LIGHT_AUTO               0x00U   /* Light Mode Auto            */
-#define OV5640_LIGHT_SUNNY              0x01U   /* Light Mode Sunny           */
-#define OV5640_LIGHT_OFFICE             0x02U   /* Light Mode Office          */
-#define OV5640_LIGHT_HOME               0x04U   /* Light Mode Home            */
-#define OV5640_LIGHT_CLOUDY             0x08U   /* Light Mode Claudy          */
+/* 光照模式 */
+#define OV5640_LIGHT_AUTO               0x00U   /* 光照模式 自动            */
+#define OV5640_LIGHT_SUNNY              0x01U   /* 光照模式 日光           */
+#define OV5640_LIGHT_OFFICE             0x02U   /* 光照模式 办公室          */
+#define OV5640_LIGHT_HOME               0x04U   /* 光照模式 家居            */
+#define OV5640_LIGHT_CLOUDY             0x08U   /* 光照模式 阴天          */
 
-/* Night Mode */
-#define NIGHT_MODE_DISABLE              0x00U   /* Disable night mode         */
-#define NIGHT_MODE_ENABLE               0x01U   /* Enable night mode          */
+/* 夜景模式 */
+#define NIGHT_MODE_DISABLE              0x00U   /* 禁用夜景模式         */
+#define NIGHT_MODE_ENABLE               0x01U   /* 启用夜景模式          */
 
-/* Colorbar Mode */
-#define COLORBAR_MODE_DISABLE           0x00U   /* Disable colorbar mode      */
-#define COLORBAR_MODE_ENABLE            0x01U   /* 8 bars W/Y/C/G/M/R/B/Bl    */
-#define COLORBAR_MODE_GRADUALV          0x02U   /* Gradual vertical colorbar  */
+/* 彩条模式 */
+#define COLORBAR_MODE_DISABLE           0x00U   /* 禁用彩条模式      */
+#define COLORBAR_MODE_ENABLE            0x01U   /* 8 条彩条 W/Y/C/G/M/R/B/Bl    */
+#define COLORBAR_MODE_GRADUALV          0x02U   /* 垂直渐变彩条  */
 
-/* Pixel Clock */
-#define OV5640_PCLK_7M                  0x00U   /* Pixel Clock set to 7Mhz    */
-#define OV5640_PCLK_8M                  0x01U   /* Pixel Clock set to 8Mhz    */
-#define OV5640_PCLK_9M                  0x02U   /* Pixel Clock set to 9Mhz    */
-#define OV5640_PCLK_12M                 0x04U   /* Pixel Clock set to 12Mhz   */
-#define OV5640_PCLK_24M                 0x08U   /* Pixel Clock set to 24Mhz   */
-#define OV5640_PCLK_48M                 0x09U   /* Pixel Clock set to 48MHz   */
+/* 像素时钟 */
+#define OV5640_PCLK_7M                  0x00U   /* 像素时钟设为 7MHz    */
+#define OV5640_PCLK_8M                  0x01U   /* 像素时钟设为 8MHz    */
+#define OV5640_PCLK_9M                  0x02U   /* 像素时钟设为 9MHz    */
+#define OV5640_PCLK_12M                 0x04U   /* 像素时钟设为 12MHz   */
+#define OV5640_PCLK_24M                 0x08U   /* 像素时钟设为 24MHz   */
+#define OV5640_PCLK_48M                 0x09U   /* 像素时钟设为 48MHz   */
 
-/* Mode */
-#define PARALLEL_MODE                   0x00U   /* Parallel Interface Mode */
-#define SERIAL_MODE                     0x01U   /* Serial Interface Mode   */
+/* 模式 */
+#define PARALLEL_MODE                   0x00U   /* 并行接口模式 */
+#define SERIAL_MODE                     0x01U   /* 串行接口模式   */
 
 /**
   * @}
@@ -238,7 +237,7 @@ int32_t OV5640_SetMIPIVirtualChannel(OV5640_Object_t *pObj, uint32_t vchannel);
 int32_t OV5640_Start(OV5640_Object_t *pObj);
 int32_t OV5640_Stop(OV5640_Object_t *pObj);
 
-/* CAMERA driver structure */
+/* CAMERA 驱动结构体 */
 extern OV5640_CAMERA_Drv_t   OV5640_CAMERA_Driver;
 /**
   * @}

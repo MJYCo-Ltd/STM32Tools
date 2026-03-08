@@ -4,8 +4,7 @@
   * @author  MCD Application Team
   * @version V1.0.2
   * @date    02-December-2014
-  * @brief   This file contains all the functions prototypes for the ov2640.c
-  *          driver.
+  * @brief   本文件包含 ov2640.c 驱动的所有函数原型。
   ******************************************************************************
   * @attention
   *
@@ -19,7 +18,7 @@
   ******************************************************************************
   */ 
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/* 防止重复包含 -------------------------------------*/
 #ifndef __OV2640_H
 #define __OV2640_H
 
@@ -27,7 +26,7 @@
  extern "C" {
 #endif 
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 #include "../Common/camera.h"
    
 /** @addtogroup BSP
@@ -54,13 +53,13 @@
   * @{
   */
 /** 
-  * @brief  OV2640 ID  
+  * @brief  OV2640 器件 ID  
   */  
 #define  OV2640_ID    0x26
 /** 
-  * @brief  OV2640 Registers  
+  * @brief  OV2640 寄存器定义  
   */
-/* OV2640 Registers definition when DSP bank selected (0xFF = 0x00) */
+/* 选择 DSP 存储区时的 OV2640 寄存器定义 (0xFF = 0x00) */
 #define OV2640_DSP_R_BYPASS             0x05
 #define OV2640_DSP_Qs                   0x44
 #define OV2640_DSP_CTRL                 0x50
@@ -96,7 +95,7 @@
 #define OV2640_DSP_P_STATUS             0xFE
 #define OV2640_DSP_RA_DLMT              0xFF
 
-/* OV2640 Registers definition when sensor bank selected (0xFF = 0x01) */
+/* 选择 Sensor 存储区时的 OV2640 寄存器定义 (0xFF = 0x01) */
 #define OV2640_SENSOR_GAIN              0x00
 #define OV2640_SENSOR_COM1              0x03
 #define OV2640_SENSOR_REG04             0x04
@@ -145,29 +144,29 @@
 #define OV2640_SENSOR_HISTO_HIGH        0x62 
 
 /** 
- * @brief  OV2640 Features Parameters  
+ * @brief  OV2640 特性参数  
  */
-#define OV2640_BRIGHTNESS_LEVEL0        0x40   /* Brightness level -2         */
-#define OV2640_BRIGHTNESS_LEVEL1        0x30   /* Brightness level -1         */
-#define OV2640_BRIGHTNESS_LEVEL2        0x20   /* Brightness level 0          */
-#define OV2640_BRIGHTNESS_LEVEL3        0x10   /* Brightness level +1         */
-#define OV2640_BRIGHTNESS_LEVEL4        0x00   /* Brightness level +2         */
+#define OV2640_BRIGHTNESS_LEVEL0        0x40   /* 亮度等级 -2         */
+#define OV2640_BRIGHTNESS_LEVEL1        0x30   /* 亮度等级 -1         */
+#define OV2640_BRIGHTNESS_LEVEL2        0x20   /* 亮度等级 0          */
+#define OV2640_BRIGHTNESS_LEVEL3        0x10   /* 亮度等级 +1         */
+#define OV2640_BRIGHTNESS_LEVEL4        0x00   /* 亮度等级 +2         */
 
-#define OV2640_BLACK_WHITE_BW           0x18   /* Black and white effect      */
-#define OV2640_BLACK_WHITE_NEGATIVE     0x40   /* Negative effect             */
-#define OV2640_BLACK_WHITE_BW_NEGATIVE  0x58   /* BW and Negative effect      */
-#define OV2640_BLACK_WHITE_NORMAL       0x00   /* Normal effect               */
+#define OV2640_BLACK_WHITE_BW           0x18   /* 黑白效果            */
+#define OV2640_BLACK_WHITE_NEGATIVE     0x40   /* 负片效果            */
+#define OV2640_BLACK_WHITE_BW_NEGATIVE  0x58   /* 黑白负片效果        */
+#define OV2640_BLACK_WHITE_NORMAL       0x00   /* 正常效果            */
 
-#define OV2640_CONTRAST_LEVEL0          0x3418 /* Contrast level -2           */
-#define OV2640_CONTRAST_LEVEL1          0x2A1C /* Contrast level -2           */
-#define OV2640_CONTRAST_LEVEL2          0x2020 /* Contrast level -2           */
-#define OV2640_CONTRAST_LEVEL3          0x1624 /* Contrast level -2           */
-#define OV2640_CONTRAST_LEVEL4          0x0C28 /* Contrast level -2           */
+#define OV2640_CONTRAST_LEVEL0          0x3418 /* 对比度等级 -2       */
+#define OV2640_CONTRAST_LEVEL1          0x2A1C /* 对比度等级 -1       */
+#define OV2640_CONTRAST_LEVEL2          0x2020 /* 对比度等级 0        */
+#define OV2640_CONTRAST_LEVEL3          0x1624 /* 对比度等级 +1       */
+#define OV2640_CONTRAST_LEVEL4          0x0C28 /* 对比度等级 +2       */
 
-#define OV2640_COLOR_EFFECT_ANTIQUE     0xA640 /* Antique effect              */
-#define OV2640_COLOR_EFFECT_BLUE        0x40A0 /* Blue effect                 */
-#define OV2640_COLOR_EFFECT_GREEN       0x4040 /* Green effect                */
-#define OV2640_COLOR_EFFECT_RED         0xC040 /* Red effect                  */   
+#define OV2640_COLOR_EFFECT_ANTIQUE     0xA640 /* 复古效果            */
+#define OV2640_COLOR_EFFECT_BLUE        0x40A0 /* 蓝色效果            */
+#define OV2640_COLOR_EFFECT_GREEN       0x4040 /* 绿色效果            */
+#define OV2640_COLOR_EFFECT_RED         0xC040 /* 红色效果            */   
 /**
   * @}
   */
@@ -184,7 +183,7 @@ void     CAMERA_IO_Write(uint8_t addr, uint8_t reg, uint8_t value);
 uint8_t  CAMERA_IO_Read(uint8_t addr, uint8_t reg);
 void     CAMERA_Delay(uint32_t delay);
 
-/* CAMERA driver structure */
+/* CAMERA 驱动结构体 */
 extern CAMERA_DrvTypeDef   ov2640_drv;
 /**
   * @}

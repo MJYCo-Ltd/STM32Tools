@@ -4,7 +4,7 @@
   * @author  MCD Application Team
   * @version V1.0.2
   * @date    02-December-2014
-  * @brief   This file provides the OV2640 camera driver
+  * @brief   本文件提供 OV2640 摄像头驱动
   ******************************************************************************
   * @attention
   *
@@ -18,7 +18,7 @@
   ******************************************************************************
   */ 
 
-/* Includes ------------------------------------------------------------------*/
+/* 头文件包含 ------------------------------------------------------------------*/
 #include "ov2640.h"
 
 /** @addtogroup BSP
@@ -30,8 +30,7 @@
   */ 
   
 /** @addtogroup OV2640
-  * @brief     This file provides a set of functions needed to drive the 
-  *            OV2640 Camera module.
+  * @brief     本文件提供驱动 OV2640 摄像头模块所需的一组函数。
   * @{
   */
 
@@ -78,54 +77,54 @@ CAMERA_DrvTypeDef   ov2640_drv =
   ov2640_Config,
 };
 
-/* Initialization sequence for 480x272 resolution */
+/* 480x272 分辨率初始化序列 */
 const unsigned char OV2640_480x272[][2]=
 {
-  {0xff, 0x00},  /* Device control register list Table 12 */
-  {0x2c, 0xff},  /* Reserved                              */
-  {0x2e, 0xdf},  /* Reserved                              */
-  {0xff, 0x01},  /* Device control register list Table 13 */
-  {0x3c, 0x32},  /* Reserved                              */
-  {0x11, 0x00},  /* Clock Rate Control                    */
-  {0x09, 0x02},  /* Common control 2                      */
-  {0x04, 0xA8},  /* Mirror                                */
-  {0x13, 0xe5},  /* Common control 8                      */
-  {0x14, 0x48},  /* Common control 9                      */
-  {0x2c, 0x0c},  /* Reserved                              */
-  {0x33, 0x78},  /* Reserved                              */
-  {0x3a, 0x33},  /* Reserved                              */
-  {0x3b, 0xfB},  /* Reserved                              */
-  {0x3e, 0x00},  /* Reserved                              */
-  {0x43, 0x11},  /* Reserved                              */
-  {0x16, 0x10},  /* Reserved                              */
-  {0x4a, 0x81},  /* Reserved                              */
-  {0x21, 0x99},  /* Reserved                              */
-  {0x24, 0x40},  /* Luminance signal High range           */
-  {0x25, 0x38},  /* Luminance signal low range            */
+  {0xff, 0x00},  /* 器件控制寄存器列表 表12 */
+  {0x2c, 0xff},  /* 保留                              */
+  {0x2e, 0xdf},  /* 保留                              */
+  {0xff, 0x01},  /* 器件控制寄存器列表 表13 */
+  {0x3c, 0x32},  /* 保留                              */
+  {0x11, 0x00},  /* 时钟速率控制                      */
+  {0x09, 0x02},  /* 通用控制 2                        */
+  {0x04, 0xA8},  /* 镜像                              */
+  {0x13, 0xe5},  /* 通用控制 8                        */
+  {0x14, 0x48},  /* 通用控制 9                        */
+  {0x2c, 0x0c},  /* 保留                              */
+  {0x33, 0x78},  /* 保留                              */
+  {0x3a, 0x33},  /* 保留                              */
+  {0x3b, 0xfB},  /* 保留                              */
+  {0x3e, 0x00},  /* 保留                              */
+  {0x43, 0x11},  /* 保留                              */
+  {0x16, 0x10},  /* 保留                              */
+  {0x4a, 0x81},  /* 保留                              */
+  {0x21, 0x99},  /* 保留                              */
+  {0x24, 0x40},  /* 亮度信号高范围                    */
+  {0x25, 0x38},  /* 亮度信号低范围                    */
   {0x26, 0x82},  /*                                       */
-  {0x5c, 0x00},  /* Reserved                              */
-  {0x63, 0x00},  /* Reserved                              */
-  {0x46, 0x3f},  /* Frame length adjustment               */
-  {0x0c, 0x3c},  /* Common control 3                      */
-  {0x61, 0x70},  /* Histogram algo low level              */
-  {0x62, 0x80},  /* Histogram algo high level             */
-  {0x7c, 0x05},  /* Reserved                              */
-  {0x20, 0x80},  /* Reserved                              */
-  {0x28, 0x30},  /* Reserved                              */
-  {0x6c, 0x00},  /* Reserved                              */
-  {0x6d, 0x80},  /* Reserved                              */
-  {0x6e, 0x00},  /* Reserved                              */
-  {0x70, 0x02},  /* Reserved                              */
-  {0x71, 0x94},  /* Reserved                              */
-  {0x73, 0xc1},  /* Reserved                              */
-  {0x3d, 0x34},  /* Reserved                              */
-  {0x5a, 0x57},  /* Reserved                              */
-  {0x12, 0x00},  /* Common control 7                      */
-  {0x11, 0x00},  /* Clock Rate Control                   2*/
-  {0x17, 0x11},  /* Horiz window start MSB 8bits          */
-  {0x18, 0x75},  /* Horiz window end MSB 8bits            */
-  {0x19, 0x01},  /* Vert window line start MSB 8bits      */
-  {0x1a, 0x97},  /* Vert window line end MSB 8bits        */
+  {0x5c, 0x00},  /* 保留                              */
+  {0x63, 0x00},  /* 保留                              */
+  {0x46, 0x3f},  /* 帧长调整                          */
+  {0x0c, 0x3c},  /* 通用控制 3                        */
+  {0x61, 0x70},  /* 直方图算法低电平                  */
+  {0x62, 0x80},  /* 直方图算法高电平                  */
+  {0x7c, 0x05},  /* 保留                              */
+  {0x20, 0x80},  /* 保留                              */
+  {0x28, 0x30},  /* 保留                              */
+  {0x6c, 0x00},  /* 保留                              */
+  {0x6d, 0x80},  /* 保留                              */
+  {0x6e, 0x00},  /* 保留                              */
+  {0x70, 0x02},  /* 保留                              */
+  {0x71, 0x94},  /* 保留                              */
+  {0x73, 0xc1},  /* 保留                              */
+  {0x3d, 0x34},  /* 保留                              */
+  {0x5a, 0x57},  /* 保留                              */
+  {0x12, 0x00},  /* 通用控制 7                        */
+  {0x11, 0x00},  /* 时钟速率控制 2                    */
+  {0x17, 0x11},  /* 水平窗口起始高 8 位               */
+  {0x18, 0x75},  /* 水平窗口结束高 8 位               */
+  {0x19, 0x01},  /* 垂直窗口行起始高 8 位             */
+  {0x1a, 0x97},  /* 垂直窗口行结束高 8 位             */
   {0x32, 0x36},
   {0x03, 0x0f},
   {0x37, 0x40},
@@ -320,54 +319,54 @@ const unsigned char OV2640_480x272[][2]=
   {0xe0, 0x00},
 };
 
-/* Initialization sequence for VGA resolution (640x480)*/
+/* VGA 分辨率 (640x480) 初始化序列 */
 const unsigned char OV2640_VGA[][2]=
 {
-  {0xff, 0x00},  /* Device control register list Table 12 */
-  {0x2c, 0xff},  /* Reserved                              */
-  {0x2e, 0xdf},  /* Reserved                              */
-  {0xff, 0x01},  /* Device control register list Table 13 */
-  {0x3c, 0x32},  /* Reserved                              */
-  {0x11, 0x00},  /* Clock Rate Control                    */
-  {0x09, 0x02},  /* Common control 2                      */
-  {0x04, 0xA8},  /* Mirror                                */
-  {0x13, 0xe5},  /* Common control 8                      */
-  {0x14, 0x48},  /* Common control 9                      */
-  {0x2c, 0x0c},  /* Reserved                              */
-  {0x33, 0x78},  /* Reserved                              */
-  {0x3a, 0x33},  /* Reserved                              */
-  {0x3b, 0xfB},  /* Reserved                              */
-  {0x3e, 0x00},  /* Reserved                              */
-  {0x43, 0x11},  /* Reserved                              */
-  {0x16, 0x10},  /* Reserved                              */
-  {0x4a, 0x81},  /* Reserved                              */
-  {0x21, 0x99},  /* Reserved                              */
-  {0x24, 0x40},  /* Luminance signal High range           */
-  {0x25, 0x38},  /* Luminance signal low range            */
+  {0xff, 0x00},  /* 器件控制寄存器列表 表12 */
+  {0x2c, 0xff},  /* 保留                              */
+  {0x2e, 0xdf},  /* 保留                              */
+  {0xff, 0x01},  /* 器件控制寄存器列表 表13 */
+  {0x3c, 0x32},  /* 保留                              */
+  {0x11, 0x00},  /* 时钟速率控制                      */
+  {0x09, 0x02},  /* 通用控制 2                        */
+  {0x04, 0xA8},  /* 镜像                              */
+  {0x13, 0xe5},  /* 通用控制 8                        */
+  {0x14, 0x48},  /* 通用控制 9                        */
+  {0x2c, 0x0c},  /* 保留                              */
+  {0x33, 0x78},  /* 保留                              */
+  {0x3a, 0x33},  /* 保留                              */
+  {0x3b, 0xfB},  /* 保留                              */
+  {0x3e, 0x00},  /* 保留                              */
+  {0x43, 0x11},  /* 保留                              */
+  {0x16, 0x10},  /* 保留                              */
+  {0x4a, 0x81},  /* 保留                              */
+  {0x21, 0x99},  /* 保留                              */
+  {0x24, 0x40},  /* 亮度信号高范围                    */
+  {0x25, 0x38},  /* 亮度信号低范围                    */
   {0x26, 0x82},  /*                                       */
-  {0x5c, 0x00},  /* Reserved                              */
-  {0x63, 0x00},  /* Reserved                              */
-  {0x46, 0x3f},  /* Frame length adjustment               */
-  {0x0c, 0x3c},  /* Common control 3                      */
-  {0x61, 0x70},  /* Histogram algo low level              */
-  {0x62, 0x80},  /* Histogram algo high level             */
-  {0x7c, 0x05},  /* Reserved                              */
-  {0x20, 0x80},  /* Reserved                              */
-  {0x28, 0x30},  /* Reserved                              */
-  {0x6c, 0x00},  /* Reserved                              */
-  {0x6d, 0x80},  /* Reserved                              */
-  {0x6e, 0x00},  /* Reserved                              */
-  {0x70, 0x02},  /* Reserved                              */
-  {0x71, 0x94},  /* Reserved                              */
-  {0x73, 0xc1},  /* Reserved                              */
-  {0x3d, 0x34},  /* Reserved                              */
-  {0x5a, 0x57},  /* Reserved                              */
-  {0x12, 0x00},  /* Common control 7                      */
-  {0x11, 0x00},  /* Clock Rate Control                   2*/
-  {0x17, 0x11},  /* Horiz window start MSB 8bits          */
-  {0x18, 0x75},  /* Horiz window end MSB 8bits            */
-  {0x19, 0x01},  /* Vert window line start MSB 8bits      */
-  {0x1a, 0x97},  /* Vert window line end MSB 8bits        */
+  {0x5c, 0x00},  /* 保留                              */
+  {0x63, 0x00},  /* 保留                              */
+  {0x46, 0x3f},  /* 帧长调整                          */
+  {0x0c, 0x3c},  /* 通用控制 3                        */
+  {0x61, 0x70},  /* 直方图算法低电平                  */
+  {0x62, 0x80},  /* 直方图算法高电平                  */
+  {0x7c, 0x05},  /* 保留                              */
+  {0x20, 0x80},  /* 保留                              */
+  {0x28, 0x30},  /* 保留                              */
+  {0x6c, 0x00},  /* 保留                              */
+  {0x6d, 0x80},  /* 保留                              */
+  {0x6e, 0x00},  /* 保留                              */
+  {0x70, 0x02},  /* 保留                              */
+  {0x71, 0x94},  /* 保留                              */
+  {0x73, 0xc1},  /* 保留                              */
+  {0x3d, 0x34},  /* 保留                              */
+  {0x5a, 0x57},  /* 保留                              */
+  {0x12, 0x00},  /* 通用控制 7                        */
+  {0x11, 0x00},  /* 时钟速率控制 2                    */
+  {0x17, 0x11},  /* 水平窗口起始高 8 位               */
+  {0x18, 0x75},  /* 水平窗口结束高 8 位               */
+  {0x19, 0x01},  /* 垂直窗口行起始高 8 位             */
+  {0x1a, 0x97},  /* 垂直窗口行结束高 8 位             */
   {0x32, 0x36},
   {0x03, 0x0f},
   {0x37, 0x40},
@@ -562,7 +561,7 @@ const unsigned char OV2640_VGA[][2]=
   {0xe0, 0x00},
 };
 
-/* Initialization sequence for QVGA resolution (320x240) */
+/* QVGA 分辨率 (320x240) 初始化序列 */
 const unsigned char OV2640_QVGA[][2]=
 {
   {0xff, 0x00},
@@ -787,7 +786,7 @@ const unsigned char OV2640_QVGA[][2]=
   {0x00, 0x00},
 };
 
-/* Initialization sequence for QQVGA resolution (160x120) */
+/* QQVGA 分辨率 (160x120) 初始化序列 */
 const char OV2640_QQVGA[][2]=
 {
   {0xff, 0x00},
@@ -1021,24 +1020,24 @@ const char OV2640_QQVGA[][2]=
   */ 
   
 /**
-  * @brief  Initializes the OV2640 CAMERA component.
-  * @param  DeviceAddr: Device address on communication Bus.
-  * @param  resolution: Camera resolution
+  * @brief  初始化 OV2640 摄像头组件。
+  * @param  DeviceAddr: 通信总线上的器件地址。
+  * @param  resolution: 摄像头分辨率
   * @retval None
   */
 void ov2640_Init(uint16_t DeviceAddr, uint32_t resolution)
 {
   uint32_t index;
   
-  /* Initialize I2C */
+  /* 初始化 I2C */
   CAMERA_IO_Init();    
   
-  /* Prepare the camera to be configured */
+  /* 准备配置摄像头 */
   CAMERA_IO_Write(DeviceAddr, OV2640_DSP_RA_DLMT, 0x01);
   CAMERA_IO_Write(DeviceAddr, OV2640_SENSOR_COM7, 0x80);
   CAMERA_Delay(200);
   
-  /* Initialize OV2640 */
+  /* 初始化 OV2640 */
   switch (resolution)
   {
   case CAMERA_R160x120:
@@ -1085,11 +1084,11 @@ void ov2640_Init(uint16_t DeviceAddr, uint32_t resolution)
 }
 
 /**
-  * @brief  Configures the OV2640 camera feature.
-  * @param  DeviceAddr: Device address on communication Bus.
-  * @param  feature: Camera feature to be configured
-  * @param  value: Value to be configured
-  * @param  brightness_value: Brightness value to be configured
+  * @brief  配置 OV2640 摄像头特性。
+  * @param  DeviceAddr: 通信总线上的器件地址。
+  * @param  feature: 待配置的摄像头特性
+  * @param  value: 待配置的值
+  * @param  brightness_value: 待配置的亮度值
   * @retval None
   */
 void ov2640_Config(uint16_t DeviceAddr, uint32_t feature, uint32_t value, uint32_t brightness_value)
@@ -1098,7 +1097,7 @@ void ov2640_Config(uint16_t DeviceAddr, uint32_t feature, uint32_t value, uint32
   uint32_t value_tmp;
   uint32_t br_value;
   
-  /* Convert the input value into ov2640 parameters */
+  /* 将输入值转换为 ov2640 参数 */
   value_tmp = ov2640_ConvertValue(feature, value); 
   br_value = ov2640_ConvertValue(CAMERA_CONTRAST_BRIGHTNESS, brightness_value); 
     
@@ -1148,30 +1147,30 @@ void ov2640_Config(uint16_t DeviceAddr, uint32_t feature, uint32_t value, uint32
 }
 
 /**
-  * @brief  Read the OV2640 Camera identity.
-  * @param  DeviceAddr: Device address on communication Bus.
-  * @retval the OV2640 ID
+  * @brief  读取 OV2640 摄像头标识。
+  * @param  DeviceAddr: 通信总线上的器件地址。
+  * @retval OV2640 的 ID
   */
 uint16_t ov2640_ReadID(uint16_t DeviceAddr)
 {
-  /* Initialize I2C */
+  /* 初始化 I2C */
   CAMERA_IO_Init();
   
-  /* Prepare the sensor to read the Camera ID */
+  /* 准备传感器以读取摄像头 ID */
   CAMERA_IO_Write(DeviceAddr, OV2640_DSP_RA_DLMT, 0x01);
   
-  /* Get the camera ID */
+  /* 获取摄像头 ID */
   return (CAMERA_IO_Read(DeviceAddr, OV2640_SENSOR_PIDH));
 }
 
 /******************************************************************************
-                            Static Functions
+                            静态函数
 *******************************************************************************/
 /**
-  * @brief  Convert input values into ov2640 parameters.
-  * @param  feature: Camera feature to be configured
-  * @param  value: Value to be configured
-  * @retval The converted value
+  * @brief  将输入值转换为 ov2640 参数。
+  * @param  feature: 待配置的摄像头特性
+  * @param  value: 待配置的值
+  * @retval 转换后的值
   */
 static uint32_t ov2640_ConvertValue(uint32_t feature, uint32_t value)
 {
