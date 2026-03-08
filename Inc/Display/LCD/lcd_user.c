@@ -3,8 +3,8 @@
 /**
  * @brief 选择使用的硬件 SPI 端口
  */
-#define ST7789_SPI_PORT hspi4
-extern SPI_HandleTypeDef ST7789_SPI_PORT;
+#define DISPLAY_SPI_PORT hspi4
+extern SPI_HandleTypeDef DISPLAY_SPI_PORT;
 
 /* 是否使用 DMA 传输（需 MCU 有足够 RAM） */
 // #define USE_DMA
@@ -36,9 +36,9 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
   HAL_GPIO_WritePin(LCD_BlackLight_GPIO_Port, LCD_BlackLight_Pin, GPIO_PIN_SET)
 
 /* DC 引脚：低电平=传输指令，高电平=传输数据 */
-#define LCD_SEND_CMD                                                           \
+#define SPI_SEND_CMD                                                           \
   HAL_GPIO_WritePin(ST7789_DC_PORT, ST7789_DC_PIN, GPIO_PIN_RESET)
-#define LCD_SEND_DATA                                                          \
+#define SPI_SEND_DATA                                                          \
   HAL_GPIO_WritePin(ST7789_DC_PORT, ST7789_DC_PIN, GPIO_PIN_SET)
 /*
  * 屏幕尺寸选择（三选一）
@@ -220,13 +220,13 @@ __attribute__((section(".dma_buffer"), aligned(32))) uint8_t lcd_buffer[LCD_BUFF
 #endif
 
 #ifndef CFG_NO_CS
-#define ST7789_Select()                                                        \
+#define SPI_SELECT                                                        \
   HAL_GPIO_WritePin(ST7789_CS_PORT, ST7789_CS_PIN, GPIO_PIN_RESET)
-#define ST7789_UnSelect()                                                      \
+#define SPI_UNSELECT                                                      \
   HAL_GPIO_WritePin(ST7789_CS_PORT, ST7789_CS_PIN, GPIO_PIN_SET)
 #else
-#define ST7789_Select()
-#define ST7789_UnSelect()
+#define SPI_SELECT
+#define SPI_UNSELECT
 #endif
 
 #ifndef ST7789_ROTATION

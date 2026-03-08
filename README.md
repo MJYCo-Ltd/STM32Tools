@@ -8,16 +8,24 @@
 ```
 STM32Tools/
 ├── Inc/                    # 头文件及用户配置
-│   ├── Display/            # 显示相关（LCD、EPD、Graphics）
+│   ├── Display/            # 显示相关
+│   │   ├── SPIDisplay.h    # SPI 显示统一接口（EPD/LCD 共用）
+│   │   ├── LCD/            # ST7789 配置
+│   │   └── EPD/            # UC8253 墨水屏配置
 │   ├── TMP/                # TMP117 温度传感器
 │   ├── MX/                 # MX-22 蓝牙模块
 │   ├── L051C8T6/           # STM32L051 专用（EEPROM）
 │   ├── pb/                 # nanopb 协议缓冲
+│   ├── MQTT/               # MQTT 客户端
+│   ├── Tracealzer/         # Percepio Tracealyzer 追踪
 │   └── ...
 ├── Src/                    # 源文件
 │   ├── Display/            # LCD、EPD、Graphics 实现
 │   ├── TMP/                # TMP117 驱动
 │   ├── MX/                 # MX-22 驱动
+│   ├── pb/                 # nanopb 编解码
+│   ├── MQTT/               # MQTT 核心
+│   ├── Tracealzer/         # Tracealyzer 运行时
 │   └── ...
 └── Test/                   # 单元测试
 ```
@@ -46,15 +54,41 @@ STM32Tools/
 
 ## 显示模块
 
+### SPI 显示统一接口 (SPIDisplay.h)
+
+EPD 与 LCD 共用 `SPI_SendCommand`、`SPI_SendData`、`SPI_SendBuffer`。头文件为内联实现，需在包含前由用户配置定义以下宏：
+
+| 宏 | 说明 |
+|----|------|
+| `SPI_SELECT` | 片选有效 |
+| `SPI_UNSELECT` | 片选释放 |
+| `SPI_SEND_CMD` | DC 置为指令模式（低电平） |
+| `SPI_SEND_DATA` | DC 置为数据模式（高电平） |
+| `DISPLAY_SPI_PORT` | SPI 句柄，如 `hspi1` |
+| `USE_BUFFER` | 可选，大块数据使用 DMA 传输 |
+
+### 绘图接口 (Graphics)
+
+基于 `DrawPixel` 的通用绘图库，LCD 与 EPD 共用同一套接口。底层由各自实现 `DrawPixel` 区分。
+
+- **直线**：Bresenham 算法
+- **圆/填充圆**：中点圆算法
+- **三角形**：边缘追踪扫描填充
+
+`DrawHLine(x0, y0, x1, color)` 与 `DrawVLine(x0, y0, y1, color)` 的第三个参数为**终点坐标**，非长度。
+
 ### LCD (ST7789)
 
 - 支持 135x240、240x240、170x320 分辨率
-- 需在 `Inc/Display/LCD/lcd_user.c` 中配置 SPI 端口、引脚、分辨率
+- 在 `Inc/Display/LCD/lcd_user.c` 中配置 SPI 端口、引脚、分辨率
+- 包含 `lcd_user.c` 后包含 `SPIDisplay.h`，即可使用统一 SPI 接口
 
 ### EPD 墨水屏 (UC8253)
 
 - 支持双色/三色模式，全刷与局刷
-- 需在 `Inc/Display/EPD/epd_user.c` 中配置 SPI、GPIO、引脚映射
+- 在 `Inc/Display/EPD/epd_user.c` 中配置 SPI、GPIO、引脚映射
+- `epd_uc8253.c` 实现 `DrawPixel`，可直接使用 Graphics 接口
+- 包含 `epd_user.c` 后包含 `SPIDisplay.h`，即可使用统一 SPI 接口
 
 示例代码：
 
@@ -86,7 +120,7 @@ EPD_PowerOff();
 EPD_DeepSleep();
 ```
 
-> 注：`EPD_DrawRect`、`EPD_WHITE` 等由项目中的 `epd_graphics.h` 提供，需在工程中引入对应头文件
+> 注：`EPD_DrawRect`、`EPD_WHITE`、`EPD_BLACK` 等由项目中的 `epd_graphics.h` 提供，需在工程中引入对应头文件并实现颜色常量与绘图接口的 EPD 封装。
 
 ## 爱氪森传感器 (ECSense)
 
@@ -106,6 +140,8 @@ EPD_DeepSleep();
 - **RF24L01**：2.4GHz 无线收发
 - **SoftSpi**：软件 SPI 实现
 - **nanopb**：Protocol Buffers 编解码
+- **MQTT**：MQTT 客户端（core_mqtt）
+- **Tracealyzer**：Percepio Tracealyzer 运行时追踪
 
 ## 接口说明
 

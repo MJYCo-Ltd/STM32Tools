@@ -48,11 +48,10 @@ uint8_t g_fast = 0;
 #define PANEL_SETTING_KW (1 << 4) // 黑白两色
 ///!EPD_CMD_PANEL_SETTING
 
-// 底层 SPI 通信
-void EPD_SendCommand(uint8_t cmd);
-void EPD_SendData(uint8_t data);
-void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength);
+#include <Display/EPD/epd_user.c>
+#include <Display/SPIDisplay.h>
 
+COLOR RED={255,0,0},BLACK={0,0,0};
 #ifdef GOOD_DISPLAY
 #define EPD_OPEN_TSFIX 0x02
 
@@ -69,30 +68,30 @@ void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength);
 ///// end EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING 参数////
 
 void GD_PartFresh(void) {
-  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
-  EPD_SendData(EPD_OPEN_TSFIX);
+  SPI_SendCommand(EPD_CMD_CASCADE_SETTING);
+  SPI_SendData(EPD_OPEN_TSFIX);
 
-  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
-  EPD_SendData(GD_PART_REFRESH);
+  SPI_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
+  SPI_SendData(GD_PART_REFRESH);
 
-  EPD_SendCommand(EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING);
-  EPD_SendData(GD_WB_VBDF);
+  SPI_SendCommand(EPD_CMD_VCOM_AND_DATA_INTERVAL_SETTING);
+  SPI_SendData(GD_WB_VBDF);
 }
 
 void GD_FastFresh(void) {
-  EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
-  EPD_SendData(EPD_OPEN_TSFIX);
+  SPI_SendCommand(EPD_CMD_CASCADE_SETTING);
+  SPI_SendData(EPD_OPEN_TSFIX);
 
-  EPD_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
-  EPD_SendData(GD_QUICK_REFRESH); // 0x5F--1.5s快刷
+  SPI_SendCommand(EPD_CMD_FORCE_TEMPERATURE);
+  SPI_SendData(GD_QUICK_REFRESH); // 0x5F--1.5s快刷
 }
 
 void GD_Reset(void) {
   if (0 != g_fast) {
     GD_FastFresh();
   } else {
-    EPD_SendCommand(EPD_CMD_CASCADE_SETTING);
-    EPD_SendData(0x00);
+    SPI_SendCommand(EPD_CMD_CASCADE_SETTING);
+    SPI_SendData(0x00);
   }
 }
 #else
@@ -142,26 +141,24 @@ static const uint8_t K2W_LUT[][7] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
 #endif
 
-#include <Display/EPD/epd_user.c>
-
 void EPD_LoadFastLUT(void) {
 #ifdef GOOD_DISPLAY
   GD_FastFresh();
 #else
-  EPD_SendCommand(EPD_CMD_VCOM_LUT);
-  EPD_SendBuffer(VCOM_LUT, sizeof(VCOM_LUT));
+  SPI_SendCommand(EPD_CMD_VCOM_LUT);
+  SPI_SendBuffer(VCOM_LUT, sizeof(VCOM_LUT));
   EPD_WaitUntilIdle();
-  EPD_SendCommand(EPD_CMD_W2W_LUT);
-  EPD_SendBuffer(W2W_LUT, sizeof(W2W_LUT));
+  SPI_SendCommand(EPD_CMD_W2W_LUT);
+  SPI_SendBuffer(W2W_LUT, sizeof(W2W_LUT));
   EPD_WaitUntilIdle();
-  EPD_SendCommand(EPD_CMD_B2W_LUT);
-  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
+  SPI_SendCommand(EPD_CMD_B2W_LUT);
+  SPI_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
-  EPD_SendCommand(EPD_CMD_W2B_LUT);
-  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
+  SPI_SendCommand(EPD_CMD_W2B_LUT);
+  SPI_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
-  EPD_SendCommand(EPD_CMD_B2B_LUT);
-  EPD_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
+  SPI_SendCommand(EPD_CMD_B2B_LUT);
+  SPI_SendBuffer(K2W_LUT, sizeof(K2W_LUT));
   EPD_WaitUntilIdle();
 #endif
 }
@@ -170,44 +167,23 @@ void EPD_LoadFastLUT(void) {
  * @brief epd_RFrame  红色像素
  */
 uint8_t epd_WBframe[EPD_BUFFER_SIZE], epd_Rframe[EPD_BUFFER_SIZE];
-// ================= 低层通信函数 =================
-void EPD_SendCommand(uint8_t cmd) {
-  SELECT_EPD;
-  EPD_CMD;
-  HAL_SPI_Transmit(&EPD_SPI, &cmd, 1, HAL_MAX_DELAY);
-  UNSELECT_EPD;
-}
-
-void EPD_SendData(uint8_t data) {
-  SELECT_EPD;
-  EPD_DATA;
-  HAL_SPI_Transmit(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
-  UNSELECT_EPD;
-}
-
-void EPD_SendBuffer(const unsigned char *pBuffer, uint16_t unLength) {
-  SELECT_EPD;
-  EPD_DATA;
-  HAL_SPI_Transmit(&EPD_SPI, pBuffer, unLength, HAL_MAX_DELAY);
-  UNSELECT_EPD;
-}
 
 /// 开机
 void EPD_PowerOn(void) {
-  EPD_SendCommand(EPD_CMD_POWER_ON);
+  SPI_SendCommand(EPD_CMD_POWER_ON);
   EPD_WaitUntilIdle();
 }
 
 /// 关机
 void EPD_PowerOff(void) {
-  EPD_SendCommand(EPD_CMD_POWER_OFF);
+  SPI_SendCommand(EPD_CMD_POWER_OFF);
   EPD_WaitUntilIdle();
 }
 
 /// 硬件休眠
 void EPD_DeepSleep(void) {
-  EPD_SendCommand(EPD_CMD_DEEP_SLEEP);
-  EPD_SendData(0xA5);
+  SPI_SendCommand(EPD_CMD_DEEP_SLEEP);
+  SPI_SendData(0xA5);
 }
 
 /// 初始化显存
@@ -229,10 +205,10 @@ void EPD_InitDrawBuffer(COLOR color) {
 }
 
 void EPD_ShowBuffer(void) {
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
-  EPD_SendBuffer(epd_WBframe, EPD_BUFFER_SIZE);
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
-  EPD_SendBuffer(EPD_THREE_COLOR == g_model ? epd_Rframe : epd_WBframe,
+  SPI_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+  SPI_SendBuffer(epd_WBframe, EPD_BUFFER_SIZE);
+  SPI_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+  SPI_SendBuffer(EPD_THREE_COLOR == g_model ? epd_Rframe : epd_WBframe,
                  EPD_BUFFER_SIZE);
 }
 
@@ -240,16 +216,16 @@ void EPD_ShowPartBuffer(uint16_t nXStart, uint16_t nYStart, uint16_t nXEnd,
                         uint16_t nYEnd) {
   uint16_t nPixelWidth = (nXEnd - nXStart + 1) >> 3;
 
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
+  SPI_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_1);
   for (uint16_t nIndex = nYStart; nIndex < nYEnd; ++nIndex) {
-    EPD_SendBuffer(epd_WBframe + ((nXStart + nIndex * EPD_WIDTH) >> 3),
+    SPI_SendBuffer(epd_WBframe + ((nXStart + nIndex * EPD_WIDTH) >> 3),
                    nPixelWidth);
   }
-  EPD_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
+  SPI_SendCommand(EPD_CMD_DATA_START_TRANSMISSION_2);
   const unsigned char *pBuffer =
       EPD_THREE_COLOR == g_model ? epd_Rframe : epd_WBframe;
   for (uint16_t nIndex = nYStart; nIndex < nYEnd; ++nIndex) {
-    EPD_SendBuffer(pBuffer + ((nXStart + nIndex * EPD_WIDTH) >> 3),
+    SPI_SendBuffer(pBuffer + ((nXStart + nIndex * EPD_WIDTH) >> 3),
                    nPixelWidth);
   }
   memcpy(epd_Rframe, epd_WBframe, EPD_BUFFER_SIZE);
@@ -288,7 +264,7 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
   EPD_Rest();
 
   // 设置板子的模式
-  EPD_SendCommand(EPD_CMD_PANEL_SETTING);
+  SPI_SendCommand(EPD_CMD_PANEL_SETTING);
   uint8_t panelSetting = 0x0F;
   if (EPD_TWO_COLOR == g_model) {
     panelSetting |= PANEL_SETTING_KW;
@@ -298,11 +274,11 @@ void EPD_Init(EPD_MODEL model, uint8_t fastFresh) {
     panelSetting |= PANEL_SETTING_REG;
   }
 #endif
-  EPD_SendData(panelSetting);
+  SPI_SendData(panelSetting);
   EPD_WaitUntilIdle();
 
   if (0 != g_fast) {
-    EPD_SendCommand(EPD_CMD_POWER_ON);
+    SPI_SendCommand(EPD_CMD_POWER_ON);
     EPD_WaitUntilIdle();
     EPD_LoadFastLUT();
   }
@@ -315,7 +291,7 @@ void EPD_Clear(COLOR color) {
 }
 
 void EPD_Update(void) {
-  EPD_SendCommand(EPD_CMD_DISPLAY_REFRESH);
+  SPI_SendCommand(EPD_CMD_DISPLAY_REFRESH);
   EPD_WaitUntilIdle();
 }
 
@@ -332,23 +308,23 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
   uint16_t y_end = y + h - 1;
 
   // 进入部分刷新模式
-  EPD_SendCommand(EPD_CMD_PARTIAL_IN);
+  SPI_SendCommand(EPD_CMD_PARTIAL_IN);
 
   // 设置窗口
-  EPD_SendCommand(EPD_CMD_PARTIAL_WINDOW);
-  EPD_SendData(x_start);
-  EPD_SendData(x_end);
-  EPD_SendData(y >> 8);
-  EPD_SendData(y & 0x00FF);
-  EPD_SendData(y_end >> 8);
-  EPD_SendData(y_end & 0x00FF);
-  EPD_SendData(0x0);
+  SPI_SendCommand(EPD_CMD_PARTIAL_WINDOW);
+  SPI_SendData(x_start);
+  SPI_SendData(x_end);
+  SPI_SendData(y >> 8);
+  SPI_SendData(y & 0x00FF);
+  SPI_SendData(y_end >> 8);
+  SPI_SendData(y_end & 0x00FF);
+  SPI_SendData(0x0);
 
   EPD_ShowPartBuffer(x_start, y, x_end, y_end);
   EPD_WaitUntilIdle();
   EPD_Update();
   /// 退出局部模式
-  EPD_SendCommand(EPD_CMD_PARTIAL_OUT);
+  SPI_SendCommand(EPD_CMD_PARTIAL_OUT);
 #ifdef GOOD_DISPLAY
   GD_Reset();
 #endif
@@ -358,11 +334,11 @@ void EPD_DisplayPartial(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
 __attribute__((weak)) uint8_t EPD_GetInnerTemp(void) {
   EPD_PowerOn();
 
-  EPD_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
+  SPI_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
   EPD_WaitUntilIdle();
 
   uint8_t data;
-  HAL_SPI_Receive(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
+  HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1, HAL_MAX_DELAY);
 
   EPD_PowerOff();
   return (data);
@@ -370,10 +346,10 @@ __attribute__((weak)) uint8_t EPD_GetInnerTemp(void) {
 
 /// 检查面板玻璃
 __attribute__((weak)) uint8_t EPD_IsOk() {
-  EPD_SendCommand(EPD_CMD_PANEL_GLASS_CHECK);
+  SPI_SendCommand(EPD_CMD_PANEL_GLASS_CHECK);
   EPD_WaitUntilIdle();
 
   uint8_t data;
-  HAL_SPI_Receive(&EPD_SPI, &data, 1, HAL_MAX_DELAY);
+  HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1, HAL_MAX_DELAY);
   return (data);
 }

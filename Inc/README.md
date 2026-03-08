@@ -16,6 +16,29 @@
 
 ---
 
+## SPI 显示统一接口 (Display/SPIDisplay.h)
+
+EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序**：先包含用户配置（`epd_user.c` 或 `lcd_user.c`），再包含 `SPIDisplay.h`。
+
+| 接口 | 说明 |
+|------|------|
+| `SPI_SendCommand(cmd)` | 写指令（DC 低） |
+| `SPI_SendData(data)` | 写单字节数据（DC 高） |
+| `SPI_SendBuffer(buff, len)` | 写数据缓冲区（DC 高，支持 64K 分块及 DMA） |
+
+**用户配置需定义**：
+
+| 宏 | 说明 |
+|----|------|
+| `SPI_SELECT` | 片选有效 |
+| `SPI_UNSELECT` | 片选释放 |
+| `SPI_SEND_CMD` | DC 置为指令模式 |
+| `SPI_SEND_DATA` | DC 置为数据模式 |
+| `DISPLAY_SPI_PORT` | SPI 句柄 |
+| `USE_BUFFER` | 可选，大块数据使用 DMA |
+
+---
+
 ## 显示 - LCD (Display/LCD/)
 
 ### lcd.h
@@ -26,9 +49,9 @@
 | `LCD_Reset()` | 复位 |
 | `LCD_SetRotation(m)` | 设置旋转方向 |
 | `LCD_SetAddressWindow(x0,y0,x1,y1)` | 设置显存窗口 |
-| `LCD_Clear(color)` | 全屏填充 RGB565 颜色 |
+| `LCD_Refresh()` | 刷新帧缓冲区到屏幕 |
+| `LCD_InvertColors(invert)` | 全屏颜色反显开关 |
 | `LCD_TearEffect(tear)` | 撕裂效应线开关 |
-| `lcd_st7789_draw_buffer(...)` | 绘制缓冲区到指定区域 |
 
 ### 用户配置 (Display/LCD/lcd_user.c)
 
@@ -36,13 +59,13 @@
 
 | 配置项 | 说明 |
 |--------|------|
-| `ST7789_SPI_PORT` | SPI 句柄，如 `hspi4` |
+| `DISPLAY_SPI_PORT` | SPI 句柄，如 `hspi4` |
 | `ST7789_DC_PORT/PIN` | DC 引脚（数据/指令选择） |
 | `LCD_BlackLight_GPIO_Port/Pin` | 背光引脚 |
 | `USING_135X240` / `USING_240X240` / `USING_170X320` | 分辨率三选一 |
 | `CFG_NO_CS` | 无硬件 CS 时定义 |
 | `CFG_NO_REST` | 无硬件 RST 时定义 |
-| `USE_DMA` | 使用 DMA 传输时定义（需足够 RAM） |
+| `USE_BUFFER` | 使用 DMA 传输时定义（需足够 RAM） |
 
 ---
 
@@ -76,13 +99,14 @@
 | `DC_GPIO_Port` / `DC_Pin` | 数据/指令选择 |
 | `RST_GPIO_Port` / `RST_Pin` | 复位引脚 |
 | `BUSY_GPIO_Port` / `BUSY_Pin` | 忙状态引脚 |
-| `EPD_SPI` | SPI 句柄，如 `hspi1` |
+| `DISPLAY_SPI_PORT` | SPI 句柄，如 `hspi1` |
+
+epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_DATA` 供 SPIDisplay.h 使用。
 
 **可重写弱函数**：
 
 | 函数 | 默认行为 |
 |------|----------|
-| `SPI_WriteBuffer(buf, len)` | `HAL_SPI_Transmit` |
 | `EPD_Rest()` | 拉低 RST 10ms → 拉高 10ms |
 | `EPD_WaitUntilIdle()` | 轮询 BUSY 直到高电平 |
 
@@ -95,10 +119,11 @@
 | 接口 | 说明 |
 |------|------|
 | `DrawPixel(pPixel)` | 画点 |
-| `DrawLine(x0,y0,x1,y1,color)` | 直线 |
-| `DrawHLine` / `DrawVLine` | 水平/垂直线 |
+| `DrawLine(x0,y0,x1,y1,color)` | 直线（Bresenham） |
+| `DrawHLine(x0,y0,x1,color)` | 水平线，x1 为终点坐标 |
+| `DrawVLine(x0,y0,y1,color)` | 垂直线，y1 为终点坐标 |
 | `DrawRect` / `DrawFilledRect` | 矩形 / 填充矩形 |
-| `DrawCircle` / `DrawFilledCircle` | 圆 / 填充圆 |
+| `DrawCircle` / `DrawFilledCircle` | 圆 / 填充圆（中点算法） |
 | `DrawTriangle` / `DrawFilledTriangle` | 三角形 / 填充三角形 |
 | `DrawChar(x,y,c,color)` | 单字符（5x7 字体） |
 | `DrawString(x,y,str,color)` | 字符串 |
