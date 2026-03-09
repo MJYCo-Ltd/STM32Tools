@@ -253,6 +253,55 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 
 ---
 
+## OV5640 摄像头 (Camera/ov5640.h)
+
+500 万像素摄像头，I2C/SCCB 配置寄存器，DCMI 接收图像。
+
+| 接口 | 说明 |
+|------|------|
+| `OV5640_RegisterBusIO(pObj, pIO)` | 注册 I2C 读写回调 |
+| `OV5640_Init(pObj, Resolution, PixelFormat)` | 初始化 |
+| `OV5640_ReadID(pObj, Id)` | 读取器件 ID |
+| `OV5640_SetResolution` / `OV5640_SetPixelFormat` | 设置分辨率、像素格式 |
+| `OV5640_SetLightMode` / `OV5640_SetColorEffect` | 光照模式、色彩特效 |
+| `OV5640_SetBrightness` / `SetSaturation` / `SetContrast` | 亮度、饱和度、对比度 |
+| `OV5640_MirrorFlipConfig` / `OV5640_ZoomConfig` | 镜像翻转、变焦 |
+| `OV5640_Start` / `OV5640_Stop` | 启动/停止采集 |
+
+**分辨率**：`OV5640_R160x120`、`OV5640_R320x240`、`OV5640_R480x272`、`OV5640_R640x480`、`OV5640_R800x480`  
+**像素格式**：`OV5640_RGB565`、`OV5640_RGB888`、`OV5640_YUV422`、`OV5640_Y8`、`OV5640_JPEG`
+
+需实现 `OV5640_IO_t`（Init、WriteReg、ReadReg 等），详见 `ov5640_user.h`。
+
+---
+
+## OV2640 摄像头 (Camera/ov2640.h)
+
+200 万像素摄像头，I2C 配置，DCMI 接收。需提供 `camera.h` 等 BSP 依赖。
+
+---
+
+## QSPI Flash (QSPIFlash.h)
+
+W25Q 系列 QSPI Flash，适用于 STM32H7 等支持 QSPI 的型号。
+
+| 接口 | 说明 |
+|------|------|
+| `QSPI_Flash_Init()` | 初始化 |
+| `QSPI_Flash_ReadID()` | 读取器件 ID |
+| `QSPI_Flash_Read(addr, buf, len)` | 读取数据 |
+| `QSPI_Flash_Read_DMA(addr, buf, len)` | DMA 读取 |
+| `QSPI_Flash_Write(addr, buf, len)` | 写入数据 |
+| `QSPI_Flash_EraseSector(addr)` | 擦除扇区 (4KB) |
+| `QSPI_Flash_EraseBlock(addr)` | 擦除块 (64KB) |
+| `QSPI_Flash_EraseChip()` | 全片擦除 |
+| `QSPI_EnableMemoryMapped()` | 使能内存映射模式 |
+
+**常量**：`QSPI_FLASH_BASE`(0x90000000)、`W25Q_PAGE_SIZE`(256)、`W25Q_SECTOR_SIZE`(4096)、`W25Q_BLOCK_SIZE`(65536)  
+需在工程中定义 `hqspi` 句柄。
+
+---
+
 ## RF24L01 (RF24L01.h)
 
 2.4GHz 无线收发，需在工程中定义 `RF24L01_CE_GPIO_Port` / `RF24L01_CE_Pin` 等引脚。

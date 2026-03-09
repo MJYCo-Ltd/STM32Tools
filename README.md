@@ -12,15 +12,20 @@ STM32Tools/
 │   │   ├── SPIDisplay.h    # SPI 显示统一接口（EPD/LCD 共用）
 │   │   ├── LCD/            # ST7789 配置
 │   │   └── EPD/            # UC8253 墨水屏配置
+│   ├── Camera/             # 摄像头驱动
+│   │   ├── ov5640.h        # OV5640 500 万像素
+│   │   └── ov2640.h        # OV2640 200 万像素
 │   ├── TMP/                # TMP117 温度传感器
 │   ├── MX/                 # MX-22 蓝牙模块
 │   ├── L051C8T6/           # STM32L051 专用（EEPROM）
 │   ├── pb/                 # nanopb 协议缓冲
 │   ├── MQTT/               # MQTT 客户端
 │   ├── Tracealzer/         # Percepio Tracealyzer 追踪
+│   ├── QSPIFlash.h         # QSPI Flash (W25Q) 接口
 │   └── ...
 ├── Src/                    # 源文件
 │   ├── Display/            # LCD、EPD、Graphics 实现
+│   ├── Camera/             # OV5640、OV2640 驱动
 │   ├── TMP/                # TMP117 驱动
 │   ├── MX/                 # MX-22 驱动
 │   ├── pb/                 # nanopb 编解码
@@ -133,6 +138,27 @@ EPD_DeepSleep();
 - **字节模式**：一旦使用字节模式，需一直使用，切换模式前需先擦除整个 EEPROM
 - 建议在 HAL 初始化后调用 `srand(HAL_GetTick())`，用于随机选择有效写入地址
 
+## 摄像头 (Camera)
+
+### OV5640
+
+- 500 万像素，I2C/SCCB 配置寄存器，DCMI 接收图像
+- 支持分辨率：160x120、320x240、480x272、640x480、800x480
+- 支持格式：RGB565、RGB888、YUV422、Y8、JPEG
+- 需实现 `OV5640_IO_t` 并注册 I2C 读写回调，详见 `Inc/README.md` 及 `ov5640_user.h`
+
+### OV2640
+
+- 200 万像素，I2C 配置，DCMI 接收
+- 需提供 `camera.h` 等 BSP 依赖
+
+## QSPI Flash (W25Q 系列)
+
+- 适用于 STM32H7 等支持 QSPI 的型号
+- 内存映射基址：`0x90000000`
+- 支持页/扇区/块擦除，支持 DMA 读取
+- 需在工程中定义 `hqspi` 句柄
+
 ## 其他模块
 
 - **TMP117**：高精度 I2C 温度传感器
@@ -141,7 +167,7 @@ EPD_DeepSleep();
 - **SoftSpi**：软件 SPI 实现
 - **nanopb**：Protocol Buffers 编解码
 - **MQTT**：MQTT 客户端（core_mqtt）
-- **Tracealyzer**：Percepio Tracealyzer 运行时追踪
+- **Tracealzer**：Percepio Tracealyzer 运行时追踪
 
 ## 接口说明
 
