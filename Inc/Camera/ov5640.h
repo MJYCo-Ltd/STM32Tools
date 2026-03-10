@@ -207,27 +207,10 @@ typedef struct
   * @{
   */
 int32_t OV5640_RegisterBusIO(OV5640_Object_t *pObj, OV5640_IO_t *pIO);
-int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFormat);
-int32_t OV5640_DeInit(OV5640_Object_t *pObj);
-int32_t OV5640_ReadID(OV5640_Object_t *pObj, uint32_t *Id);
-int32_t OV5640_GetCapabilities(OV5640_Object_t *pObj, OV5640_Capabilities_t *Capabilities);
-int32_t OV5640_SetLightMode(OV5640_Object_t *pObj, uint32_t LightMode);
-int32_t OV5640_SetColorEffect(OV5640_Object_t *pObj, uint32_t Effect);
-int32_t OV5640_SetBrightness(OV5640_Object_t *pObj, int32_t Level);
-int32_t OV5640_SetSaturation(OV5640_Object_t *pObj, int32_t Level);
-int32_t OV5640_SetContrast(OV5640_Object_t *pObj, int32_t Level);
-int32_t OV5640_SetHueDegree(OV5640_Object_t *pObj, int32_t Degree);
-int32_t OV5640_MirrorFlipConfig(OV5640_Object_t *pObj, uint32_t Config);
-int32_t OV5640_ZoomConfig(OV5640_Object_t *pObj, uint32_t Zoom);
-int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution);
-int32_t OV5640_GetResolution(OV5640_Object_t *pObj, uint32_t *Resolution);
-int32_t OV5640_SetPixelFormat(OV5640_Object_t *pObj, uint32_t PixelFormat);
-int32_t OV5640_GetPixelFormat(OV5640_Object_t *pObj, uint32_t *PixelFormat);
 int32_t OV5640_SetPolarities(OV5640_Object_t *pObj, uint32_t PclkPolarity, uint32_t HrefPolarity,
                              uint32_t VsyncPolarity);
 int32_t OV5640_GetPolarities(OV5640_Object_t *pObj, uint32_t *PclkPolarity, uint32_t *HrefPolarity,
                              uint32_t *VsyncPolarity);
-int32_t OV5640_NightModeConfig(OV5640_Object_t *pObj, uint32_t Cmd);
 int32_t OV5640_ColorbarModeConfig(OV5640_Object_t *pObj, uint32_t Cmd);
 int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *pSyncCodes);
 int32_t OV5640_SetPCLK(OV5640_Object_t *pObj, uint32_t ClockValue);
@@ -238,7 +221,7 @@ int32_t OV5640_SetMIPIVirtualChannel(OV5640_Object_t *pObj, uint32_t vchannel);
 int32_t OV5640_Start(OV5640_Object_t *pObj);
 int32_t OV5640_Stop(OV5640_Object_t *pObj);
 
-/* CAMERA 驱动结构体 */
+/* CAMERA 驱动结构体，通过 OV5640_CAMERA_Driver.Init/ReadID/SetResolution 等调用 */
 extern OV5640_CAMERA_Drv_t   OV5640_CAMERA_Driver;
 /**
   * @}

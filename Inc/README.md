@@ -260,18 +260,26 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 | 接口 | 说明 |
 |------|------|
 | `OV5640_RegisterBusIO(pObj, pIO)` | 注册 I2C 读写回调 |
-| `OV5640_Init(pObj, Resolution, PixelFormat)` | 初始化 |
-| `OV5640_ReadID(pObj, Id)` | 读取器件 ID |
-| `OV5640_SetResolution` / `OV5640_SetPixelFormat` | 设置分辨率、像素格式 |
-| `OV5640_SetLightMode` / `OV5640_SetColorEffect` | 光照模式、色彩特效 |
-| `OV5640_SetBrightness` / `SetSaturation` / `SetContrast` | 亮度、饱和度、对比度 |
-| `OV5640_MirrorFlipConfig` / `OV5640_ZoomConfig` | 镜像翻转、变焦 |
+| `OV5640_CAMERA_Driver.Init` / `ReadID` / `SetResolution` / `SetPixelFormat` 等 | 通过驱动结构体调用（见 `OV5640_CAMERA_Drv_t`） |
+| `OV5640_SetPolarities` / `OV5640_GetPolarities` | 极性配置 |
+| `OV5640_ColorbarModeConfig` / `OV5640_EmbeddedSynchroConfig` / `OV5640_SetPCLK` | 彩条、同步码、像素时钟 |
+| `OV5640_EnableDVPMode` / `OV5640_EnableMIPIMode` / `OV5640_SetMIPIVirtualChannel` | DVP/MIPI 模式 |
 | `OV5640_Start` / `OV5640_Stop` | 启动/停止采集 |
 
-**分辨率**：`OV5640_R160x120`、`OV5640_R320x240`、`OV5640_R480x272`、`OV5640_R640x480`、`OV5640_R800x480`  
+**分辨率**：`OV5640_R160x120`、`OV5640_R320x240`、`OV5640_R480x272`、`OV5640_R640x480`、`OV5640_R800x480`、`OV5640_R400x300`  
 **像素格式**：`OV5640_RGB565`、`OV5640_RGB888`、`OV5640_YUV422`、`OV5640_Y8`、`OV5640_JPEG`
 
-需实现 `OV5640_IO_t`（Init、WriteReg、ReadReg 等），详见 `ov5640_user.h`。
+### ov5640_user.h 用户封装
+
+| 函数 | 说明 |
+|------|------|
+| `OV5640_USER_HwPowerDown()` | 硬件掉电（PWDN 高） |
+| `OV5640_USER_HwPowerOn()` | 硬件上电（PWDN 低） |
+| `OV5640_USER_HwReset()` | 硬件复位完整序列 |
+| `OV5640_USER_SoftReset()` | 软件复位（I2C 写 0x3103/0x3008） |
+| `OV5640_USER_RegisterBusIO()` | 配置 IO 并注册总线，返回 `OV5640_OK`/`OV5640_ERROR` |
+
+**初始化顺序**：`HwReset` → `RegisterBusIO` → `SoftReset` → `ReadID` → `Init`。需在 main.h 中定义 `CAMERA_PWDN_GPIO_Port/Pin`、`CAMERA_RESET_GPIO_Port/Pin`。
 
 ---
 

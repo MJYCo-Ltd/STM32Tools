@@ -5,8 +5,13 @@
  ******************************************************************************
  * 使用步骤：
  * 1. CubeMX 中启用 I2C（如 I2C1），连接 OV5640 的 SIO_C(SCL)、SIO_D(SDA)
- * 2. 在工程中实现本头文件声明的接口，或使用 ov5640_bridge.c 模板
- * 3. 在初始化时调用 OV5640_RegisterBusIO、OV5640_Init
+ * 2. 在工程中实现本头文件声明的接口
+ * 3. 初始化顺序：
+ * OV5640_USER_HwReset ->
+ * OV5640_USER_RegisterBusIO ->
+ * OV5640_USER_SoftReset ->
+ * OV5640_CAMERA_Driver.ReadID ->
+ * OV5640_CAMERA_Driver.Init
  * 4. 使用 HAL_DCMI_Start_DMA 启动图像采集
  ******************************************************************************
  */
@@ -56,17 +61,52 @@ static inline int32_t OV5640_USER_ReadReg(uint16_t devAddr, uint16_t Reg,
     return OV5640_ERROR;
 }
 
-/**
-  user_ov5640_IO.Address = OV5640_I2C_ADDR;
-  user_ov5640_IO.Init = OV5640_USER_Init;
-  user_ov5640_IO.DeInit = OV5640_USER_DeInit;
-  user_ov5640_IO.WriteReg = OV5640_USER_WriteReg;
-  user_ov5640_IO.ReadReg = OV5640_USER_ReadReg;
-  user_ov5640_IO.GetTick = OV5640_USER_GetTick;
-  OV5640_RegisterBusIO(&user_ov5640_OBJ, &user_ov5640_IO);
- */
+/** @brief 硬件掉电：PWDN 高电平，OV5640 进入掉电模式 */
+static inline void OV5640_USER_HwPowerDown(void) {
+    HAL_GPIO_WritePin(CAMERA_PWDN_GPIO_Port, CAMERA_PWDN_Pin, GPIO_PIN_SET);
+}
+
+/** @brief 硬件上电：PWDN 低电平，释放掉电模式 */
+static inline void OV5640_USER_HwPowerOn(void) {
+    HAL_GPIO_WritePin(CAMERA_PWDN_GPIO_Port, CAMERA_PWDN_Pin, GPIO_PIN_RESET);
+}
+
+/** @brief 硬件复位：掉电+RESET低 -> delay30 -> 上电 -> delay5 -> RESET高 -> delay20 */
+static inline void OV5640_USER_HwReset(void) {
+    OV5640_USER_HwPowerDown();
+    HAL_GPIO_WritePin(CAMERA_RESET_GPIO_Port, CAMERA_RESET_Pin, GPIO_PIN_RESET);
+    HAL_Delay(30);
+    OV5640_USER_HwPowerOn();
+    HAL_Delay(5);
+    HAL_GPIO_WritePin(CAMERA_RESET_GPIO_Port, CAMERA_RESET_Pin, GPIO_PIN_SET);
+    HAL_Delay(20);
+}
+
+/** @brief 软件复位：写 0x3103=0x11, 0x3008=0x82，需在 RegisterBusIO 之后、ReadID 之前调用 */
+static inline void OV5640_USER_SoftReset(void) {
+    uint8_t val = 0x11;
+    OV5640_USER_WriteReg(OV5640_I2C_ADDR, 0x3103, &val, 1);
+    val = 0x82;
+    OV5640_USER_WriteReg(OV5640_I2C_ADDR, 0x3008, &val, 1);
+    HAL_Delay(5);
+}
+
 static OV5640_IO_t user_ov5640_IO;
 static OV5640_Object_t user_ov5640_OBJ;
+
+/** @brief 配置 IO 并注册总线，需在 HwReset 之后、SoftReset 之前调用 */
+static inline int32_t OV5640_USER_RegisterBusIO(void) {
+    user_ov5640_IO.Address = OV5640_I2C_ADDR;
+    user_ov5640_IO.Init = OV5640_USER_Init;
+    user_ov5640_IO.DeInit = OV5640_USER_DeInit;
+    user_ov5640_IO.WriteReg = OV5640_USER_WriteReg;
+    user_ov5640_IO.ReadReg = OV5640_USER_ReadReg;
+    user_ov5640_IO.GetTick = OV5640_USER_GetTick;
+    user_ov5640_OBJ.Mode = PARALLEL_MODE;
+    user_ov5640_OBJ.IsInitialized = 0;
+    return OV5640_RegisterBusIO(&user_ov5640_OBJ, &user_ov5640_IO);
+}
+
 #ifdef __cplusplus
 }
 #endif

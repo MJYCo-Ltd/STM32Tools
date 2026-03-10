@@ -143,9 +143,21 @@ EPD_DeepSleep();
 ### OV5640
 
 - 500 万像素，I2C/SCCB 配置寄存器，DCMI 接收图像
-- 支持分辨率：160x120、320x240、480x272、640x480、800x480
+- 支持分辨率：160x120、320x240、480x272、640x480、800x480、400x300（4:3 鹿小班参考）
 - 支持格式：RGB565、RGB888、YUV422、Y8、JPEG
-- 需实现 `OV5640_IO_t` 并注册 I2C 读写回调，详见 `Inc/README.md` 及 `ov5640_user.h`
+- 通过 `ov5640_user.h` 提供用户层封装，需在 main.h 中定义 `CAMERA_PWDN_*`、`CAMERA_RESET_*` 引脚
+
+**初始化顺序**（`ov5640_user.h`）：
+```
+OV5640_USER_HwReset() -> OV5640_USER_RegisterBusIO() -> OV5640_USER_SoftReset() ->
+OV5640_CAMERA_Driver.ReadID() -> OV5640_CAMERA_Driver.Init()
+```
+
+**用户函数**：`OV5640_USER_HwPowerDown` / `HwPowerOn` / `HwReset` / `SoftReset` / `RegisterBusIO`
+
+**配置宏**：定义 `USE_OV5640_REFERENCE_CONFIG` 可启用鹿小班参考例程的 OV5640_INIT_Config（240×240 小屏）。两种配置对比见 `Src/Camera/OV5640_INIT_Config_vs_Common.md`。
+
+详见 `Inc/README.md` 及 `Inc/Camera/ov5640_user.h`。
 
 ### OV2640
 
