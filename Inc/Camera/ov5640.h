@@ -132,6 +132,7 @@ typedef struct
 #define OV5640_R480x272                 0x02U   /* 480x272 分辨率         */
 #define OV5640_R640x480                 0x03U   /* VGA 分辨率             */
 #define OV5640_R800x480                 0x04U   /* WVGA 分辨率            */
+#define OV5640_R400x300                 0x05U   /* 400x300（鹿小班参考例程 4:3） */
 
 /* 摄像头像素格式 */
 #define OV5640_RGB565                   0x00U   /* 像素格式 RGB565        */

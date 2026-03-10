@@ -18,6 +18,350 @@
 
 /* 头文件包含 ------------------------------------------------------------------*/
 #include <Camera/ov5640.h>
+#ifdef USE_OV5640_REFERENCE_CONFIG
+/// OV5640初始化配置
+const uint16_t OV5640_INIT_Config[][2] = {
+    {OV5640_SYSTEM_CTROL0, 0x42},   // 系统电源控制，Bit[6]设置为1进入掉电模式
+    {OV5640_SCCB_SYSTEM_CTRL1, 0x03}, // 系统时钟选择，设置使用PLL生成后的时钟
+    {OV5640_PAD_OUTPUT_ENABLE01, 0xff}, // PCLK、VS、HS以及数据引脚 D9~D6 使能输出
+    {OV5640_POLARITY_CTRL, 0x21},   // 设置PCLK、VS和HS的信号极性
+    {OV5640_PAD_OUTPUT_ENABLE02, 0xff}, // 数据引脚 D5~D0 使能输出
+
+    /*------- 时钟配置，可结合资料里的《时钟图》进行参考
+       -------------------------------------*/
+
+    //	以下所有关于时钟的配置，都是在 XVCLK=24MHz 的前提下进行设置
+
+    //	PLL预分频,bit[7:5]没有说明作用
+    //	bit[4], PLL R
+    //divider，用来设置是否将经过0x3035寄存器配置之后的时钟进行分频，设置为0不分频，为1则是2分频
+    // Bit[3:0]，PLL pre-divider，预分频，此处设置为3，即将 XVCLK
+    // 3分频后得到8M的时钟
+    {OV5640_SC_PLL_CONTRL3, 0x13},  // 分频
+
+    // Bit[7:0] 用于设置倍频参数，倍频值可以是4~127的任何数值
+    {OV5640_SC_PLL_CONTRL2, 0x64},  // 倍频
+
+    // Bit[3:0] 用于设置MIPI时钟，Bit[7:4] 分频系数
+    {OV5640_SC_PLL_CONTRL1, 0x11},  // 分频
+
+    // 0x3034的 Bit[3:0] 的取值会影响分频系数，此处设置是2.5分频，主时钟为 160M
+    {OV5640_SC_PLL_CONTRL0, 0x1A},  // 手册的默认值
+
+    // 设置 PCLK 和 SCLK 分频
+    {OV5640_SYSTEM_ROOT_DIVIDER, 0x01}, // 分频
+
+    // 0x460c Bit[7:4] JPEG空数据速度，Bit[1] PCLK分频控制
+    {OV5640_VFIFO_CTRL0C, 0x20},
+
+    // Bit[4:0]有效，只能设置为 1、2、4、8、16，PCLK分频系数
+    {OV5640_TIMING_TC_REG24, 0x02},  // PCLK分频系数
+                    // fanke
+
+    /*------------------------------------------------------------------
+       时钟配置结束 -----*/
+
+    // 手册里没有说明这些寄存器的作用,这里直接保留手册给的设置参数
+    {0x3630, 0x36},
+    {0x3631, 0x0e},
+    {0x3632, 0xe2},
+    {0x3633, 0x12},
+    {0x3621, 0xe0},
+    {0x3704, 0xa0}, // FanKe
+    {0x3703, 0x5a},
+    {0x3715, 0x78},
+    {0x3717, 0x01},
+    {0x370b, 0x60},
+    {0x3705, 0x1a},
+    {0x3905, 0x02},
+    {0x3906, 0x10},
+    {0x3901, 0x0a},
+    {0x3731, 0x12},
+    {0x3600, 0x08},
+    {0x3601, 0x33},
+    {0x302d, 0x60},
+    {0x3620, 0x52},
+    {0x371b, 0x20},
+    {0x471c, 0x50},
+    {0x3635, 0x13},
+    {0x3636, 0x03},
+    {0x3634, 0x40},
+    {0x3622, 0x01},
+    {0x440e, 0x00},
+    {0x5025, 0x00},
+    {0x3618, 0x00},
+    {0x3612, 0x29},
+    {0x3708, 0x64},
+    {0x3709, 0x52},
+    {0x370c, 0x03},
+    {0x302e, 0x00},
+    {0x460b, 0x37},
+
+    {OV5640_SYSREM_RESET00, 0x00},  // 使能所有系统单元，包括 BIST、MCU、OTP等
+    {OV5640_SYSREM_RESET02, 0x1c},  // 复位 JFIFO, SFIFO, JPG
+    {OV5640_CLOCK_ENABLE00, 0xff},  // 使能所有系统单元
+    {OV5640_CLOCK_ENABLE02, 0xc3},  // 禁止 JPEG2x, JPEG 的时钟
+    {OV5640_MIPI_CONTROL00, 0x58},  // 禁止 MIPI，使用DVP接口（STM32的DCMI接口）
+
+    // 设置数据接口输出的格式，RGB565格式，序列为 G[2:0]B[4:0], R[4:0]G[5:3]
+    {OV5640_FORMAT_CTRL00, 0x6F},
+    {OV5640_FORMAT_MUX_CTRL, 0x01}, // ISP格式，此处使用RGB格式
+    {OV5640_ISP_CONTROL00, 0xa7},   // ISP设置，使能 LENC、黑色像素、白色像素、CIP
+    {OV5640_ISP_CONTROL01, 0xA3},  // ISP设置，使能 SDE、图像缩放、Color Matrix、AWB
+
+    {OV5640_TIMING_TC_REG20, 0x47}, // Bit[2:1]垂直翻转
+    {OV5640_TIMING_TC_REG21, 0x01}, // Bit[2:1]水平镜像，Bit[0]水平像素合并
+
+    /*------- 窗口配置，参考OV5640数据手册 4.2 小节 image windowing
+       ------------------------*/
+
+    // OV5640有好几个窗口的概念
+    // 摄像头的物理像素窗口：2624*1954
+    // （包含黑电平矫正线和空像素，有效分辨率为2592*1944） ISP（image sensor
+    // processor）输入窗口：需要进行处理的像素窗口
+    // 预缩放窗口：ISP窗口的基础上，调整用于缩放输出的窗口
+    // 输出窗口： 根据预缩放窗口和要输出的分辨率，进行缩放，得到最终的图像
+
+    // 因为摄像头的默认像素比例是 2592/1944 = 4/3
+    // （15帧），而我们实际使用的屏幕往往不是这个比例或者不需要这么高像素，
+    // 因此需要做一定的调整，最终再配合DCMI的窗口裁剪以匹配屏幕。
+    // （注：用户也可以直接使用OV5640裁剪 物理窗口 得到对应比例的
+    // ISP窗口，然后缩放偏移按照默认设置即可， 例如可以直接将ISP窗口设置为
+    // 240/280等对应实际屏幕的比例，而无需DCMI去裁剪。不过为了例程的通用性，我们选择
+    // 使用 4:3固定比例+DCMI裁剪的方式	）
+
+    // 以下配置为 4:3(1280*960) 43帧 的配置
+    {OV5640_TIMING_HS_HIGH, 0x00},
+    {OV5640_TIMING_HS_LOW, 0x00},
+    {OV5640_TIMING_VS_HIGH, 0x00},
+    {OV5640_TIMING_VS_LOW, 0x04},
+    {OV5640_TIMING_HW_HIGH, 0x0a},
+    {OV5640_TIMING_HW_LOW, 0x3f},
+    {OV5640_TIMING_VH_HIGH, 0x07},
+    {OV5640_TIMING_VH_LOW, 0x9b},
+    {OV5640_TIMING_HTS_HIGH, 0x07},
+    {OV5640_TIMING_HTS_LOW, 0x68},
+    {OV5640_TIMING_VTS_HIGH, 0x03},
+    {OV5640_TIMING_VTS_LOW, 0xd8},
+
+    // 预缩放窗口，水平偏移16，垂直偏移4
+    {OV5640_TIMING_HOFFSET_HIGH, 0x00},
+    {OV5640_TIMING_HOFFSET_LOW, 0x10},
+    {OV5640_TIMING_VOFFSET_HIGH, 0x00},
+    {OV5640_TIMING_VOFFSET_LOW, 0x04},
+
+    {OV5640_TIMING_X_INC, 0x31},
+    {OV5640_TIMING_Y_INC, 0x31},
+
+    /*------------------------------------------------------------------
+       窗口配置结束 -----*/
+
+    // BLC（Black Level Calibration ）黑电平校正
+    {OV5640_BLC_CTRL01, 0x02},
+    {OV5640_BLC_CTRL04, 0x02},
+    {OV5640_BLC_CTRL05, 0x1a},
+
+    // 曝光时间相关
+    {OV5640_AEC_CTRL02, 0x05},
+    {OV5640_AEC_CTRL03, 0xc4},
+    {OV5640_AEC_B50_STEP_HIGH, 0x00},
+    {OV5640_AEC_B50_STEP_LOW, 0x93},
+    {OV5640_AEC_B60_STEP_HIGH, 0x00},
+    {OV5640_AEC_B60_STEP_LOW, 0x7b},
+    {OV5640_AEC_CTRL0D, 0x08},
+    {OV5640_AEC_CTRL0E, 0x06},
+    {OV5640_AEC_MAX_EXPO_HIGH, 0x05},
+    {OV5640_AEC_MAX_EXPO_LOW, 0xc4},
+
+    // AEC 增益相关
+    {OV5640_AEC_CTRL13, 0x43},
+    {OV5640_AEC_GAIN_CEILING_HIGH, 0x00},
+    {OV5640_AEC_GAIN_CEILING_LOW, 0xf8},
+
+    // 50/60Hz 灯光条纹过滤
+    {OV5640_5060HZ_CTRL01, 0x34},
+    {OV5640_5060HZ_CTRL04, 0x28},
+    {OV5640_5060HZ_CTRL05, 0x98},
+    {OV5640_LIGHTMETER1_TH_HIGH, 0x00},
+    {OV5640_LIGHTMETER1_TH_LOW, 0x08},
+    {OV5640_LIGHTMETER2_TH_HIGH, 0x00},
+    {OV5640_LIGHTMETER2_TH_LOW, 0x1c},
+    {OV5640_SAMPLE_NUMBER_HIGH, 0x9c},
+    {OV5640_SAMPLE_NUMBER_LOW, 0x40},
+
+    // AWB 自动白平衡
+    {OV5640_AWB_CTRL00, 0xff},
+    {OV5640_AWB_CTRL01, 0xf2},
+    {OV5640_AWB_CTRL02, 0x00},
+    {OV5640_AWB_CTRL03, 0x14},
+    {OV5640_AWB_CTRL04, 0x25},
+    {OV5640_AWB_CTRL05, 0x24},
+    {OV5640_AWB_CTRL06, 0x09},
+    {OV5640_AWB_CTRL07, 0x09},
+    {OV5640_AWB_CTRL08, 0x09},
+    {OV5640_AWB_CTRL09, 0x75},
+    {OV5640_AWB_CTRL10, 0x54},
+    {OV5640_AWB_CTRL11, 0xe0},
+    {OV5640_AWB_CTRL12, 0xb2},
+    {OV5640_AWB_CTRL13, 0x42},
+    {OV5640_AWB_CTRL14, 0x3d},
+    {OV5640_AWB_CTRL15, 0x56},
+    {OV5640_AWB_CTRL16, 0x46},
+    {OV5640_AWB_CTRL17, 0xf8},
+    {OV5640_AWB_CTRL18, 0x04},
+    {OV5640_AWB_CTRL19, 0x70},
+    {OV5640_AWB_CTRL20, 0xf0},
+    {OV5640_AWB_CTRL21, 0xf0},
+    {OV5640_AWB_CTRL22, 0x03},
+    {OV5640_AWB_CTRL23, 0x01},
+    {OV5640_AWB_CTRL24, 0x04},
+    {OV5640_AWB_CTRL25, 0x12},
+    {OV5640_AWB_CTRL26, 0x04},
+    {OV5640_AWB_CTRL27, 0x00},
+    {OV5640_AWB_CTRL28, 0x06},
+    {OV5640_AWB_CTRL29, 0x82},
+    {OV5640_AWB_CTRL30, 0x38},
+
+    // color matrix 色彩矩阵
+    {OV5640_CMX1, 0x1e},
+    {OV5640_CMX2, 0x5b},
+    {OV5640_CMX3, 0x08},
+    {OV5640_CMX4, 0x0a},
+    {OV5640_CMX5, 0x7e},
+    {OV5640_CMX6, 0x88},
+    {OV5640_CMX7, 0x7c},
+    {OV5640_CMX8, 0x6c},
+    {OV5640_CMX9, 0x10},
+    {OV5640_CMXSIGN_HIGH, 0x01},
+    {OV5640_CMXSIGN_LOW, 0x98},
+
+    // CIP 锐化和降噪
+    {OV5640_CIP_SHARPENMT_TH1, 0x08},
+    {OV5640_CIP_SHARPENMT_TH2, 0x30},
+    {OV5640_CIP_SHARPENMT_OFFSET1, 0x10},
+    {OV5640_CIP_SHARPENMT_OFFSET2, 0x00},
+    {OV5640_CIP_DNS_TH1, 0x08},
+    {OV5640_CIP_DNS_TH2, 0x30},
+    {OV5640_CIP_DNS_OFFSET1, 0x08},
+    {OV5640_CIP_DNS_OFFSET2, 0x16},
+    {OV5640_CIP_SHARPENTH_TH1, 0x08},
+    {OV5640_CIP_SHARPENTH_TH2, 0x30},
+    {OV5640_CIP_SHARPENTH_OFFSET1, 0x04},
+    {OV5640_CIP_SHARPENTH_OFFSET2, 0x06},
+
+    // Gamma 伽玛曲线
+    {OV5640_GAMMA_CTRL00, 0x01},
+    {OV5640_GAMMA_YST00, 0x08},
+    {OV5640_GAMMA_YST01, 0x14},
+    {OV5640_GAMMA_YST02, 0x28},
+    {OV5640_GAMMA_YST03, 0x51},
+    {OV5640_GAMMA_YST04, 0x65},
+    {OV5640_GAMMA_YST05, 0x71},
+    {OV5640_GAMMA_YST06, 0x7d},
+    {OV5640_GAMMA_YST07, 0x87},
+    {OV5640_GAMMA_YST08, 0x91},
+    {OV5640_GAMMA_YST09, 0x9a},
+    {OV5640_GAMMA_YST0A, 0xaa},
+    {OV5640_GAMMA_YST0B, 0xb8},
+    {OV5640_GAMMA_YST0C, 0xcd},
+    {OV5640_GAMMA_YST0D, 0xdd},
+    {OV5640_GAMMA_YST0E, 0xea},
+    {OV5640_GAMMA_YST0F, 0x1d},
+
+    // UV adjust
+    {OV5640_SDE_CTRL0, 0x06},
+    {OV5640_SDE_CTRL3, 0x40},
+    {OV5640_SDE_CTRL4, 0x10},
+    {OV5640_SDE_CTRL9, 0x10},
+    {OV5640_SDE_CTRL10, 0x00},
+    {OV5640_SDE_CTRL11, 0xf8},
+    {OV5640_ISP_MISC0, 0x40},
+
+    // AEC 自动曝光补偿
+    {OV5640_AEC_CTRL0F, 0x30},
+    {OV5640_AEC_CTRL10, 0x28},
+    {OV5640_AEC_CTRL1B, 0x30},
+    {OV5640_AEC_CTRL1E, 0x26},
+    {OV5640_AEC_CTRL11, 0x60},
+    {OV5640_AEC_CTRL1F, 0x14},
+
+    // AWB 环境光配置自动模式
+    {OV5640_AWB_MANUAL_CONTROL, 0x00},
+    {OV5640_AWB_R_GAIN_MSB, 0x04},
+    {OV5640_AWB_R_GAIN_LSB, 0x00},
+    {OV5640_AWB_G_GAIN_MSB, 0x04},
+    {OV5640_AWB_G_GAIN_LSB, 0x00},
+    {OV5640_AWB_B_GAIN_MSB, 0x04},
+    {OV5640_AWB_B_GAIN_LSB, 0x00},
+
+    // lens correction (LENC) 镜头补偿设置
+    {OV5640_GMTRX00, 0x23},
+    {OV5640_GMTRX01, 0x14},
+    {OV5640_GMTRX02, 0x0f},
+    {OV5640_GMTRX03, 0x0f},
+    {OV5640_GMTRX04, 0x12},
+    {OV5640_GMTRX05, 0x26},
+    {OV5640_GMTRX10, 0x0c},
+    {OV5640_GMTRX11, 0x08},
+    {OV5640_GMTRX12, 0x05},
+    {OV5640_GMTRX13, 0x05},
+    {OV5640_GMTRX14, 0x08},
+    {OV5640_GMTRX15, 0x0d},
+    {OV5640_GMTRX20, 0x08},
+    {OV5640_GMTRX21, 0x03},
+    {OV5640_GMTRX22, 0x00},
+    {OV5640_GMTRX23, 0x00},
+    {OV5640_GMTRX24, 0x03},
+    {OV5640_GMTRX25, 0x09},
+    {OV5640_GMTRX30, 0x07},
+    {OV5640_GMTRX31, 0x03},
+    {OV5640_GMTRX32, 0x00},
+    {OV5640_GMTRX33, 0x01},
+    {OV5640_GMTRX34, 0x03},
+    {OV5640_GMTRX35, 0x08},
+    {OV5640_GMTRX40, 0x0d},
+    {OV5640_GMTRX41, 0x08},
+    {OV5640_GMTRX42, 0x05},
+    {OV5640_GMTRX43, 0x06},
+    {OV5640_GMTRX44, 0x08},
+    {OV5640_GMTRX45, 0x0e},
+    {OV5640_GMTRX50, 0x29},
+    {OV5640_GMTRX51, 0x17},
+    {OV5640_GMTRX52, 0x11},
+    {OV5640_GMTRX53, 0x11},
+    {OV5640_GMTRX54, 0x15},
+    {OV5640_GMTRX55, 0x28},
+    {OV5640_BRMATRX00, 0x46},
+    {OV5640_BRMATRX01, 0x26},
+    {OV5640_BRMATRX02, 0x08},
+    {OV5640_BRMATRX03, 0x26},
+    {OV5640_BRMATRX04, 0x64},
+    {OV5640_BRMATRX05, 0x26},
+    {OV5640_BRMATRX06, 0x24},
+    {OV5640_BRMATRX07, 0x22},
+    {OV5640_BRMATRX08, 0x24},
+    {OV5640_BRMATRX09, 0x24},
+    {OV5640_BRMATRX20, 0x06},
+    {OV5640_BRMATRX21, 0x22},
+    {OV5640_BRMATRX22, 0x40},
+    {OV5640_BRMATRX23, 0x42},
+    {OV5640_BRMATRX24, 0x24},
+    {OV5640_BRMATRX30, 0x26},
+    {OV5640_BRMATRX31, 0x24},
+    {OV5640_BRMATRX32, 0x22},
+    {OV5640_BRMATRX33, 0x22},
+    {OV5640_BRMATRX34, 0x26},
+    {OV5640_BRMATRX40, 0x44},
+    {OV5640_BRMATRX41, 0x24},
+    {OV5640_BRMATRX42, 0x26},
+    {OV5640_BRMATRX43, 0x28},
+    {OV5640_BRMATRX44, 0x42},
+    {OV5640_LENC_BR_OFFSET, 0xce},
+
+    // 系统电源控制，从掉电模式中唤醒
+    {OV5640_SYSTEM_CTROL0, 0x02}
+};
+#endif
 
 /** @addtogroup BSP
   * @{
@@ -231,9 +575,9 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
     {OV5640_JPEG_CTRL07, 0x04},
     {0x440e, 0x00},
     {0x460b, 0x35},
-    {0x460c, 0x23},
+    {OV5640_VFIFO_CTRL0C, 0x23},
     {OV5640_PCLK_PERIOD, 0x22},
-    {0x3824, 0x02},
+    {OV5640_TIMING_TC_REG24, 0x02},
     {OV5640_ISP_CONTROL00, 0xa7},
     {OV5640_ISP_CONTROL01, 0xa3},
     {OV5640_AWB_CTRL00, 0xff},
@@ -389,7 +733,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
   if (pObj->IsInitialized == 0U)
   {
     /* 检查分辨率是否支持 */
-    if ((Resolution > OV5640_R800x480) ||
+    if ((Resolution > OV5640_R400x300) ||
         ((PixelFormat != OV5640_RGB565) && (PixelFormat != OV5640_YUV422) &&
          (PixelFormat != OV5640_RGB888) && (PixelFormat != OV5640_Y8) &&
          (PixelFormat != OV5640_JPEG)))
@@ -399,6 +743,20 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
     else
     {
       /* 为所有分辨率设置通用参数 */
+#ifdef USE_OV5640_REFERENCE_CONFIG
+      /* 使用参考例程（鹿小班 240x240 屏幕）的 OV5640_INIT_Config */
+      for (index = 0; index < (sizeof(OV5640_INIT_Config) / sizeof(OV5640_INIT_Config[0])); index++)
+      {
+        if (ret != OV5640_ERROR)
+        {
+          tmp = (uint8_t)OV5640_INIT_Config[index][1];
+          if (ov5640_write_reg(&pObj->Ctx, OV5640_INIT_Config[index][0], &tmp, 1) != OV5640_OK)
+          {
+            ret = OV5640_ERROR;
+          }
+        }
+      }
+#else
       for (index = 0; index < (sizeof(OV5640_Common) / 4U) ; index++)
       {
         if (ret != OV5640_ERROR)
@@ -411,6 +769,7 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
           }
         }
       }
+#endif
 
       if(ret == OV5640_OK)
       {
@@ -452,8 +811,8 @@ int32_t OV5640_Init(OV5640_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
         {
           ret = OV5640_ERROR;
         }/* 设置像素时钟、Href 和 VSync 极性 */
-        else if (OV5640_SetPolarities(pObj, OV5640_POLARITY_PCLK_HIGH, OV5640_POLARITY_HREF_HIGH,
-                                      OV5640_POLARITY_VSYNC_HIGH) != OV5640_OK)
+        else if (OV5640_SetPolarities(pObj, OV5640_POLARITY_PCLK_HIGH, OV5640_POLARITY_HREF_LOW,
+                                      OV5640_POLARITY_VSYNC_LOW) != OV5640_OK)
         {
           ret = OV5640_ERROR;
         }
@@ -638,6 +997,25 @@ int32_t OV5640_SetPixelFormat(OV5640_Object_t *pObj, uint32_t PixelFormat)
             }
           }
         }
+        /* 与参考例程 OV5640_Set_Pixformat 一致：RGB565 时配置 0x3821/0x3002/0x3006 */
+        if (ret == OV5640_OK)
+        {
+          if (ov5640_read_reg(&pObj->Ctx, OV5640_TIMING_TC_REG21, &tmp, 1) == OV5640_OK)
+          {
+            tmp = (uint8_t)((tmp & 0xDFU) | 0x00U);  /* Bit[5]=0 非 JPEG 模式 */
+            (void)ov5640_write_reg(&pObj->Ctx, OV5640_TIMING_TC_REG21, &tmp, 1);
+          }
+          if (ov5640_read_reg(&pObj->Ctx, OV5640_SYSREM_RESET02, &tmp, 1) == OV5640_OK)
+          {
+            tmp = (uint8_t)((tmp & 0xE3U) | 0x1CU);  /* 使能 VFIFO、SFIFO、JPG */
+            (void)ov5640_write_reg(&pObj->Ctx, OV5640_SYSREM_RESET02, &tmp, 1);
+          }
+          if (ov5640_read_reg(&pObj->Ctx, OV5640_CLOCK_ENABLE02, &tmp, 1) == OV5640_OK)
+          {
+            tmp = (uint8_t)((tmp & 0xD7U) | 0x00U);  /* 禁止 JPEG 时钟 */
+            (void)ov5640_write_reg(&pObj->Ctx, OV5640_CLOCK_ENABLE02, &tmp, 1);
+          }
+        }
         break;
 
     }
@@ -744,6 +1122,15 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     {OV5640_TIMING_DVPVO_LOW, 0x10},
   };
 
+  /* 400x300 分辨率（鹿小班参考例程 4:3）初始化序列 */
+  static const uint16_t OV5640_400x300[][2] =
+  {
+    {OV5640_TIMING_DVPHO_HIGH, 0x01},
+    {OV5640_TIMING_DVPHO_LOW, 0x90},
+    {OV5640_TIMING_DVPVO_HIGH, 0x01},
+    {OV5640_TIMING_DVPVO_LOW, 0x2C},
+  };
+
   /* QVGA 分辨率 (320x240) 初始化序列 */
   static const uint16_t OV5640_QVGA[][2] =
   {
@@ -763,7 +1150,7 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
   };
 
   /* 检查分辨率是否支持 */
-  if (Resolution > OV5640_R800x480)
+  if (Resolution > OV5640_R400x300)
   {
     ret = OV5640_ERROR;
   }
@@ -772,6 +1159,19 @@ int32_t OV5640_SetResolution(OV5640_Object_t *pObj, uint32_t Resolution)
     /* 初始化 OV5640 */
     switch (Resolution)
     {
+      case OV5640_R400x300:
+        for (index = 0; index < (sizeof(OV5640_400x300) / 4U); index++)
+        {
+          if (ret != OV5640_ERROR)
+          {
+            tmp = (uint8_t)OV5640_400x300[index][1];
+            if (ov5640_write_reg(&pObj->Ctx, OV5640_400x300[index][0], &tmp, 1) != OV5640_OK)
+            {
+              ret = OV5640_ERROR;
+            }
+          }
+        }
+        break;
       case OV5640_R160x120:
         for (index = 0; index < (sizeof(OV5640_QQVGA) / 4U); index++)
         {
@@ -893,6 +1293,11 @@ int32_t OV5640_GetResolution(OV5640_Object_t *pObj, uint32_t *Resolution)
           if ((x_size == 800U) && (y_size == 480U))
           {
             *Resolution = OV5640_R800x480;
+            ret = OV5640_OK;
+          }
+          else if ((x_size == 400U) && (y_size == 300U))
+          {
+            *Resolution = OV5640_R400x300;
             ret = OV5640_OK;
           }
           else if ((x_size == 640U) && (y_size == 480U))
@@ -1910,15 +2315,15 @@ int32_t OV5640_EmbeddedSynchroConfig(OV5640_Object_t *pObj, OV5640_SyncCodes_t *
   tmp = 0x2;
   if (ret == OV5640_OK)
   {
-    ret = ov5640_write_reg(&pObj->Ctx, 0x4302, &tmp, 1);
+    ret = ov5640_write_reg(&pObj->Ctx, OV5640_YMAX_VAL_HIGH, &tmp, 1);
   }
   if (ret == OV5640_OK)
   {
-    ret = ov5640_write_reg(&pObj->Ctx, 0x4306, &tmp, 1);
+    ret = ov5640_write_reg(&pObj->Ctx, OV5640_UMAX_VAL_HIGH, &tmp, 1);
   }
   if (ret == OV5640_OK)
   {
-    ret = ov5640_write_reg(&pObj->Ctx, 0x430A, &tmp, 1);
+    ret = ov5640_write_reg(&pObj->Ctx, OV5640_VMAX_VAL_HIGH, &tmp, 1);
   }
 
   return ret;

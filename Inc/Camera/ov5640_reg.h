@@ -167,6 +167,7 @@ extern "C" {
 #define OV5640_HSYNC_WIDTH_LOW                     0x3819U
 #define OV5640_TIMING_TC_REG20                     0x3820U
 #define OV5640_TIMING_TC_REG21                     0x3821U
+#define OV5640_TIMING_TC_REG24                     0x3824U  /* PCLK 分频 */
 
 /* AEC/AGC 掉电域控制 [0x3A00 ~ 0x3A25] */
 #define OV5640_AEC_CTRL00                          0x3A00U
