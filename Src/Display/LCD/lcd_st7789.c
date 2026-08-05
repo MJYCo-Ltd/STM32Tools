@@ -1,7 +1,7 @@
 #include <cmsis_os.h>
 #include <Common.h>
 #include <Display/LCD/lcd.h>
-#include <Display/LCD/lcd_user.c>
+#include <Display/LCD/lcd_st7789_user.c>
 #include <Display/SPIDisplay.h>
 
 HALF_WORD_DATA tmp_color;

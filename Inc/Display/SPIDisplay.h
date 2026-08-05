@@ -30,7 +30,7 @@ static inline void SPI_SendBuffer(const uint8_t *buff, size_t buff_size) {
     /* HAL 单次传输限制 64K，需分块发送 */
     while (buff_size > 0) {
         uint16_t chunk_size = buff_size > 65535 ? 65535 : buff_size;
-#ifdef USE_BUFFER
+#ifdef USE_DMA
         if (16 <= buff_size) {
             HAL_SPI_Transmit_DMA(&DISPLAY_SPI_PORT, buff, chunk_size);
             while (DISPLAY_SPI_PORT.hdmatx->State != HAL_DMA_STATE_READY) {

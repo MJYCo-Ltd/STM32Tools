@@ -85,8 +85,8 @@ EPD 与 LCD 共用 `SPI_SendCommand`、`SPI_SendData`、`SPI_SendBuffer`。头�
 ### LCD (ST7789)
 
 - 支持 135x240、240x240、170x320 分辨率
-- 在 `Inc/Display/LCD/lcd_user.c` 中配置 SPI 端口、引脚、分辨率
-- 包含 `lcd_user.c` 后包含 `SPIDisplay.h`，即可使用统一 SPI 接口
+- 在 `Inc/Display/LCD/lcd_st7789_user.c` 中配置 SPI 端口、引脚、分辨率
+- 包含 `lcd_st7789_user.c` 后包含 `SPIDisplay.h`，即可使用统一 SPI 接口
 
 ### EPD 墨水屏 (UC8253)
 

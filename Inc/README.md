@@ -18,7 +18,7 @@
 
 ## SPI 显示统一接口 (Display/SPIDisplay.h)
 
-EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序**：先包含用户配置（`epd_user.c` 或 `lcd_user.c`），再包含 `SPIDisplay.h`。
+EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序**：先包含用户配置（`epd_user.c`、`lcd_st7789_user.c` 或 `lcd_st7305_user.c`），再包含 `SPIDisplay.h`。
 
 | 接口 | 说明 |
 |------|------|
@@ -53,7 +53,7 @@ EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序*
 | `LCD_InvertColors(invert)` | 全屏颜色反显开关 |
 | `LCD_TearEffect(tear)` | 撕裂效应线开关 |
 
-### 用户配置 (Display/LCD/lcd_user.c)
+### ST7789 用户配置 (Display/LCD/lcd_st7789_user.c)
 
 需在工程中提供或修改：
 

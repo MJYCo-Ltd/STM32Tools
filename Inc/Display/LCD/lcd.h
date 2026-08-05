@@ -29,7 +29,7 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
 /**
  * @brief 刷新帧缓冲区数据
  */
-void LCD_Refresh();
+void LCD_Refresh(void);
 
 /**
  * @brief 全屏颜色反显开关
