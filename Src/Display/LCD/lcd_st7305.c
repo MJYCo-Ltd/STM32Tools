@@ -46,7 +46,7 @@
 #define ST7305_WIRE_ROW_BYTES  (ST7305_ADDRESS_COLUMNS * 3U)
 
 static uint8_t lcd_buffer[ST7305_BUFFER_SIZE];
-static ROTATION lcd_rotation = NO_ROTATION;
+static ROTATION lcd_rotation = ST7305_DEFAULT_ROTATION;
 
 static void ST7305_Send(uint8_t command, const uint8_t *data, size_t length) {
   SPI_SendCommand(command);
@@ -154,7 +154,6 @@ void LCD_Init(void) {
   osDelay(100U);
 
   LCD_Refresh();
-  LCD_Backlight_ON;
 }
 
 void LCD_SetRotation(ROTATION rotation) { lcd_rotation = rotation; }
@@ -175,7 +174,9 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1,
     y1 = ST7305_HEIGHT - 1U;
   }
   columns[0] = (uint8_t)(ST7305_COLUMN_OFFSET + x0 / 12U);
-  columns[1] = (uint8_t)(ST7305_COLUMN_OFFSET + x1 / 12U);
+  columns[1] = (x1 == (ST7305_WIDTH - 1U))
+                   ? ST7305_COLUMN_END
+                   : (uint8_t)(ST7305_COLUMN_OFFSET + x1 / 12U);
   rows[0] = (uint8_t)(ST7305_ROW_OFFSET + y0 / 2U);
   rows[1] = (uint8_t)(ST7305_ROW_OFFSET + y1 / 2U);
   ST7305_Send(ST7305_CASET, columns, sizeof(columns));
@@ -188,7 +189,6 @@ void LCD_Refresh(void) {
   uint16_t y;
   uint16_t address_column;
 
-  LCD_SetAddressWindow(0U, 0U, ST7305_WIDTH - 1U, ST7305_HEIGHT - 1U);
   for (y = 0U; y < ST7305_HEIGHT; y += 2U) {
     for (address_column = 0U; address_column < ST7305_ADDRESS_COLUMNS;
          ++address_column) {
@@ -198,6 +198,8 @@ void LCD_Refresh(void) {
       line[out + 1U] = ST7305_Pack4x2((uint16_t)(x + 4U), y);
       line[out + 2U] = ST7305_Pack4x2((uint16_t)(x + 8U), y);
     }
+    /* 300x400 参考驱动逐个 2 行地址写入，避免依赖大窗口自动换行。 */
+    LCD_SetAddressWindow(0U, y, ST7305_WIDTH - 1U, (uint16_t)(y + 1U));
     SPI_SendBuffer(line, sizeof(line));
   }
 }
