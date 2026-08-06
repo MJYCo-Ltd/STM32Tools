@@ -1,366 +1,285 @@
 /*
  ******************************************************************************
  * @file           : ml307.c
- * @brief          : ML307C AT command builder (V2.0.5)
+ * @brief          : ML307 pack / unpack facade
  ******************************************************************************
  */
 #include "ML307/ml307.h"
 
-#include <stdarg.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define Q_EXEC ML307_AT_FORM_EXECUTE
-#define Q_READ ML307_AT_FORM_READ
-#define KIND_B ML307_CMD_KIND_BASIC
-#define KIND_P ML307_CMD_KIND_PLUS
-#define RESP_P ML307_RESP_PLUS
-#define RESP_T ML307_RESP_PLAIN
+#include "ML307/ml307_at.h"
+#include "ML307/ml307_mqtt.h"
+#include "ML307/ml307_parser.h"
 
-static const ML307_CmdInfo s_commands[ML307_CMD_COUNT] = {
-    /* 3. General */
-    {ML307_CMD_ATE, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATE"},
-    {ML307_CMD_ATS3, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS3"},
-    {ML307_CMD_ATS4, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS4"},
-    {ML307_CMD_ATS5, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS5"},
-    {ML307_CMD_AT_AND_F, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "AT&F"},
-    {ML307_CMD_ATV, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATV"},
-    {ML307_CMD_ATQ, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATQ"},
-    {ML307_CMD_ATZ, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATZ"},
-    {ML307_CMD_ATX, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATX"},
-    {ML307_CMD_ATI, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_T, "ATI"},
-    {ML307_CMD_GMI, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMI"},
-    {ML307_CMD_CGMI, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMI"},
-    {ML307_CMD_GMM, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMM"},
-    {ML307_CMD_CGMM, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMM"},
-    {ML307_CMD_GMR, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMR"},
-    {ML307_CMD_CGMR, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMR"},
-    {ML307_CMD_GSN, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GSN"},
-    {ML307_CMD_CGSN, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGSN"},
-    {ML307_CMD_IPR, ML307_CATEGORY_GENERAL, KIND_P, Q_READ, RESP_P, "IPR"},
-    {ML307_CMD_CSCS, ML307_CATEGORY_GENERAL, KIND_P, Q_READ, RESP_P, "CSCS"},
-
-    /* 4. Call */
-    {ML307_CMD_ATS0, ML307_CATEGORY_CALL, KIND_B, Q_READ, RESP_T, "ATS0"},
-    {ML307_CMD_ATA, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATA"},
-    {ML307_CMD_ATD, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATD"},
-    {ML307_CMD_ATH, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATH"},
-    {ML307_CMD_CHUP, ML307_CATEGORY_CALL, KIND_P, Q_EXEC, RESP_P, "CHUP"},
-    {ML307_CMD_CEER, ML307_CATEGORY_CALL, KIND_P, Q_EXEC, RESP_P, "CEER"},
-    {ML307_CMD_CRC, ML307_CATEGORY_CALL, KIND_P, Q_READ, RESP_P, "CRC"},
-
-    /* 5. Network */
-    {ML307_CMD_CREG, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CREG"},
-    {ML307_CMD_COPS, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "COPS"},
-    {ML307_CMD_CLCK, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CLCK"},
-    {ML307_CMD_CHLD, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CHLD"},
-    {ML307_CMD_CLCC, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CLCC"},
-    {ML307_CMD_CPOL, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CPOL"},
-    {ML307_CMD_CPLS, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CPLS"},
-    {ML307_CMD_COPN, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "COPN"},
-
-    /* 6. ME */
-    {ML307_CMD_CPAS, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CPAS"},
-    {ML307_CMD_CFUN, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CFUN"},
-    {ML307_CMD_CSQ, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CSQ"},
-    {ML307_CMD_CESQ, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CESQ"},
-    {ML307_CMD_CCLK, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CCLK"},
-    {ML307_CMD_CLAC, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_T, "CLAC"},
-    {ML307_CMD_CTZU, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CTZU"},
-    {ML307_CMD_CTZR, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CTZR"},
-
-    /* 7. Packet */
-    {ML307_CMD_CGDCONT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGDCONT"},
-    {ML307_CMD_CGTFT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGTFT"},
-    {ML307_CMD_CGATT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGATT"},
-    {ML307_CMD_CGACT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGACT"},
-    {ML307_CMD_CGPADDR, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P, "CGPADDR"},
-    {ML307_CMD_CGCLASS, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGCLASS"},
-    {ML307_CMD_CGEREP, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGEREP"},
-    {ML307_CMD_CGREG, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGREG"},
-    {ML307_CMD_CEREG, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CEREG"},
-    {ML307_CMD_CGCONTRDP, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P,
-     "CGCONTRDP"},
-    {ML307_CMD_CGEQOS, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGEQOS"},
-    {ML307_CMD_CGEQOSRDP, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P,
-     "CGEQOSRDP"},
-    {ML307_CMD_CEMODE, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CEMODE"},
-    {ML307_CMD_CGDEL, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P, "CGDEL"},
-    {ML307_CMD_CGAUTH, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGAUTH"},
-
-    /* 8. SIM */
-    {ML307_CMD_CPIN, ML307_CATEGORY_SIM, KIND_P, Q_READ, RESP_P, "CPIN"},
-    {ML307_CMD_CPWD, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CPWD"},
-    {ML307_CMD_CSIM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CSIM"},
-    {ML307_CMD_CRSM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CRSM"},
-    {ML307_CMD_CNUM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CNUM"},
-    {ML307_CMD_CIMI, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_T, "CIMI"},
-    {ML307_CMD_CCHO, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CCHO"},
-    {ML307_CMD_CCHC, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CCHC"},
-    {ML307_CMD_CGLA, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CGLA"},
-
-    /* 9. SMS */
-    {ML307_CMD_CSMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSMS"},
-    {ML307_CMD_CMGF, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CMGF"},
-    {ML307_CMD_CSMP, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSMP"},
-    {ML307_CMD_CSCA, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSCA"},
-    {ML307_CMD_CSDH, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSDH"},
-    {ML307_CMD_CNMI, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CNMI"},
-    {ML307_CMD_CMGR, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGR"},
-    {ML307_CMD_CMGC, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGC"},
-    {ML307_CMD_CMGL, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGL"},
-    {ML307_CMD_CMGD, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGD"},
-    {ML307_CMD_CMGW, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGW"},
-    {ML307_CMD_CMGS, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGS"},
-    {ML307_CMD_CMSS, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMSS"},
-    {ML307_CMD_CPMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CPMS"},
-    {ML307_CMD_CMMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CMMS"},
-
-    /* 10. Error */
-    {ML307_CMD_CMEE, ML307_CATEGORY_ERROR, KIND_P, Q_READ, RESP_P, "CMEE"},
-};
-
-_Static_assert(sizeof(s_commands) / sizeof(s_commands[0]) == ML307_CMD_COUNT,
-               "ML307 command table and enum are out of sync");
-
-static ML307_Result ML307_Fail(char *output, size_t output_size,
-                               ML307_Result result)
+static ML307_Cmd TypeToCmd(ML307_Type type)
 {
-  if ((output != NULL) && (output_size > 0U)) {
-    output[0] = '\0';
+  switch (type) {
+  case ML307_TYPE_ATI:
+    return ML307_CMD_ATI;
+  case ML307_TYPE_CEREG:
+    return ML307_CMD_CEREG;
+  case ML307_TYPE_CIMI:
+    return ML307_CMD_CIMI;
+  case ML307_TYPE_CESQ:
+    return ML307_CMD_CESQ;
+  case ML307_TYPE_CGATT:
+    return ML307_CMD_CGATT;
+  default:
+    return ML307_CMD_COUNT;
   }
-  return result;
 }
 
-static ML307_Result ML307_Format(char *output, size_t output_size,
-                                 const char *fmt, ...)
+static int IsAtQuery(ML307_Type type)
 {
-  va_list args;
-  int written;
+  return TypeToCmd(type) != ML307_CMD_COUNT;
+}
 
-  if ((output == NULL) || (output_size == 0U) || (fmt == NULL)) {
-    return ML307_RESULT_INVALID_ARGUMENT;
+static int ParseCesqRsrp(const char *info)
+{
+  long fields[6];
+  uint8_t count = 0U;
+  const char *cursor = info;
+  char *end;
+
+  if (info == NULL) {
+    return -1;
   }
-
-  va_start(args, fmt);
-  written = vsnprintf(output, output_size, fmt, args);
-  va_end(args);
-
-  if (written < 0) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+  while ((count < 6U) && (*cursor != '\0')) {
+    fields[count] = strtol(cursor, &end, 10);
+    if (end == cursor) {
+      return -1;
+    }
+    ++count;
+    cursor = end;
+    if (*cursor == ',') {
+      ++cursor;
+    } else if ((*cursor != '\0') && (count < 6U)) {
+      return -1;
+    }
   }
-  if ((size_t)written >= output_size) {
-    return ML307_Fail(output, output_size, ML307_RESULT_BUFFER_TOO_SMALL);
+  return (count < 6U) ? -1 : (int)fields[5];
+}
+
+static ML307_Result FinishPack(char *packet, size_t packet_size, size_t *length,
+                               ML307_Result result)
+{
+  if (result != ML307_RESULT_OK) {
+    if ((packet != NULL) && (packet_size > 0U)) {
+      packet[0] = '\0';
+    }
+    if (length != NULL) {
+      *length = 0U;
+    }
+    return result;
+  }
+  if (length != NULL) {
+    *length = strlen(packet);
   }
   return ML307_RESULT_OK;
 }
 
-static int ML307_IsSingleLine(const char *text)
+const char *ML307_TypeName(ML307_Type type)
 {
-  if (text == NULL) {
-    return 0;
-  }
-  while (*text != '\0') {
-    if ((*text == '\r') || (*text == '\n')) {
-      return 0;
-    }
-    ++text;
-  }
-  return 1;
-}
-
-static int ML307_FormAllowed(const ML307_CmdInfo *info, ML307_AtForm form)
-{
-  if (info->kind == ML307_CMD_KIND_PLUS) {
-    return 1;
-  }
-
-  /* BASIC stems: no AT+NAME=? style for most; allow EXECUTE/SET/READ where
-   * S-registers use ATS0? / ATS0=n. */
-  switch (form) {
-  case ML307_AT_FORM_EXECUTE:
-    return 1;
-  case ML307_AT_FORM_SET:
-    return 1;
-  case ML307_AT_FORM_READ:
-    return (strncmp(info->stem, "ATS", 3) == 0);
-  case ML307_AT_FORM_TEST:
-    return 0;
+  switch (type) {
+  case ML307_TYPE_ATI:
+    return "ATI";
+  case ML307_TYPE_CEREG:
+    return "CEREG";
+  case ML307_TYPE_CIMI:
+    return "CIMI";
+  case ML307_TYPE_CESQ:
+    return "CESQ";
+  case ML307_TYPE_CGATT:
+    return "CGATT";
+  case ML307_TYPE_SLEEP:
+    return "SLEEP";
+  case ML307_TYPE_MQTT_DISCONNECT:
+    return "MQTT_DISC";
+  case ML307_TYPE_MQTT_CLEAN:
+    return "MQTT_CLEAN";
+  case ML307_TYPE_MQTT_CONNECT:
+    return "MQTT_CONN";
+  case ML307_TYPE_MQTT_SUBSCRIBE:
+    return "MQTT_SUB";
+  case ML307_TYPE_MQTT_PUBLISH:
+    return "MQTT_PUB";
   default:
-    return 0;
+    return "?";
   }
 }
 
-static ML307_Result ML307_BuildBasic(char *output, size_t output_size,
-                                     const ML307_CmdInfo *info,
-                                     ML307_AtForm form, const char *argument)
+ML307_Result ML307_Pack(const ML307_Content *content, char *packet,
+                        size_t packet_size, size_t *length)
 {
-  switch (form) {
-  case ML307_AT_FORM_EXECUTE:
-    if (argument != NULL) {
-      /* ATE0 / ATV1 / ATD... / AT&F0 */
-      if (!ML307_IsSingleLine(argument)) {
-        return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-      }
-      return ML307_Format(output, output_size, "%s%s" ML307_COMMAND_TERMINATOR,
-                          info->stem, argument);
-    }
-    return ML307_Format(output, output_size, "%s" ML307_COMMAND_TERMINATOR,
-                        info->stem);
-
-  case ML307_AT_FORM_SET:
-    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
-      return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-    }
-    if (strncmp(info->stem, "ATS", 3) == 0) {
-      return ML307_Format(output, output_size,
-                          "%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
-                          argument);
-    }
-    return ML307_Format(output, output_size, "%s%s" ML307_COMMAND_TERMINATOR,
-                        info->stem, argument);
-
-  case ML307_AT_FORM_READ:
-    return ML307_Format(output, output_size, "%s?" ML307_COMMAND_TERMINATOR,
-                        info->stem);
-
-  default:
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-}
-
-static ML307_Result ML307_BuildPlus(char *output, size_t output_size,
-                                    const ML307_CmdInfo *info,
-                                    ML307_AtForm form, const char *argument)
-{
-  switch (form) {
-  case ML307_AT_FORM_TEST:
-    return ML307_Format(output, output_size, "AT+%s=?" ML307_COMMAND_TERMINATOR,
-                        info->stem);
-  case ML307_AT_FORM_READ:
-    return ML307_Format(output, output_size, "AT+%s?" ML307_COMMAND_TERMINATOR,
-                        info->stem);
-  case ML307_AT_FORM_EXECUTE:
-    if (argument != NULL) {
-      if (!ML307_IsSingleLine(argument)) {
-        return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-      }
-      return ML307_Format(output, output_size,
-                          "AT+%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
-                          argument);
-    }
-    return ML307_Format(output, output_size, "AT+%s" ML307_COMMAND_TERMINATOR,
-                        info->stem);
-  case ML307_AT_FORM_SET:
-    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
-      return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-    }
-    return ML307_Format(output, output_size,
-                        "AT+%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
-                        argument);
-  default:
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-}
-
-const ML307_CmdInfo *ML307_GetCommands(size_t *count)
-{
-  if (count != NULL) {
-    *count = (size_t)ML307_CMD_COUNT;
-  }
-  return s_commands;
-}
-
-const ML307_CmdInfo *ML307_FindCommand(ML307_Cmd id)
-{
-  if ((unsigned int)id >= (unsigned int)ML307_CMD_COUNT) {
-    return NULL;
-  }
-  return &s_commands[(unsigned int)id];
-}
-
-int ML307_QueryIsSupported(ML307_Cmd command)
-{
-  return ML307_FindCommand(command) != NULL;
-}
-
-const char *ML307_GetExpectedResponseType(ML307_Cmd command)
-{
-  const ML307_CmdInfo *info = ML307_FindCommand(command);
-
-  if (info == NULL) {
-    return NULL;
-  }
-  return info->stem;
-}
-
-ML307_Result ML307_BuildAt(char *output, size_t output_size, ML307_Cmd command,
-                           ML307_AtForm form, const char *argument)
-{
-  const ML307_CmdInfo *info = ML307_FindCommand(command);
-
-  if (info == NULL) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-  if (!ML307_FormAllowed(info, form)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-
-  if (info->kind == ML307_CMD_KIND_BASIC) {
-    return ML307_BuildBasic(output, output_size, info, form, argument);
-  }
-  return ML307_BuildPlus(output, output_size, info, form, argument);
-}
-
-ML307_Result ML307_BuildQuery(char *output, size_t output_size,
-                              ML307_Cmd command)
-{
-  const ML307_CmdInfo *info = ML307_FindCommand(command);
-
-  if (info == NULL) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-  return ML307_BuildAt(output, output_size, command, info->default_query_form,
-                       NULL);
-}
-
-ML307_Result ML307_BuildQueryCommand(char *output, size_t output_size,
-                                     ML307_Cmd command, const char *argument)
-{
-  const ML307_CmdInfo *info = ML307_FindCommand(command);
-
-  if (info == NULL) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-
-  /* NULL argument → default query form; non-NULL → SET / execute-with-arg. */
-  if (argument == NULL) {
-    return ML307_BuildQuery(output, output_size, command);
-  }
-  if (info->kind == ML307_CMD_KIND_PLUS) {
-    return ML307_BuildAt(output, output_size, command, ML307_AT_FORM_SET,
-                         argument);
-  }
-  return ML307_BuildAt(output, output_size, command, ML307_AT_FORM_EXECUTE,
-                       argument);
-}
-
-ML307_Result ML307_FormatQueryHint(char *output, size_t output_size,
-                                   ML307_Cmd command, const char *argument)
-{
-  char built[96];
   ML307_Result result;
-  size_t length;
+  const char *topic;
 
-  result = ML307_BuildQueryCommand(built, sizeof(built), command, argument);
-  if (result != ML307_RESULT_OK) {
-    return ML307_Fail(output, output_size, result);
+  if ((content == NULL) || (packet == NULL) || (packet_size == 0U)) {
+    return FinishPack(packet, packet_size, length,
+                      ML307_RESULT_INVALID_ARGUMENT);
   }
 
-  length = strlen(built);
-  while ((length > 0U) &&
-         ((built[length - 1U] == '\r') || (built[length - 1U] == '\n'))) {
-    built[--length] = '\0';
+  if (IsAtQuery(content->type)) {
+    result = ML307_BuildQueryCommand(packet, packet_size,
+                                     TypeToCmd(content->type), NULL);
+    return FinishPack(packet, packet_size, length, result);
   }
-  return ML307_Format(output, output_size, "%s", built);
+
+  topic = (content->topic != NULL) ? content->topic : content->host;
+
+  switch (content->type) {
+  case ML307_TYPE_SLEEP:
+    result = ML307_BuildSleep(packet, packet_size);
+    break;
+  case ML307_TYPE_MQTT_DISCONNECT:
+    result = ML307_MqttBuildDisconnect(packet, packet_size, content->id);
+    break;
+  case ML307_TYPE_MQTT_CLEAN:
+    result = ML307_MqttBuildCleanSession(packet, packet_size, content->id,
+                                         content->flag);
+    break;
+  case ML307_TYPE_MQTT_CONNECT:
+    result = ML307_MqttBuildConnect(
+        packet, packet_size, content->id, content->host, content->port,
+        (content->client_id != NULL) ? content->client_id : "",
+        (content->user != NULL) ? content->user : "",
+        (content->password != NULL) ? content->password : "");
+    break;
+  case ML307_TYPE_MQTT_SUBSCRIBE:
+    result = ML307_MqttBuildSubscribe(packet, packet_size, content->id, topic,
+                                      content->qos);
+    break;
+  case ML307_TYPE_MQTT_PUBLISH:
+    result = ML307_MqttBuildPublish(
+        packet, packet_size, content->id, topic, content->qos, content->retain,
+        (content->message != NULL) ? content->message : "");
+    break;
+  default:
+    result = ML307_RESULT_INVALID_VALUE;
+    break;
+  }
+  return FinishPack(packet, packet_size, length, result);
+}
+
+int ML307_IsComplete(const char *packet, ML307_Type expect, uint8_t id)
+{
+  if (packet == NULL) {
+    return 0;
+  }
+  if (expect == ML307_TYPE_MQTT_CONNECT) {
+    return ML307_MqttConnectResponseIsComplete(packet, id);
+  }
+  return ML307_ResponseIsComplete(packet);
+}
+
+ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
+                          ML307_Data *out)
+{
+  ML307_ParsedResponse parsed;
+  ML307_MqttEvent mqtt;
+  ML307_ParseResult parse_result;
+  const char *expected_type;
+  ML307_Cmd cmd;
+
+  if ((packet == NULL) || (out == NULL)) {
+    return ML307_RESULT_INVALID_ARGUMENT;
+  }
+  memset(out, 0, sizeof(*out));
+  out->type = expect;
+  out->value = -1;
+
+  if ((expect == ML307_TYPE_MQTT_CONNECT) ||
+      (expect == ML307_TYPE_MQTT_SUBSCRIBE) ||
+      (expect == ML307_TYPE_MQTT_PUBLISH) ||
+      (expect == ML307_TYPE_MQTT_CLEAN) ||
+      (expect == ML307_TYPE_MQTT_DISCONNECT)) {
+    if (ML307_MqttResponseHasError(packet) != 0) {
+      out->error = 1U;
+      (void)strncpy(out->name, "ERROR", sizeof(out->name) - 1U);
+      (void)strncpy(out->text, "Module rejected command",
+                    sizeof(out->text) - 1U);
+      return ML307_RESULT_ERROR_RESPONSE;
+    }
+
+    if (expect == ML307_TYPE_MQTT_CONNECT) {
+      if (ML307_MqttParseUrc(packet, &mqtt) != ML307_RESULT_OK) {
+        return ML307_RESULT_NOT_FOUND;
+      }
+      out->id = mqtt.connect_id;
+      out->value = mqtt.state;
+      out->message_id = mqtt.message_id;
+      out->qos = mqtt.qos;
+      (void)strncpy(out->name, "MQTT", sizeof(out->name) - 1U);
+      (void)strncpy(out->topic, mqtt.topic, sizeof(out->topic) - 1U);
+      (void)strncpy(out->payload, mqtt.payload, sizeof(out->payload) - 1U);
+      if (mqtt.type == ML307_MQTT_EVENT_CONNECTION) {
+        out->ok = (mqtt.state == 0) ? 1U : 0U;
+        out->error = (mqtt.state == 0) ? 0U : 1U;
+        return (mqtt.state == 0) ? ML307_RESULT_OK : ML307_RESULT_ERROR_RESPONSE;
+      }
+      out->ok = 1U;
+      return ML307_RESULT_OK;
+    }
+
+    out->ok = 1U;
+    (void)strncpy(out->name, ML307_TypeName(expect), sizeof(out->name) - 1U);
+    (void)strncpy(out->text, "OK", sizeof(out->text) - 1U);
+    if (ML307_MqttParseUrc(packet, &mqtt) == ML307_RESULT_OK) {
+      out->id = mqtt.connect_id;
+      out->value = mqtt.state;
+      out->message_id = mqtt.message_id;
+      out->qos = mqtt.qos;
+      (void)strncpy(out->topic, mqtt.topic, sizeof(out->topic) - 1U);
+      (void)strncpy(out->payload, mqtt.payload, sizeof(out->payload) - 1U);
+    }
+    return ML307_RESULT_OK;
+  }
+
+  cmd = TypeToCmd(expect);
+  if (expect == ML307_TYPE_SLEEP) {
+    if (ML307_ResponseIsComplete(packet) == 0) {
+      return ML307_RESULT_NOT_FOUND;
+    }
+    if ((strstr(packet, "ERROR") != NULL) ||
+        (strstr(packet, "+CME ERROR:") != NULL)) {
+      out->error = 1U;
+      (void)strncpy(out->name, "ERROR", sizeof(out->name) - 1U);
+      return ML307_RESULT_ERROR_RESPONSE;
+    }
+    out->ok = 1U;
+    (void)strncpy(out->name, "SLEEP", sizeof(out->name) - 1U);
+    (void)strncpy(out->text, "OK", sizeof(out->text) - 1U);
+    return ML307_RESULT_OK;
+  }
+
+  if (cmd == ML307_CMD_COUNT) {
+    return ML307_RESULT_INVALID_VALUE;
+  }
+  expected_type = ML307_GetExpectedResponseType(cmd);
+  if (expected_type == NULL) {
+    return ML307_RESULT_INVALID_VALUE;
+  }
+
+  parse_result = ML307_ParseResponse(packet, expected_type, &parsed);
+  out->ok = parsed.has_ok;
+  out->error = parsed.has_error;
+  (void)strncpy(out->name, parsed.type, sizeof(out->name) - 1U);
+  (void)strncpy(out->text, parsed.info, sizeof(out->text) - 1U);
+
+  if (parse_result == ML307_PARSE_ERROR_RESPONSE) {
+    return ML307_RESULT_ERROR_RESPONSE;
+  }
+  if (parse_result == ML307_PARSE_TRUNCATED) {
+    return ML307_RESULT_BUFFER_TOO_SMALL;
+  }
+  if (parse_result != ML307_PARSE_OK) {
+    return ML307_RESULT_NOT_FOUND;
+  }
+
+  if (expect == ML307_TYPE_CESQ) {
+    out->value = ParseCesqRsrp(out->text);
+  }
+  return ML307_RESULT_OK;
 }

@@ -1,11 +1,9 @@
 /*
  ******************************************************************************
  * @file           : ml307_parser.h
- * @brief          : ML307 AT response parser (no UART I/O)
+ * @brief          : Internal ML307 AT response parser
  *
- * Matches AT Commands Reference Guide 4G Series V2.0.5 result codes:
- * OK / ERROR / +CME ERROR / +CMS ERROR, +TYPE: lines, and plain-text
- * identification responses (ATI, CIMI, CGMR, ...).
+ * Not for application use — prefer ML307_Unpack in ml307.h.
  ******************************************************************************
  */
 #ifndef STM32TOOLS_ML307_PARSER_H
