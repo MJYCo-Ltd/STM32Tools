@@ -1,169 +1,127 @@
 /*
  ******************************************************************************
  * @file           : ml307.c
- * @brief          : ML307C DTU/RTU AT command builder implementation
+ * @brief          : ML307C AT command builder (V2.0.5)
  ******************************************************************************
  */
 #include "ML307/ml307.h"
 
-#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
-static const ML307_QueryCommandInfo s_query_commands[] = {
-    /* Basic commands. */
-    {ML307_QUERY_BASIC_VERSION, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_LITERAL, "ATI"},
-    {ML307_QUERY_BASIC_IMEI, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "IMEI"},
-    {ML307_QUERY_BASIC_CSQ, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "CSQ"},
-    {ML307_QUERY_BASIC_ICCID, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "ICCID"},
-    {ML307_QUERY_BASIC_IMSI, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "IMSI"},
-    {ML307_QUERY_BASIC_SIM, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "SIM"},
-    {ML307_QUERY_BASIC_SIM_MODE, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "SIMMODE"},
-    {ML307_QUERY_BASIC_SIM_INFO, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "SIMINFO"},
-    {ML307_QUERY_BASIC_CEREG, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "CEREG"},
-    {ML307_QUERY_BASIC_IS_LINK, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "ISLINK"},
-    {ML307_QUERY_BASIC_UTC, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "UTC"},
-    {ML307_QUERY_BASIC_TIME, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "TIME"},
-    {ML307_QUERY_BASIC_NTP, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "NTP"},
-    {ML307_QUERY_BASIC_CGI, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "CGI"},
-    {ML307_QUERY_BASIC_LBS, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "LBS"},
-    {ML307_QUERY_BASIC_APN, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "APN"},
-    {ML307_QUERY_BASIC_MONITOR, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "MONITOR"},
-    {ML307_QUERY_BASIC_ONLINE_CFG, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "ONLINECFG"},
-    {ML307_QUERY_BASIC_NET_LED, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "NETLED"},
-    {ML307_QUERY_BASIC_ADC, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_PARAMETER, "ADC"},
-    {ML307_QUERY_BASIC_CFG_ID, ML307_QUERY_CATEGORY_BASIC,
-     ML307_QUERY_SYNTAX_SIMPLE, "CFGID"},
+#define Q_EXEC ML307_AT_FORM_EXECUTE
+#define Q_READ ML307_AT_FORM_READ
+#define KIND_B ML307_CMD_KIND_BASIC
+#define KIND_P ML307_CMD_KIND_PLUS
+#define RESP_P ML307_RESP_PLUS
+#define RESP_T ML307_RESP_PLAIN
 
-    /* DTU commands. */
-    {ML307_QUERY_DTU_TASK, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUTASK"},
-    {ML307_QUERY_DTU_PSDN, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUPSDN"},
-    {ML307_QUERY_DTU_PSUP, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUPSUP"},
-    {ML307_QUERY_DTU_HEART, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUHEART"},
-    {ML307_QUERY_DTU_REG, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUREG"},
-    {ML307_QUERY_DTU_STATE, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER, "DTUSTATE"},
-    {ML307_QUERY_DTU_STATE_IO, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "DTUSTATEIO"},
-    {ML307_QUERY_DTU_MSG_HEAD, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_SIMPLE, "DTUMSGHEAD"},
-    {ML307_QUERY_DTU_AT_PASSWORD, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_SIMPLE, "DTUATPSD"},
-    {ML307_QUERY_DTU_FILTER, ML307_QUERY_CATEGORY_DTU,
-     ML307_QUERY_SYNTAX_SIMPLE, "DTUFILTER"},
+static const ML307_CmdInfo s_commands[ML307_CMD_COUNT] = {
+    /* 3. General */
+    {ML307_CMD_ATE, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATE"},
+    {ML307_CMD_ATS3, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS3"},
+    {ML307_CMD_ATS4, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS4"},
+    {ML307_CMD_ATS5, ML307_CATEGORY_GENERAL, KIND_B, Q_READ, RESP_T, "ATS5"},
+    {ML307_CMD_AT_AND_F, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "AT&F"},
+    {ML307_CMD_ATV, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATV"},
+    {ML307_CMD_ATQ, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATQ"},
+    {ML307_CMD_ATZ, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATZ"},
+    {ML307_CMD_ATX, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_P, "ATX"},
+    {ML307_CMD_ATI, ML307_CATEGORY_GENERAL, KIND_B, Q_EXEC, RESP_T, "ATI"},
+    {ML307_CMD_GMI, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMI"},
+    {ML307_CMD_CGMI, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMI"},
+    {ML307_CMD_GMM, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMM"},
+    {ML307_CMD_CGMM, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMM"},
+    {ML307_CMD_GMR, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GMR"},
+    {ML307_CMD_CGMR, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGMR"},
+    {ML307_CMD_GSN, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "GSN"},
+    {ML307_CMD_CGSN, ML307_CATEGORY_GENERAL, KIND_P, Q_EXEC, RESP_T, "CGSN"},
+    {ML307_CMD_IPR, ML307_CATEGORY_GENERAL, KIND_P, Q_READ, RESP_P, "IPR"},
+    {ML307_CMD_CSCS, ML307_CATEGORY_GENERAL, KIND_P, Q_READ, RESP_P, "CSCS"},
 
-    /* Socket commands. */
-    {ML307_QUERY_SOCKET_CONFIG, ML307_QUERY_CATEGORY_SOCKET,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "SOCK"},
-    {ML307_QUERY_SOCKET_BACKUP, ML307_QUERY_CATEGORY_SOCKET,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "SOCKBAKE"},
-    {ML307_QUERY_SOCKET_SHORT, ML307_QUERY_CATEGORY_SOCKET,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "SOCKSHORT"},
-    {ML307_QUERY_SOCKET_KEEP, ML307_QUERY_CATEGORY_SOCKET,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "SOCKKEEP"},
-    {ML307_QUERY_SOCKET_OTHER, ML307_QUERY_CATEGORY_SOCKET,
-     ML307_QUERY_SYNTAX_PARAMETER_COMMA, "SOCKOTHER"},
+    /* 4. Call */
+    {ML307_CMD_ATS0, ML307_CATEGORY_CALL, KIND_B, Q_READ, RESP_T, "ATS0"},
+    {ML307_CMD_ATA, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATA"},
+    {ML307_CMD_ATD, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATD"},
+    {ML307_CMD_ATH, ML307_CATEGORY_CALL, KIND_B, Q_EXEC, RESP_P, "ATH"},
+    {ML307_CMD_CHUP, ML307_CATEGORY_CALL, KIND_P, Q_EXEC, RESP_P, "CHUP"},
+    {ML307_CMD_CEER, ML307_CATEGORY_CALL, KIND_P, Q_EXEC, RESP_P, "CEER"},
+    {ML307_CMD_CRC, ML307_CATEGORY_CALL, KIND_P, Q_READ, RESP_P, "CRC"},
 
-    /* MQTT commands. */
-    {ML307_QUERY_MQTT_CONFIG, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTT"},
-    {ML307_QUERY_MQTT_AUTH, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTAUTH"},
-    {ML307_QUERY_MQTT_PLATFORM, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTPLATFORM"},
-    {ML307_QUERY_MQTT_SUB, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTSUB"},
-    {ML307_QUERY_MQTT_PUB, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTPUB"},
-    {ML307_QUERY_MQTT_SHORT, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTSHORT"},
-    {ML307_QUERY_MQTT_WILL, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MQTTWILL"},
-    {ML307_QUERY_MQTT_OTHER, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER_COMMA, "MQTTOTHER"},
-    {ML307_QUERY_MQTT_GET_SUB, ML307_QUERY_CATEGORY_MQTT,
-     ML307_QUERY_SYNTAX_PARAMETER, "MQTTGETSUB"},
+    /* 5. Network */
+    {ML307_CMD_CREG, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CREG"},
+    {ML307_CMD_COPS, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "COPS"},
+    {ML307_CMD_CLCK, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CLCK"},
+    {ML307_CMD_CHLD, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CHLD"},
+    {ML307_CMD_CLCC, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "CLCC"},
+    {ML307_CMD_CPOL, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CPOL"},
+    {ML307_CMD_CPLS, ML307_CATEGORY_NETWORK, KIND_P, Q_READ, RESP_P, "CPLS"},
+    {ML307_CMD_COPN, ML307_CATEGORY_NETWORK, KIND_P, Q_EXEC, RESP_P, "COPN"},
 
-    /* Data mapping and MCU OTA. */
-    {ML307_QUERY_MAPPING_USER, ML307_QUERY_CATEGORY_MAPPING,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MAPUSER"},
-    {ML307_QUERY_MAPPING_USER_HEX, ML307_QUERY_CATEGORY_MAPPING,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "MAPUSERH"},
-    {ML307_QUERY_MCU_OTA, ML307_QUERY_CATEGORY_MCU_OTA,
-     ML307_QUERY_SYNTAX_SIMPLE, "MCUOTA"},
+    /* 6. ME */
+    {ML307_CMD_CPAS, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CPAS"},
+    {ML307_CMD_CFUN, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CFUN"},
+    {ML307_CMD_CSQ, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CSQ"},
+    {ML307_CMD_CESQ, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_P, "CESQ"},
+    {ML307_CMD_CCLK, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CCLK"},
+    {ML307_CMD_CLAC, ML307_CATEGORY_ME, KIND_P, Q_EXEC, RESP_T, "CLAC"},
+    {ML307_CMD_CTZU, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CTZU"},
+    {ML307_CMD_CTZR, ML307_CATEGORY_ME, KIND_P, Q_READ, RESP_P, "CTZR"},
 
-    /* HTTP commands. */
-    {ML307_QUERY_HTTP_URL, ML307_QUERY_CATEGORY_HTTP,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "HTTPURL"},
-    {ML307_QUERY_HTTP_CFG, ML307_QUERY_CATEGORY_HTTP,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "HTTPCFG"},
-    {ML307_QUERY_HTTP_SSL, ML307_QUERY_CATEGORY_HTTP,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "HTTPSSL"},
-    {ML307_QUERY_HTTP_RESP, ML307_QUERY_CATEGORY_HTTP,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "HTTPRESP"},
-    {ML307_QUERY_HTTP_RANGE, ML307_QUERY_CATEGORY_HTTP,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "HTTPRANGE"},
+    /* 7. Packet */
+    {ML307_CMD_CGDCONT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGDCONT"},
+    {ML307_CMD_CGTFT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGTFT"},
+    {ML307_CMD_CGATT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGATT"},
+    {ML307_CMD_CGACT, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGACT"},
+    {ML307_CMD_CGPADDR, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P, "CGPADDR"},
+    {ML307_CMD_CGCLASS, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGCLASS"},
+    {ML307_CMD_CGEREP, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGEREP"},
+    {ML307_CMD_CGREG, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGREG"},
+    {ML307_CMD_CEREG, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CEREG"},
+    {ML307_CMD_CGCONTRDP, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P,
+     "CGCONTRDP"},
+    {ML307_CMD_CGEQOS, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGEQOS"},
+    {ML307_CMD_CGEQOSRDP, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P,
+     "CGEQOSRDP"},
+    {ML307_CMD_CEMODE, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CEMODE"},
+    {ML307_CMD_CGDEL, ML307_CATEGORY_PACKET, KIND_P, Q_EXEC, RESP_P, "CGDEL"},
+    {ML307_CMD_CGAUTH, ML307_CATEGORY_PACKET, KIND_P, Q_READ, RESP_P, "CGAUTH"},
 
-    /* UART commands. */
-    {ML307_QUERY_UART_CONFIG, ML307_QUERY_CATEGORY_UART,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "UART"},
-    {ML307_QUERY_UART_QUEUE, ML307_QUERY_CATEGORY_UART,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "UARTQUE"},
+    /* 8. SIM */
+    {ML307_CMD_CPIN, ML307_CATEGORY_SIM, KIND_P, Q_READ, RESP_P, "CPIN"},
+    {ML307_CMD_CPWD, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CPWD"},
+    {ML307_CMD_CSIM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CSIM"},
+    {ML307_CMD_CRSM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CRSM"},
+    {ML307_CMD_CNUM, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CNUM"},
+    {ML307_CMD_CIMI, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_T, "CIMI"},
+    {ML307_CMD_CCHO, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CCHO"},
+    {ML307_CMD_CCHC, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CCHC"},
+    {ML307_CMD_CGLA, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "CGLA"},
 
-    /* IO commands. */
-    {ML307_QUERY_IO_CFG, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "IOCFG"},
-    {ML307_QUERY_IO_GET, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER, "IOGET"},
-    {ML307_QUERY_IO_LOOP_REPORT, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "IOLR"},
-    {ML307_QUERY_IO_CHANGE_REPORT, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "IOCR"},
-    {ML307_QUERY_IO_TEMPLATE, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "IOTMPL"},
-    {ML307_QUERY_IO_TEMPLATE_HEX, ML307_QUERY_CATEGORY_IO,
-     ML307_QUERY_SYNTAX_PARAMETER_QUESTION, "IOTMPLH"},
+    /* 9. SMS */
+    {ML307_CMD_CSMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSMS"},
+    {ML307_CMD_CMGF, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CMGF"},
+    {ML307_CMD_CSMP, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSMP"},
+    {ML307_CMD_CSCA, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSCA"},
+    {ML307_CMD_CSDH, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CSDH"},
+    {ML307_CMD_CNMI, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CNMI"},
+    {ML307_CMD_CMGR, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGR"},
+    {ML307_CMD_CMGC, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGC"},
+    {ML307_CMD_CMGL, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGL"},
+    {ML307_CMD_CMGD, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGD"},
+    {ML307_CMD_CMGW, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGW"},
+    {ML307_CMD_CMGS, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMGS"},
+    {ML307_CMD_CMSS, ML307_CATEGORY_SMS, KIND_P, Q_EXEC, RESP_P, "CMSS"},
+    {ML307_CMD_CPMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CPMS"},
+    {ML307_CMD_CMMS, ML307_CATEGORY_SMS, KIND_P, Q_READ, RESP_P, "CMMS"},
 
-    /* GNSS commands (ML307C-GC only). */
-    {ML307_QUERY_GNSS_CONFIG, ML307_QUERY_CATEGORY_GNSS,
-     ML307_QUERY_SYNTAX_SIMPLE, "GNSS"},
-    {ML307_QUERY_GNSS_LOCATION, ML307_QUERY_CATEGORY_GNSS,
-     ML307_QUERY_SYNTAX_PARAMETER, "GNSSLOC"},
-    {ML307_QUERY_GNSS_REPORT, ML307_QUERY_CATEGORY_GNSS,
-     ML307_QUERY_SYNTAX_SIMPLE, "GNSSREP"},
-    {ML307_QUERY_GNSS_LAST, ML307_QUERY_CATEGORY_GNSS,
-     ML307_QUERY_SYNTAX_SIMPLE, "GNSSLAST"},
+    /* 10. Error */
+    {ML307_CMD_CMEE, ML307_CATEGORY_ERROR, KIND_P, Q_READ, RESP_P, "CMEE"},
 };
 
-_Static_assert((sizeof(s_query_commands) / sizeof(s_query_commands[0])) ==
-                   ML307_QUERY_COMMAND_COUNT,
-               "ML307 query list and enum are out of sync");
+_Static_assert(sizeof(s_commands) / sizeof(s_commands[0]) == ML307_CMD_COUNT,
+               "ML307 command table and enum are out of sync");
 
 static ML307_Result ML307_Fail(char *output, size_t output_size,
                                ML307_Result result)
@@ -175,238 +133,234 @@ static ML307_Result ML307_Fail(char *output, size_t output_size,
 }
 
 static ML307_Result ML307_Format(char *output, size_t output_size,
-                                 const char *format, ...)
+                                 const char *fmt, ...)
 {
-  int length;
   va_list args;
+  int written;
 
-  if ((output == NULL) || (output_size == 0U) || (format == NULL)) {
+  if ((output == NULL) || (output_size == 0U) || (fmt == NULL)) {
     return ML307_RESULT_INVALID_ARGUMENT;
   }
 
-  output[0] = '\0';
-  va_start(args, format);
-  length = vsnprintf(output, output_size, format, args);
+  va_start(args, fmt);
+  written = vsnprintf(output, output_size, fmt, args);
   va_end(args);
 
-  if (length < 0) {
-    output[0] = '\0';
-    return ML307_RESULT_INVALID_ARGUMENT;
+  if (written < 0) {
+    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
   }
-  if ((size_t)length >= output_size) {
-    output[0] = '\0';
-    return ML307_RESULT_BUFFER_TOO_SMALL;
+  if ((size_t)written >= output_size) {
+    return ML307_Fail(output, output_size, ML307_RESULT_BUFFER_TOO_SMALL);
   }
   return ML307_RESULT_OK;
 }
 
-static int ML307_IsCommandName(const char *name)
+static int ML307_IsSingleLine(const char *text)
 {
-  const unsigned char *cursor = (const unsigned char *)name;
-
-  if ((cursor == NULL) || (*cursor == '\0')) {
+  if (text == NULL) {
     return 0;
   }
-  while (*cursor != '\0') {
-    if ((isalnum(*cursor) == 0) && (*cursor != '_')) {
+  while (*text != '\0') {
+    if ((*text == '\r') || (*text == '\n')) {
       return 0;
     }
-    ++cursor;
+    ++text;
   }
   return 1;
 }
 
-static int ML307_IsSingleLine(const char *text)
+static int ML307_FormAllowed(const ML307_CmdInfo *info, ML307_AtForm form)
 {
-  return (text != NULL) && (text[0] != '\0') &&
-         (strchr(text, '\r') == NULL) && (strchr(text, '\n') == NULL);
-}
-
-const ML307_QueryCommandInfo *ML307_GetQueryCommands(size_t *count)
-{
-  if (count != NULL) {
-    *count = sizeof(s_query_commands) / sizeof(s_query_commands[0]);
-  }
-  return s_query_commands;
-}
-
-ML307_Result ML307_BuildQueryCommand(char *output, size_t output_size,
-                                     ML307_QueryCommand command,
-                                     const char *argument)
-{
-  const ML307_QueryCommandInfo *info;
-
-  if ((unsigned int)command >= (unsigned int)ML307_QUERY_COMMAND_COUNT) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
+  if (info->kind == ML307_CMD_KIND_PLUS) {
+    return 1;
   }
 
-  info = &s_query_commands[(size_t)command];
-  if ((info->syntax == ML307_QUERY_SYNTAX_LITERAL) ||
-      (info->syntax == ML307_QUERY_SYNTAX_SIMPLE)) {
-    if ((argument != NULL) && (argument[0] != '\0')) {
+  /* BASIC stems: no AT+NAME=? style for most; allow EXECUTE/SET/READ where
+   * S-registers use ATS0? / ATS0=n. */
+  switch (form) {
+  case ML307_AT_FORM_EXECUTE:
+    return 1;
+  case ML307_AT_FORM_SET:
+    return 1;
+  case ML307_AT_FORM_READ:
+    return (strncmp(info->stem, "ATS", 3) == 0);
+  case ML307_AT_FORM_TEST:
+    return 0;
+  default:
+    return 0;
+  }
+}
+
+static ML307_Result ML307_BuildBasic(char *output, size_t output_size,
+                                     const ML307_CmdInfo *info,
+                                     ML307_AtForm form, const char *argument)
+{
+  switch (form) {
+  case ML307_AT_FORM_EXECUTE:
+    if (argument != NULL) {
+      /* ATE0 / ATV1 / ATD... / AT&F0 */
+      if (!ML307_IsSingleLine(argument)) {
+        return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+      }
+      return ML307_Format(output, output_size, "%s%s" ML307_COMMAND_TERMINATOR,
+                          info->stem, argument);
+    }
+    return ML307_Format(output, output_size, "%s" ML307_COMMAND_TERMINATOR,
+                        info->stem);
+
+  case ML307_AT_FORM_SET:
+    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
       return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
     }
-  } else if (!ML307_IsSingleLine(argument)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-  }
+    if (strncmp(info->stem, "ATS", 3) == 0) {
+      return ML307_Format(output, output_size,
+                          "%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
+                          argument);
+    }
+    return ML307_Format(output, output_size, "%s%s" ML307_COMMAND_TERMINATOR,
+                        info->stem, argument);
 
-  switch (info->syntax) {
-  case ML307_QUERY_SYNTAX_LITERAL:
-    return ML307_BuildLiteral(output, output_size, info->name);
-  case ML307_QUERY_SYNTAX_SIMPLE:
-    return ML307_BuildQuery(output, output_size, info->name);
-  case ML307_QUERY_SYNTAX_PARAMETER:
+  case ML307_AT_FORM_READ:
+    return ML307_Format(output, output_size, "%s?" ML307_COMMAND_TERMINATOR,
+                        info->stem);
+
+  default:
+    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
+  }
+}
+
+static ML307_Result ML307_BuildPlus(char *output, size_t output_size,
+                                    const ML307_CmdInfo *info,
+                                    ML307_AtForm form, const char *argument)
+{
+  switch (form) {
+  case ML307_AT_FORM_TEST:
+    return ML307_Format(output, output_size, "AT+%s=?" ML307_COMMAND_TERMINATOR,
+                        info->stem);
+  case ML307_AT_FORM_READ:
+    return ML307_Format(output, output_size, "AT+%s?" ML307_COMMAND_TERMINATOR,
+                        info->stem);
+  case ML307_AT_FORM_EXECUTE:
+    if (argument != NULL) {
+      if (!ML307_IsSingleLine(argument)) {
+        return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+      }
+      return ML307_Format(output, output_size,
+                          "AT+%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
+                          argument);
+    }
+    return ML307_Format(output, output_size, "AT+%s" ML307_COMMAND_TERMINATOR,
+                        info->stem);
+  case ML307_AT_FORM_SET:
+    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
+      return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+    }
     return ML307_Format(output, output_size,
-                        "AT+%s=%s" ML307_COMMAND_TERMINATOR, info->name,
-                        argument);
-  case ML307_QUERY_SYNTAX_PARAMETER_QUESTION:
-    return ML307_BuildSetQuery(output, output_size, info->name, argument);
-  case ML307_QUERY_SYNTAX_PARAMETER_COMMA:
-    return ML307_Format(output, output_size,
-                        "AT+%s=%s," ML307_COMMAND_TERMINATOR, info->name,
+                        "AT+%s=%s" ML307_COMMAND_TERMINATOR, info->stem,
                         argument);
   default:
     return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
   }
 }
 
-ML307_Result ML307_BuildLiteral(char *output, size_t output_size,
-                                const char *command)
+const ML307_CmdInfo *ML307_GetCommands(size_t *count)
 {
-  if (!ML307_IsSingleLine(command) || (command[0] != 'A') ||
-      (command[1] != 'T')) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+  if (count != NULL) {
+    *count = (size_t)ML307_CMD_COUNT;
   }
-  return ML307_Format(output, output_size, "%s" ML307_COMMAND_TERMINATOR,
-                      command);
+  return s_commands;
 }
 
-ML307_Result ML307_BuildExecute(char *output, size_t output_size,
-                                const char *name)
+const ML307_CmdInfo *ML307_FindCommand(ML307_Cmd id)
 {
-  if (!ML307_IsCommandName(name)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+  if ((unsigned int)id >= (unsigned int)ML307_CMD_COUNT) {
+    return NULL;
   }
-  return ML307_Format(output, output_size,
-                      "AT+%s" ML307_COMMAND_TERMINATOR, name);
+  return &s_commands[(unsigned int)id];
+}
+
+int ML307_QueryIsSupported(ML307_Cmd command)
+{
+  return ML307_FindCommand(command) != NULL;
+}
+
+const char *ML307_GetExpectedResponseType(ML307_Cmd command)
+{
+  const ML307_CmdInfo *info = ML307_FindCommand(command);
+
+  if (info == NULL) {
+    return NULL;
+  }
+  return info->stem;
+}
+
+ML307_Result ML307_BuildAt(char *output, size_t output_size, ML307_Cmd command,
+                           ML307_AtForm form, const char *argument)
+{
+  const ML307_CmdInfo *info = ML307_FindCommand(command);
+
+  if (info == NULL) {
+    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
+  }
+  if (!ML307_FormAllowed(info, form)) {
+    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
+  }
+
+  if (info->kind == ML307_CMD_KIND_BASIC) {
+    return ML307_BuildBasic(output, output_size, info, form, argument);
+  }
+  return ML307_BuildPlus(output, output_size, info, form, argument);
 }
 
 ML307_Result ML307_BuildQuery(char *output, size_t output_size,
-                              const char *name)
+                              ML307_Cmd command)
 {
-  if (!ML307_IsCommandName(name)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-  }
-  return ML307_Format(output, output_size,
-                      "AT+%s?" ML307_COMMAND_TERMINATOR, name);
-}
+  const ML307_CmdInfo *info = ML307_FindCommand(command);
 
-ML307_Result ML307_BuildSet(char *output, size_t output_size,
-                            const char *name, const char *arguments)
-{
-  if (!ML307_IsCommandName(name) || !ML307_IsSingleLine(arguments)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-  }
-  return ML307_Format(output, output_size,
-                      "AT+%s=%s" ML307_COMMAND_TERMINATOR, name, arguments);
-}
-
-ML307_Result ML307_BuildSetQuery(char *output, size_t output_size,
-                                 const char *name, const char *arguments)
-{
-  if (!ML307_IsCommandName(name) || !ML307_IsSingleLine(arguments)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
-  }
-  return ML307_Format(output, output_size,
-                      "AT+%s=%s?" ML307_COMMAND_TERMINATOR, name, arguments);
-}
-
-ML307_Result ML307_BuildAttention(char *output, size_t output_size)
-{
-  return ML307_BuildLiteral(output, output_size, "AT");
-}
-
-ML307_Result ML307_BuildVersionQuery(char *output, size_t output_size)
-{
-  return ML307_BuildLiteral(output, output_size, "ATI");
-}
-
-ML307_Result ML307_BuildReset(char *output, size_t output_size)
-{
-  return ML307_BuildExecute(output, output_size, "RESET");
-}
-
-ML307_Result ML307_BuildSimQuery(char *output, size_t output_size)
-{
-  return ML307_BuildQuery(output, output_size, "SIM");
-}
-
-ML307_Result ML307_BuildSimSelect(char *output, size_t output_size,
-                                  uint8_t sim_id)
-{
-  if ((sim_id < 1U) || (sim_id > 2U)) {
+  if (info == NULL) {
     return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
   }
-  return ML307_Format(output, output_size,
-                      "AT+SIM=%u" ML307_COMMAND_TERMINATOR,
-                      (unsigned int)sim_id);
+  return ML307_BuildAt(output, output_size, command, info->default_query_form,
+                       NULL);
 }
 
-ML307_Result ML307_BuildUartQuery(char *output, size_t output_size,
-                                  uint8_t id)
+ML307_Result ML307_BuildQueryCommand(char *output, size_t output_size,
+                                     ML307_Cmd command, const char *argument)
 {
-  if ((id < 1U) || (id > 2U)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-  return ML307_Format(output, output_size,
-                      "AT+UART=%u?" ML307_COMMAND_TERMINATOR,
-                      (unsigned int)id);
-}
+  const ML307_CmdInfo *info = ML307_FindCommand(command);
 
-ML307_Result ML307_BuildUartConfig(char *output, size_t output_size,
-                                   uint8_t id, uint32_t baudrate,
-                                   uint8_t data_bits,
-                                   ML307_UartParity parity,
-                                   uint8_t stop_bits)
-{
-  if ((id < 1U) || (id > 2U) || (baudrate < 1200U) ||
-      (baudrate > 115200U) || (data_bits < 5U) || (data_bits > 8U) ||
-      (parity > ML307_UART_PARITY_EVEN) || (stop_bits < 1U) ||
-      (stop_bits > 2U)) {
+  if (info == NULL) {
     return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
   }
 
-  return ML307_Format(output, output_size,
-                      "AT+UART=%u,%lu,%u,%u,%u" ML307_COMMAND_TERMINATOR,
-                      (unsigned int)id, (unsigned long)baudrate,
-                      (unsigned int)data_bits, (unsigned int)parity,
-                      (unsigned int)stop_bits);
+  /* NULL argument → default query form; non-NULL → SET / execute-with-arg. */
+  if (argument == NULL) {
+    return ML307_BuildQuery(output, output_size, command);
+  }
+  if (info->kind == ML307_CMD_KIND_PLUS) {
+    return ML307_BuildAt(output, output_size, command, ML307_AT_FORM_SET,
+                         argument);
+  }
+  return ML307_BuildAt(output, output_size, command, ML307_AT_FORM_EXECUTE,
+                       argument);
 }
 
-ML307_Result ML307_BuildUartQueueQuery(char *output, size_t output_size,
-                                       uint8_t id)
+ML307_Result ML307_FormatQueryHint(char *output, size_t output_size,
+                                   ML307_Cmd command, const char *argument)
 {
-  if ((id < 1U) || (id > 2U)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
-  }
-  return ML307_Format(output, output_size,
-                      "AT+UARTQUE=%u?" ML307_COMMAND_TERMINATOR,
-                      (unsigned int)id);
-}
+  char built[96];
+  ML307_Result result;
+  size_t length;
 
-ML307_Result ML307_BuildUartQueueConfig(char *output, size_t output_size,
-                                        uint8_t id, uint8_t node_count,
-                                        uint16_t node_size,
-                                        uint16_t latency_ms)
-{
-  if ((id < 1U) || (id > 2U) || (node_count < 1U) ||
-      (node_count > 32U) || (node_size < 32U) || (node_size > 8192U) ||
-      (latency_ms < 10U) || (latency_ms > 1000U)) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_VALUE);
+  result = ML307_BuildQueryCommand(built, sizeof(built), command, argument);
+  if (result != ML307_RESULT_OK) {
+    return ML307_Fail(output, output_size, result);
   }
 
-  return ML307_Format(output, output_size,
-                      "AT+UARTQUE=%u,%u,%u,%u" ML307_COMMAND_TERMINATOR,
-                      (unsigned int)id, (unsigned int)node_count,
-                      (unsigned int)node_size, (unsigned int)latency_ms);
+  length = strlen(built);
+  while ((length > 0U) &&
+         ((built[length - 1U] == '\r') || (built[length - 1U] == '\n'))) {
+    built[--length] = '\0';
+  }
+  return ML307_Format(output, output_size, "%s", built);
 }

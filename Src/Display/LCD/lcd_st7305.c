@@ -185,22 +185,88 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1,
 }
 
 void LCD_Refresh(void) {
+  LCD_RefreshArea(0U, 0U,
+                  (lcd_rotation == ROTATION_90 || lcd_rotation == ROTATION_270)
+                      ? ST7305_HEIGHT
+                      : ST7305_WIDTH,
+                  (lcd_rotation == ROTATION_90 || lcd_rotation == ROTATION_270)
+                      ? ST7305_WIDTH
+                      : ST7305_HEIGHT);
+}
+
+void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
+                     uint16_t height) {
   uint8_t line[ST7305_WIRE_ROW_BYTES];
-  uint16_t y;
+  uint16_t logical_width;
+  uint16_t logical_height;
+  uint16_t x1;
+  uint16_t y1;
+  uint16_t native_y0;
+  uint16_t native_y1;
+  uint16_t row;
   uint16_t address_column;
 
-  for (y = 0U; y < ST7305_HEIGHT; y += 2U) {
+  logical_width = ((lcd_rotation == ROTATION_90) ||
+                   (lcd_rotation == ROTATION_270))
+                      ? ST7305_HEIGHT
+                      : ST7305_WIDTH;
+  logical_height = ((lcd_rotation == ROTATION_90) ||
+                    (lcd_rotation == ROTATION_270))
+                       ? ST7305_WIDTH
+                       : ST7305_HEIGHT;
+  if ((width == 0U) || (height == 0U) || (x >= logical_width) ||
+      (y >= logical_height)) {
+    return;
+  }
+  x1 = (uint16_t)(x + width - 1U);
+  y1 = (uint16_t)(y + height - 1U);
+  if ((x1 < x) || (x1 >= logical_width)) {
+    x1 = (uint16_t)(logical_width - 1U);
+  }
+  if ((y1 < y) || (y1 >= logical_height)) {
+    y1 = (uint16_t)(logical_height - 1U);
+  }
+
+  switch (lcd_rotation) {
+  case ROTATION_90:
+    native_y0 = x;
+    native_y1 = x1;
+    break;
+  case ROTATION_180:
+    native_y0 = (uint16_t)(ST7305_HEIGHT - 1U - y1);
+    native_y1 = (uint16_t)(ST7305_HEIGHT - 1U - y);
+    break;
+  case ROTATION_270:
+    native_y0 = (uint16_t)(ST7305_HEIGHT - 1U - x1);
+    native_y1 = (uint16_t)(ST7305_HEIGHT - 1U - x);
+    break;
+  case NO_ROTATION:
+  default:
+    native_y0 = y;
+    native_y1 = y1;
+    break;
+  }
+
+  native_y0 &= (uint16_t)~1U;
+  native_y1 |= 1U;
+  if (native_y1 >= ST7305_HEIGHT) {
+    native_y1 = ST7305_HEIGHT - 1U;
+  }
+
+  for (row = native_y0; row <= native_y1; row += 2U) {
+    size_t out = 0U;
+    /* ST7305 300x400 的可靠写法是保持完整列窗口，仅裁剪行地址。
+       非零列起始地址在此面板上会从可视区起点写入，造成画面下移/重复。 */
     for (address_column = 0U; address_column < ST7305_ADDRESS_COLUMNS;
          ++address_column) {
-      uint16_t x = (uint16_t)(address_column * 12U);
-      size_t out = (size_t)address_column * 3U;
-      line[out] = ST7305_Pack4x2(x, y);
-      line[out + 1U] = ST7305_Pack4x2((uint16_t)(x + 4U), y);
-      line[out + 2U] = ST7305_Pack4x2((uint16_t)(x + 8U), y);
+      const uint16_t column_x = (uint16_t)(address_column * 12U);
+      line[out++] = ST7305_Pack4x2(column_x, row);
+      line[out++] = ST7305_Pack4x2((uint16_t)(column_x + 4U), row);
+      line[out++] = ST7305_Pack4x2((uint16_t)(column_x + 8U), row);
     }
-    /* 300x400 参考驱动逐个 2 行地址写入，避免依赖大窗口自动换行。 */
-    LCD_SetAddressWindow(0U, y, ST7305_WIDTH - 1U, (uint16_t)(y + 1U));
-    SPI_SendBuffer(line, sizeof(line));
+    LCD_SetAddressWindow(0U, row, ST7305_WIDTH - 1U,
+                         (uint16_t)(row + 1U));
+    SPI_SendBuffer(line, out);
   }
 }
 

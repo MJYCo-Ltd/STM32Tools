@@ -32,6 +32,13 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
 void LCD_Refresh(void);
 
 /**
+ * @brief 仅刷新逻辑坐标中的矩形区域，区域会自动对齐到 ST7305 GRAM 单元
+ * @param x,y 区域左上角
+ * @param width,height 区域尺寸
+ */
+void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width, uint16_t height);
+
+/**
  * @brief 全屏颜色反显开关
  * @param invert 1=开启反显，0=关闭
  */

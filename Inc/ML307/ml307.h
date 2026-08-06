@@ -1,7 +1,11 @@
 /*
  ******************************************************************************
  * @file           : ml307.h
- * @brief          : ML307C DTU/RTU AT command builder
+ * @brief          : ML307C AT command builder (no UART I/O)
+ *
+ * Command set follows China Mobile IoT
+ * "AT Commands Reference Guide 4G Series V2.0.5".
+ * Application owns UART TX/RX; use ml307_parser for response decoding.
  ******************************************************************************
  */
 #ifndef STM32TOOLS_ML307_H
@@ -16,217 +20,198 @@ extern "C" {
 
 #define ML307_COMMAND_TERMINATOR "\r\n"
 
-/** Result of building an AT command. The output is empty on failure. */
 typedef enum {
   ML307_RESULT_OK = 0,
   ML307_RESULT_INVALID_ARGUMENT,
   ML307_RESULT_INVALID_VALUE,
-  ML307_RESULT_BUFFER_TOO_SMALL
+  ML307_RESULT_BUFFER_TOO_SMALL,
+  ML307_RESULT_NOT_FOUND,
+  ML307_RESULT_ERROR_RESPONSE
 } ML307_Result;
 
-/** UART parity values defined by AT+UART. */
+/** Manual chapters 3–10. */
 typedef enum {
-  ML307_UART_PARITY_NONE = 0,
-  ML307_UART_PARITY_ODD = 1,
-  ML307_UART_PARITY_EVEN = 2
-} ML307_UartParity;
+  ML307_CATEGORY_GENERAL = 0,
+  ML307_CATEGORY_CALL,
+  ML307_CATEGORY_NETWORK,
+  ML307_CATEGORY_ME,
+  ML307_CATEGORY_PACKET,
+  ML307_CATEGORY_SIM,
+  ML307_CATEGORY_SMS,
+  ML307_CATEGORY_ERROR
+} ML307_Category;
 
-/** Command groups follow the business chapters in the ML307C manual. */
+/** AT command form (V2.0.5 Test / Read / Set / Execute). */
 typedef enum {
-  ML307_QUERY_CATEGORY_BASIC = 0,
-  ML307_QUERY_CATEGORY_DTU,
-  ML307_QUERY_CATEGORY_SOCKET,
-  ML307_QUERY_CATEGORY_MQTT,
-  ML307_QUERY_CATEGORY_MAPPING,
-  ML307_QUERY_CATEGORY_MCU_OTA,
-  ML307_QUERY_CATEGORY_HTTP,
-  ML307_QUERY_CATEGORY_UART,
-  ML307_QUERY_CATEGORY_IO,
-  ML307_QUERY_CATEGORY_GNSS
-} ML307_QueryCategory;
+  ML307_AT_FORM_TEST = 0, /**< AT+NAME=?  (basic: not used / invalid) */
+  ML307_AT_FORM_READ,     /**< AT+NAME?   */
+  ML307_AT_FORM_SET,      /**< AT+NAME=<arg> or basic ATE<arg> */
+  ML307_AT_FORM_EXECUTE   /**< AT+NAME or ATI / ATA / ... */
+} ML307_AtForm;
 
-/** Syntax used by a query entry. */
+/** How the stem is formatted on the wire. */
 typedef enum {
-  ML307_QUERY_SYNTAX_LITERAL = 0,          /**< ATI */
-  ML307_QUERY_SYNTAX_SIMPLE,               /**< AT+NAME? */
-  ML307_QUERY_SYNTAX_PARAMETER,            /**< AT+NAME=<argument> */
-  ML307_QUERY_SYNTAX_PARAMETER_QUESTION,   /**< AT+NAME=<argument>? */
-  ML307_QUERY_SYNTAX_PARAMETER_COMMA       /**< AT+NAME=<argument>, */
-} ML307_QuerySyntax;
+  ML307_CMD_KIND_BASIC = 0, /**< Full stem: ATI, ATE, ATS0, AT&F, ... */
+  ML307_CMD_KIND_PLUS       /**< Stem is NAME in AT+NAME */
+} ML307_CmdKind;
 
-/** Query commands listed and grouped according to the manual. */
+/** Default query response parsing style. */
 typedef enum {
-  /* Basic commands. */
-  ML307_QUERY_BASIC_VERSION = 0,
-  ML307_QUERY_BASIC_IMEI,
-  ML307_QUERY_BASIC_CSQ,
-  ML307_QUERY_BASIC_ICCID,
-  ML307_QUERY_BASIC_IMSI,
-  ML307_QUERY_BASIC_SIM,
-  ML307_QUERY_BASIC_SIM_MODE,
-  ML307_QUERY_BASIC_SIM_INFO,
-  ML307_QUERY_BASIC_CEREG,
-  ML307_QUERY_BASIC_IS_LINK,
-  ML307_QUERY_BASIC_UTC,
-  ML307_QUERY_BASIC_TIME,
-  ML307_QUERY_BASIC_NTP,
-  ML307_QUERY_BASIC_CGI,
-  ML307_QUERY_BASIC_LBS,
-  ML307_QUERY_BASIC_APN,
-  ML307_QUERY_BASIC_MONITOR,
-  ML307_QUERY_BASIC_ONLINE_CFG,
-  ML307_QUERY_BASIC_NET_LED,
-  ML307_QUERY_BASIC_ADC,
-  ML307_QUERY_BASIC_CFG_ID,
+  ML307_RESP_PLUS = 0, /**< Expect +TYPE: payload lines */
+  ML307_RESP_PLAIN     /**< Expect plain text body (ATI / CIMI / CGMR ...) */
+} ML307_RespStyle;
 
-  /* DTU commands. */
-  ML307_QUERY_DTU_TASK,
-  ML307_QUERY_DTU_PSDN,
-  ML307_QUERY_DTU_PSUP,
-  ML307_QUERY_DTU_HEART,
-  ML307_QUERY_DTU_REG,
-  ML307_QUERY_DTU_STATE,
-  ML307_QUERY_DTU_STATE_IO,
-  ML307_QUERY_DTU_MSG_HEAD,
-  ML307_QUERY_DTU_AT_PASSWORD,
-  ML307_QUERY_DTU_FILTER,
+/**
+ * Full command list from V2.0.5 (chapters 3–10, excluding +++ escape).
+ * Names match the manual section titles.
+ */
+typedef enum {
+  /* 3. General */
+  ML307_CMD_ATE = 0,
+  ML307_CMD_ATS3,
+  ML307_CMD_ATS4,
+  ML307_CMD_ATS5,
+  ML307_CMD_AT_AND_F,
+  ML307_CMD_ATV,
+  ML307_CMD_ATQ,
+  ML307_CMD_ATZ,
+  ML307_CMD_ATX,
+  ML307_CMD_ATI,
+  ML307_CMD_GMI,
+  ML307_CMD_CGMI,
+  ML307_CMD_GMM,
+  ML307_CMD_CGMM,
+  ML307_CMD_GMR,
+  ML307_CMD_CGMR,
+  ML307_CMD_GSN,
+  ML307_CMD_CGSN,
+  ML307_CMD_IPR,
+  ML307_CMD_CSCS,
 
-  /* Socket commands. */
-  ML307_QUERY_SOCKET_CONFIG,
-  ML307_QUERY_SOCKET_BACKUP,
-  ML307_QUERY_SOCKET_SHORT,
-  ML307_QUERY_SOCKET_KEEP,
-  ML307_QUERY_SOCKET_OTHER,
+  /* 4. Call */
+  ML307_CMD_ATS0,
+  ML307_CMD_ATA,
+  ML307_CMD_ATD,
+  ML307_CMD_ATH,
+  ML307_CMD_CHUP,
+  ML307_CMD_CEER,
+  ML307_CMD_CRC,
 
-  /* MQTT commands. */
-  ML307_QUERY_MQTT_CONFIG,
-  ML307_QUERY_MQTT_AUTH,
-  ML307_QUERY_MQTT_PLATFORM,
-  ML307_QUERY_MQTT_SUB,
-  ML307_QUERY_MQTT_PUB,
-  ML307_QUERY_MQTT_SHORT,
-  ML307_QUERY_MQTT_WILL,
-  ML307_QUERY_MQTT_OTHER,
-  ML307_QUERY_MQTT_GET_SUB,
+  /* 5. Network */
+  ML307_CMD_CREG,
+  ML307_CMD_COPS,
+  ML307_CMD_CLCK,
+  ML307_CMD_CHLD,
+  ML307_CMD_CLCC,
+  ML307_CMD_CPOL,
+  ML307_CMD_CPLS,
+  ML307_CMD_COPN,
 
-  /* Data-mapping commands. */
-  ML307_QUERY_MAPPING_USER,
-  ML307_QUERY_MAPPING_USER_HEX,
+  /* 6. ME */
+  ML307_CMD_CPAS,
+  ML307_CMD_CFUN,
+  ML307_CMD_CSQ,
+  ML307_CMD_CESQ,
+  ML307_CMD_CCLK,
+  ML307_CMD_CLAC,
+  ML307_CMD_CTZU,
+  ML307_CMD_CTZR,
 
-  /* MCU OTA commands. */
-  ML307_QUERY_MCU_OTA,
+  /* 7. Packet */
+  ML307_CMD_CGDCONT,
+  ML307_CMD_CGTFT,
+  ML307_CMD_CGATT,
+  ML307_CMD_CGACT,
+  ML307_CMD_CGPADDR,
+  ML307_CMD_CGCLASS,
+  ML307_CMD_CGEREP,
+  ML307_CMD_CGREG,
+  ML307_CMD_CEREG,
+  ML307_CMD_CGCONTRDP,
+  ML307_CMD_CGEQOS,
+  ML307_CMD_CGEQOSRDP,
+  ML307_CMD_CEMODE,
+  ML307_CMD_CGDEL,
+  ML307_CMD_CGAUTH,
 
-  /* HTTP commands. */
-  ML307_QUERY_HTTP_URL,
-  ML307_QUERY_HTTP_CFG,
-  ML307_QUERY_HTTP_SSL,
-  ML307_QUERY_HTTP_RESP,
-  ML307_QUERY_HTTP_RANGE,
+  /* 8. SIM */
+  ML307_CMD_CPIN,
+  ML307_CMD_CPWD,
+  ML307_CMD_CSIM,
+  ML307_CMD_CRSM,
+  ML307_CMD_CNUM,
+  ML307_CMD_CIMI,
+  ML307_CMD_CCHO,
+  ML307_CMD_CCHC,
+  ML307_CMD_CGLA,
 
-  /* UART commands. */
-  ML307_QUERY_UART_CONFIG,
-  ML307_QUERY_UART_QUEUE,
+  /* 9. SMS */
+  ML307_CMD_CSMS,
+  ML307_CMD_CMGF,
+  ML307_CMD_CSMP,
+  ML307_CMD_CSCA,
+  ML307_CMD_CSDH,
+  ML307_CMD_CNMI,
+  ML307_CMD_CMGR,
+  ML307_CMD_CMGC,
+  ML307_CMD_CMGL,
+  ML307_CMD_CMGD,
+  ML307_CMD_CMGW,
+  ML307_CMD_CMGS,
+  ML307_CMD_CMSS,
+  ML307_CMD_CPMS,
+  ML307_CMD_CMMS,
 
-  /* IO commands. */
-  ML307_QUERY_IO_CFG,
-  ML307_QUERY_IO_GET,
-  ML307_QUERY_IO_LOOP_REPORT,
-  ML307_QUERY_IO_CHANGE_REPORT,
-  ML307_QUERY_IO_TEMPLATE,
-  ML307_QUERY_IO_TEMPLATE_HEX,
+  /* 10. Error */
+  ML307_CMD_CMEE,
 
-  /* GNSS commands (ML307C-GC only). */
-  ML307_QUERY_GNSS_CONFIG,
-  ML307_QUERY_GNSS_LOCATION,
-  ML307_QUERY_GNSS_REPORT,
-  ML307_QUERY_GNSS_LAST,
+  ML307_CMD_COUNT
+} ML307_Cmd;
 
-  ML307_QUERY_COMMAND_COUNT
-} ML307_QueryCommand;
-
-/** One entry in the documented query-command list. */
+/** One entry in the V2.0.5 command table. */
 typedef struct {
-  ML307_QueryCommand id;
-  ML307_QueryCategory category;
-  ML307_QuerySyntax syntax;
-  const char *name;
-} ML307_QueryCommandInfo;
+  ML307_Cmd id;
+  ML307_Category category;
+  ML307_CmdKind kind;
+  ML307_AtForm default_query_form;
+  ML307_RespStyle resp_style;
+  const char *stem; /**< BASIC: "ATI"; PLUS: "CSQ" */
+} ML307_CmdInfo;
 
-/** Return the complete read-only query-command list. */
-const ML307_QueryCommandInfo *ML307_GetQueryCommands(size_t *count);
+const ML307_CmdInfo *ML307_GetCommands(size_t *count);
+const ML307_CmdInfo *ML307_FindCommand(ML307_Cmd id);
 
-/**
- * Build a command from the documented query list.
- *
- * argument must be NULL for LITERAL/SIMPLE entries. For the other syntax
- * types it supplies the part represented by <argument>, for example "1" or
- * "1,\"keepalive\"". No UART transfer or response processing is performed.
- */
-ML307_Result ML307_BuildQueryCommand(char *output, size_t output_size,
-                                     ML307_QueryCommand command,
-                                     const char *argument);
+/** Nonzero when id is in range (full V2.0.5 table is supported). */
+int ML307_QueryIsSupported(ML307_Cmd command);
 
 /**
- * Build a literal AT command and append CRLF.
- *
- * command must start with "AT" and must not already contain CR or LF.
- * This function covers non-standard forms such as ATI and AT+SEND.
+ * Parser expected_type token: "CSQ", "CEREG", "ATI", "CIMI", ...
+ * NULL if id invalid.
  */
-ML307_Result ML307_BuildLiteral(char *output, size_t output_size,
-                                const char *command);
+const char *ML307_GetExpectedResponseType(ML307_Cmd command);
 
-/** Build AT+<name> followed by CRLF. */
-ML307_Result ML307_BuildExecute(char *output, size_t output_size,
-                                const char *name);
+/** Short hint without CRLF, e.g. "ATI", "AT+CEREG?", "AT+CSQ". */
+ML307_Result ML307_FormatQueryHint(char *output, size_t output_size,
+                                   ML307_Cmd command, const char *argument);
 
-/** Build AT+<name>? followed by CRLF. */
+/**
+ * Build AT with explicit form. SET/ATD require argument; others usually NULL.
+ * Output always includes CRLF on success.
+ */
+ML307_Result ML307_BuildAt(char *output, size_t output_size, ML307_Cmd command,
+                           ML307_AtForm form, const char *argument);
+
+/**
+ * Build the default query form for this command (see CmdInfo.default_query_form).
+ * Equivalent to ML307_BuildAt(..., default_query_form, NULL) for query-only
+ * commands; SET-default commands still require ML307_BuildAt with argument.
+ */
 ML307_Result ML307_BuildQuery(char *output, size_t output_size,
-                              const char *name);
+                              ML307_Cmd command);
 
-/** Build AT+<name>=<arguments> followed by CRLF. */
-ML307_Result ML307_BuildSet(char *output, size_t output_size,
-                            const char *name, const char *arguments);
-
-/** Build AT+<name>=<arguments>? followed by CRLF (for indexed queries). */
-ML307_Result ML307_BuildSetQuery(char *output, size_t output_size,
-                                 const char *name, const char *arguments);
-
-/** Build the basic AT attention command. */
-ML307_Result ML307_BuildAttention(char *output, size_t output_size);
-
-/** Build the ATI firmware-version query. */
-ML307_Result ML307_BuildVersionQuery(char *output, size_t output_size);
-
-/** Build AT+RESET. */
-ML307_Result ML307_BuildReset(char *output, size_t output_size);
-
-/** Build AT+SIM?. */
-ML307_Result ML307_BuildSimQuery(char *output, size_t output_size);
-
-/** Build AT+SIM=<sim_id>; sim_id is 1 (main) or 2 (secondary). */
-ML307_Result ML307_BuildSimSelect(char *output, size_t output_size,
-                                  uint8_t sim_id);
-
-/** Build AT+UART=<id>?. id 1/2 maps to the module's UART0/UART1. */
-ML307_Result ML307_BuildUartQuery(char *output, size_t output_size,
-                                  uint8_t id);
-
-/** Build AT+UART=<id>,<baud>,<data>,<parity>,<stop>. */
-ML307_Result ML307_BuildUartConfig(char *output, size_t output_size,
-                                   uint8_t id, uint32_t baudrate,
-                                   uint8_t data_bits,
-                                   ML307_UartParity parity,
-                                   uint8_t stop_bits);
-
-/** Build AT+UARTQUE=<id>?. */
-ML307_Result ML307_BuildUartQueueQuery(char *output, size_t output_size,
-                                       uint8_t id);
-
-/** Build AT+UARTQUE=<id>,<count>,<size>,<latency>. */
-ML307_Result ML307_BuildUartQueueConfig(char *output, size_t output_size,
-                                        uint8_t id, uint8_t node_count,
-                                        uint16_t node_size,
-                                        uint16_t latency_ms);
+/** Alias of ML307_BuildQuery for call sites that pass a NULL argument. */
+ML307_Result ML307_BuildQueryCommand(char *output, size_t output_size,
+                                     ML307_Cmd command, const char *argument);
 
 #ifdef __cplusplus
 }

@@ -13,7 +13,6 @@ typedef struct _Uart_Info {
   UART_HandleTypeDef *pHUart;    /// 串口句柄指针
   ReceiveUartCallback pCallback; /// 串口回调
   uint8_t *pBuffer;              /// 串口缓冲区
-  uint8_t *pReceive;             /// 串口接收地址
 #ifdef USE_FREERTOS
   osMessageQueueId_t hQueueId;   /// 串口获取消息队列
 #endif
@@ -21,10 +20,55 @@ typedef struct _Uart_Info {
 } Uart_Info;
 
 static Uart_Info **pUartInfoArray = NULL;
-const uint16_t UART_BUFFER_LENGTH = 200;
-static uint8_t *pLocalBuffer = NULL;
-
 static uint8_t uUartIndex = 0;
+static uint8_t uUartCapacity = 0;
+
+#define UART_RECEIVE_QUEUE_DEPTH 16U
+
+_Static_assert((sizeof(UartQueueInfo) % sizeof(uint32_t)) == 0U,
+               "UART queue item must be 32-bit aligned");
+
+static HAL_StatusTypeDef StartReceive(Uart_Info *pUartInfo) {
+  HAL_StatusTypeDef status;
+
+  if ((pUartInfo == NULL) || (pUartInfo->pHUart == NULL) ||
+      (pUartInfo->pBuffer == NULL)) {
+    return HAL_ERROR;
+  }
+  if (pUartInfo->pHUart->RxState == HAL_UART_STATE_BUSY_RX) {
+    return HAL_OK;
+  }
+  if (pUartInfo->pHUart->RxState != HAL_UART_STATE_READY) {
+    return HAL_BUSY;
+  }
+
+  __HAL_UART_CLEAR_OREFLAG(pUartInfo->pHUart);
+  pUartInfo->pHUart->ErrorCode = HAL_UART_ERROR_NONE;
+  status = HAL_UARTEx_ReceiveToIdle_DMA(pUartInfo->pHUart,
+                                        pUartInfo->pBuffer,
+                                        UART_RECEIVE_BUFFER_LENGTH);
+  if ((status == HAL_OK) && (pUartInfo->pHUart->hdmarx != NULL)) {
+    __HAL_DMA_DISABLE_IT(pUartInfo->pHUart->hdmarx, DMA_IT_HT);
+  }
+  return status;
+}
+
+#ifdef USE_FREERTOS
+/** Keep the newest frame when the queue is full (boot URCs must not drop ATI). */
+static osStatus_t UartQueuePutLatest(osMessageQueueId_t queue,
+                                     const UartQueueInfo *item)
+{
+  osStatus_t status = osMessageQueuePut(queue, item, 0, 0);
+  if (status == osOK) {
+    return osOK;
+  }
+  {
+    UartQueueInfo discarded;
+    (void)osMessageQueueGet(queue, &discarded, NULL, 0);
+  }
+  return osMessageQueuePut(queue, item, 0, 0);
+}
+#endif
 
 /// 初始化串口数量
 void InitUartCount(uint8_t unMaxUartSize) {
@@ -32,14 +76,17 @@ void InitUartCount(uint8_t unMaxUartSize) {
     /// 此处程序刚开始，如果没有空间说明芯片不合适
     /// 故没有进行判断指针为空的问题
     pUartInfoArray = RequestSpace(sizeof(*pUartInfoArray) * unMaxUartSize);
-    pLocalBuffer = RequestSpace(UART_BUFFER_LENGTH);
+    if (pUartInfoArray != NULL) {
+      uUartCapacity = unMaxUartSize;
+    }
   }
 }
 /**
  * 创建一个接收串口的缓冲区
  */
 uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
-  if (NULL == pUartInfoArray) {
+  if ((NULL == pUartInfoArray) || (NULL == pHUart) ||
+      (NULL == pCallback) || (uUartIndex >= uUartCapacity)) {
     return (0);
   }
   Uart_Info *pUartInfo = RequestSpace(sizeof(*pUartInfo));
@@ -47,14 +94,25 @@ uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
     return (0);
   } else {
 #ifdef USE_FREERTOS
-    pUartInfo->hQueueId = osMessageQueueNew(10, sizeof(UartQueueInfo), NULL);
+    pUartInfo->hQueueId =
+        osMessageQueueNew(UART_RECEIVE_QUEUE_DEPTH, sizeof(UartQueueInfo), NULL);
+    if (pUartInfo->hQueueId == NULL) {
+      RecycleSpace(pUartInfo);
+      return (0);
+    }
 #endif
     /// 绑定
     pUartInfo->pHUart = pHUart;
     pUartInfo->pCallback = pCallback;
 
-    pUartInfo->pBuffer = RequestSpace(UART_BUFFER_LENGTH);
-    pUartInfo->pReceive = pUartInfo->pBuffer;
+    pUartInfo->pBuffer = RequestSpace(UART_RECEIVE_BUFFER_LENGTH);
+    if (NULL == pUartInfo->pBuffer) {
+#ifdef USE_FREERTOS
+      (void)osMessageQueueDelete(pUartInfo->hQueueId);
+#endif
+      RecycleSpace(pUartInfo);
+      return (0);
+    }
 
     pUartInfoArray[uUartIndex] = pUartInfo;
   }
@@ -71,12 +129,10 @@ UART_HandleTypeDef *GetUart(uint8_t uId) {
   }
 }
 /// 开始接收串口数据
-void BeginReceiveUartInfo(uint8_t uId) {
+HAL_StatusTypeDef BeginReceiveUartInfo(uint8_t uId) {
   if (uId < 1 || uId > uUartIndex)
-    return;
-  Uart_Info *pUartInfo = pUartInfoArray[uId - 1];
-  HAL_UARTEx_ReceiveToIdle_DMA(pUartInfo->pHUart, pUartInfo->pReceive,
-                               UART_BUFFER_LENGTH);
+    return HAL_ERROR;
+  return StartReceive(pUartInfoArray[uId - 1]);
 }
 
 /// 停止接收串口数据
@@ -92,22 +148,30 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
   for (uint8_t index = 0; index < uUartIndex; ++index) {
     Uart_Info *pUartInfo = pUartInfoArray[index];
     if (pHUart == pUartInfo->pHUart) {
-      LOCAL_QUEUE_INFO.pBuffer = pUartInfo->pReceive;
+      if (nSize > UART_RECEIVE_BUFFER_LENGTH) {
+        nSize = UART_RECEIVE_BUFFER_LENGTH;
+      }
+      memcpy(LOCAL_QUEUE_INFO.buffer, pUartInfo->pBuffer, nSize);
       LOCAL_QUEUE_INFO.nLength = nSize; // 获取DMA中传输的数据个数
 #ifdef USE_FREERTOS
-      if (osOK ==
-          osMessageQueuePut(pUartInfo->hQueueId, &LOCAL_QUEUE_INFO, 0, 0))
+      if (osOK == UartQueuePutLatest(pUartInfo->hQueueId, &LOCAL_QUEUE_INFO))
 #endif
       {
         pUartInfo->stAllIOInfo.unReciveCount += nSize;
       }
 
-      pUartInfo->pReceive += nSize; // 指针向后移动
-      if (pUartInfo->pReceive - pUartInfo->pBuffer >= UART_BUFFER_LENGTH) {
-        pUartInfo->pReceive -= UART_BUFFER_LENGTH;
-      }
-      HAL_UARTEx_ReceiveToIdle_DMA(pUartInfo->pHUart, pUartInfo->pReceive,
-                                   UART_BUFFER_LENGTH);
+      (void)StartReceive(pUartInfo);
+      break;
+    }
+  }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *pHUart) {
+  for (uint8_t index = 0; index < uUartIndex; ++index) {
+    Uart_Info *pUartInfo = pUartInfoArray[index];
+    if ((pUartInfo != NULL) && (pHUart == pUartInfo->pHUart)) {
+      (void)StartReceive(pUartInfo);
+      break;
     }
   }
 }
@@ -122,23 +186,7 @@ void ProcessUart(void) {
       while (osMessageQueueGetCount(pUartInfo->hQueueId) > 0 &&
              osOK == osMessageQueueGet(pUartInfo->hQueueId, &LOCAL_QUEUE_INFO,
                                        0, 0)) {
-        /// 如果长度小于整个缓冲区得长度
-        if ((LOCAL_QUEUE_INFO.pBuffer - pUartInfo->pBuffer) +
-                LOCAL_QUEUE_INFO.nLength <=
-            UART_BUFFER_LENGTH) {
-          memcpy(pLocalBuffer, LOCAL_QUEUE_INFO.pBuffer,
-                 LOCAL_QUEUE_INFO.nLength);
-        } else {
-          uint16_t nSubSize = (LOCAL_QUEUE_INFO.pBuffer - pUartInfo->pBuffer) +
-                              LOCAL_QUEUE_INFO.nLength - UART_BUFFER_LENGTH;
-          uint16_t nPreSize = LOCAL_QUEUE_INFO.nLength - nSubSize;
-          if (nPreSize > 0)
-            memcpy(pLocalBuffer, LOCAL_QUEUE_INFO.pBuffer, nPreSize);
-          if (nSubSize > 0)
-            memcpy(pLocalBuffer + nPreSize, pUartInfo->pBuffer, nSubSize);
-        }
-
-        pUartInfo->pCallback(pUartInfo->pHUart, pLocalBuffer,
+        pUartInfo->pCallback(pUartInfo->pHUart, LOCAL_QUEUE_INFO.buffer,
                              LOCAL_QUEUE_INFO.nLength);
         pUartInfo->stAllIOInfo.unDealCount += LOCAL_QUEUE_INFO.nLength;
       }

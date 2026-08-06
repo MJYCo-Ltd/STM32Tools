@@ -20,10 +20,13 @@
 #define __YTY_UART_RECEIVE_H_
 #include "main.h"
 #include "Auxiliary.h"
+
+#define UART_RECEIVE_BUFFER_LENGTH 200U
 /// 定义串口传输
 typedef struct _Uart_Queue_Info {
-    uint8_t *pBuffer;
+    uint8_t buffer[UART_RECEIVE_BUFFER_LENGTH];
     uint16_t nLength;
+    uint16_t reserved;
 } UartQueueInfo;
 
 typedef void (*ReceiveUartCallback)(UART_HandleTypeDef *, uint8_t *pData,
@@ -54,7 +57,7 @@ void UpdateUartSendInfo(UART_HandleTypeDef *pHUart, uint16_t unLength);
 /**
  * 接收指定id的串口数据
  */
-void BeginReceiveUartInfo(uint8_t uId);
+HAL_StatusTypeDef BeginReceiveUartInfo(uint8_t uId);
 void StopReceiveUartInfo(uint8_t uId);
 
 /**
