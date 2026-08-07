@@ -10,8 +10,11 @@ STM32Tools/
 ├── Inc/                    # 头文件及用户配置
 │   ├── Display/            # 显示相关
 │   │   ├── SPIDisplay.h    # SPI 显示统一接口（EPD/LCD 共用）
-│   │   ├── LCD/            # ST7789 配置
+│   │   ├── LCD/            # ST7789 / ST7305 配置
 │   │   └── EPD/            # UC8253 墨水屏配置
+│   ├── ML307/              # 中移 ML307 4G AT（Pack/Unpack）
+│   ├── EWM103/             # 亿佰特 EWM103-W15 WiFi AT（Pack/Unpack）
+│   ├── AHT20/              # AHT20 温湿度
 │   ├── Camera/             # 摄像头驱动
 │   │   ├── ov5640.h        # OV5640 500 万像素
 │   │   └── ov2640.h        # OV2640 200 万像素
@@ -25,12 +28,13 @@ STM32Tools/
 │   └── ...
 ├── Src/                    # 源文件
 │   ├── Display/            # LCD、EPD、Graphics 实现
+│   ├── ML307/              # ML307 组包 / 解析 / MQTT 辅助
+│   ├── EWM103/             # EWM103 组包 / 解析
+│   ├── AHT20/              # AHT20 驱动
 │   ├── Camera/             # OV5640、OV2640 驱动
 │   ├── TMP/                # TMP117 驱动
 │   ├── MX/                 # MX-22 驱动
-│   ├── pb/                 # nanopb 编解码
-│   ├── MQTT/               # MQTT 核心
-│   ├── Tracealzer/         # Tracealyzer 运行时
+│   ├── UartReceive.c       # 多路 UART DMA Idle 接收
 │   └── ...
 └── Test/                   # 单元测试
 ```
@@ -47,15 +51,41 @@ STM32Tools/
 
 - DMA Settings：增加 USART_RX
 - NVIC Settings：开启 global interrupt
-- 需单独开辟 Task 调用 `ProcessUart()`，在 DefaultTask 中调用会因其他代码阻塞
+- 需单独开辟 Task / Timer 调用 `ProcessUart()`，在 DefaultTask 中调用会因其他代码阻塞
 
 ### 注意事项
 
 - 启用 `BeginReceiveUartInfo` 后，会持续调用 `HAL_UARTEx_ReceiveToIdle_DMA`，RxState 将保持 `HAL_UART_STATE_BUSY_RX`
+- **双缓冲**：IDLE 事件后先切换 DMA 缓冲并重启接收，再入队，缩短模组“回显 → OK”之间的丢字节窗口
+- 每路串口使用独立暂存，避免多 UART 共用一块静态区互相覆盖
 
 ### 性能
 
 - 每串口 100 字节缓冲区下，每 50ms 接收 51 字节，测试无丢包
+
+## AT 模组驱动（Pack / Unpack）
+
+应用只填业务内容，驱动负责组包与解包，**不直接操作 UART**。
+
+### ML307（4G）
+
+- 依据《AT Commands Reference Guide 4G Series V2.0.5》
+- 对外：`ML307_Pack` / `ML307_Unpack` / `ML307_IsComplete`
+- 覆盖常用查询（ATI / CEREG / CIMI / CESQ / CGATT）、休眠、MQTT 连接/订阅/发布等
+- 示例工程：Agriculture 的 `LteLayer`（USART1）
+
+### EWM103-W15（WiFi）
+
+- 依据《EWM103-W15 AT 指令手册 V1.1》
+- 对外：`EWM103_Pack` / `EWM103_Unpack` / `EWM103_IsComplete`
+- 覆盖系统 / WiFi / TCP-IP / MQTT 等手册指令；最终结果按行识别 `OK` / `ERROR`
+- 指令以 CRLF 结尾；`AT` 响应为 `OK`；`ATE0`/`ATE1` 控制回显
+- 示例工程：Agriculture 的 `WifiLayer`（USART6，115200）
+
+### AHT20
+
+- I2C 温湿度：`AHT20_Init` / `AHT20_Read`
+- 默认 7 位地址 `0x38`
 
 ## 显示模块
 
@@ -173,6 +203,9 @@ OV5640_CAMERA_Driver.ReadID() -> OV5640_CAMERA_Driver.Init()
 
 ## 其他模块
 
+- **ML307**：4G AT Pack/Unpack（见上文）
+- **EWM103**：WiFi AT Pack/Unpack（见上文）
+- **AHT20**：I2C 温湿度传感器
 - **TMP117**：高精度 I2C 温度传感器
 - **MX-22**：蓝牙 SPP/BLE 模块
 - **RF24L01**：2.4GHz 无线收发

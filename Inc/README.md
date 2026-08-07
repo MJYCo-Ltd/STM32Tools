@@ -180,8 +180,51 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 | `GetUart(id)` | 获取串口句柄 |
 | `GetUartIOInfo(id)` | 获取收发统计 |
 | `BeginReceiveUartInfo(id)` / `StopReceiveUartInfo(id)` | 启停接收 |
-| `ProcessUart()` | 定时处理（需在任务中调用） |
+| `ProcessUart()` | 定时处理（需在任务 / 定时器中调用） |
 | `GetUartCount()` | 获取串口数量 |
+
+实现为 **DMA ReceiveToIdle + 双缓冲**：IDLE 后先重启接收再入队，降低 AT 回显与 `OK` 分帧时的丢字节风险。
+
+---
+
+## ML307 4G AT (ML307/ml307.h)
+
+应用侧 Pack/Unpack 门面（不操作 UART）。手册：AT Commands Reference Guide 4G Series V2.0.5。
+
+| 接口 | 说明 |
+|------|------|
+| `ML307_Pack(content, packet, size, &len)` | 按类型组包 |
+| `ML307_Unpack(packet, expect, &data)` | 解包为结构化结果 |
+| `ML307_IsComplete(packet, expect, id)` | 是否已收到完整最终结果 |
+| `ML307_TypeName(type)` | 类型名字符串 |
+
+典型类型：`ATI` / `CEREG` / `CIMI` / `CESQ` / `CGATT` / `SLEEP` / MQTT 连接与收发。
+
+---
+
+## EWM103-W15 WiFi AT (EWM103/ewm103.h)
+
+应用侧 Pack/Unpack 门面（不操作 UART）。手册：EWM103-W15 AT 指令手册 V1.1。
+
+| 接口 | 说明 |
+|------|------|
+| `EWM103_Pack(content, packet, size, &len)` | 按类型组包（CRLF 结尾） |
+| `EWM103_Unpack(packet, expect, &data)` | 解包 |
+| `EWM103_IsComplete(packet, expect)` | 按行识别 `OK`/`ERROR` 等最终结果 |
+| `EWM103_TypeName(type)` | 类型名字符串 |
+
+覆盖系统（`AT`/`GMR`/`ATE`/`SLEEP`…）、WiFi、TCP-IP、MQTT 等手册指令。
+
+---
+
+## AHT20 温湿度 (AHT20/aht20.h)
+
+| 接口 | 说明 |
+|------|------|
+| `AHT20_Init(addr7)` | 初始化 / 校准 |
+| `AHT20_Read(addr7, &data)` | 读取温度 (°C) 与湿度 (%RH) |
+
+默认地址：`AHT20_I2C_ADDR7`（`0x38`）。
 
 ---
 
