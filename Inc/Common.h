@@ -67,6 +67,20 @@ void AddCRC16(uint8_t *pBuffer, uint16_t unLen, uint8_t bIsLittleEndian);
  */
 uint8_t JudgeCRC16(const uint8_t *pBuffer, uint16_t unLen, uint8_t bIsLittleEndian);
 
+/** Fixed-width byte-order primitives used by protocol and register drivers. */
+uint16_t ReadBE16(const uint8_t *data);
+uint32_t ReadBE32(const uint8_t *data);
+uint64_t ReadBE64(const uint8_t *data);
+uint16_t ReadLE16(const uint8_t *data);
+uint32_t ReadLE32(const uint8_t *data);
+uint64_t ReadLE64(const uint8_t *data);
+void WriteBE16(uint8_t *data, uint16_t value);
+void WriteBE32(uint8_t *data, uint32_t value);
+void WriteBE64(uint8_t *data, uint64_t value);
+void WriteLE16(uint8_t *data, uint16_t value);
+void WriteLE32(uint8_t *data, uint32_t value);
+void WriteLE64(uint8_t *data, uint64_t value);
+
 /**
  * @brief 字节序转换 将大端的字节序的数值转换成 mcu一致的字节序的内容
  */

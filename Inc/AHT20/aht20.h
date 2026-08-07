@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "Bus/i2c_bus.h"
+
 /** AHT20 固定 7 位 I2C 地址（8 位写地址 0x70 / 读地址 0x71） */
 #define AHT20_I2C_ADDR7 (0x38U)
 
@@ -36,6 +38,7 @@ typedef struct {
  * @param addr7 7 位 I2C 地址，通常为 AHT20_I2C_ADDR7
  */
 AHT20_Status AHT20_Init(uint8_t addr7);
+void AHT20_SetBus(const I2C_Bus *bus);
 
 /**
  * @brief 触发一次测量并读取温湿度（阻塞，约 ≥80ms）

@@ -14,6 +14,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "Bus/i2c_bus.h"
+
 /**
  * @brief TMP117 I2C 7位地址定义（根据 ADD0 引脚配置，参考手册 Table 7-2）
  */
@@ -55,6 +57,7 @@ typedef struct {
  * @note 此函数会读取温度寄存器并转换为摄氏度，同时检查是否在医学有效区间（35-42°C）
  */
 TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp);
+void TMP117_SetBus(const I2C_Bus *bus);
 
 /**
  * @brief 阻塞式 设置 TMP117 工作模式

@@ -60,7 +60,7 @@ mx22_status_t MX22_Disconnect(void);
 bool MX22_IsConnected(void);
 
 /* ===== 透传数据 ===== */
-mx22_status_t MX22_SendData(uint8_t *data, uint16_t len);
+mx22_status_t MX22_SendData(const void *data, uint16_t len);
 
 /* ===== 配对相关 ===== */
 

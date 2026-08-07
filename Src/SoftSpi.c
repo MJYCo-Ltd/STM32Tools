@@ -18,13 +18,13 @@ __attribute__((weak)) void SPI_Write(uint8_t data) {
   uint8_t i;
   for (i = 0; i < 8; i++) {
     SCL_UNDER;
-    if (dat & 0x80) {
+    if (data & 0x80U) {
       SDA_HIGH;
     } else {
       SDA_UNDER;
     }
     SCL_HIGH;
-    dat <<= 1;
+    data <<= 1;
   }
 }
 

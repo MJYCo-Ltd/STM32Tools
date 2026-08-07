@@ -11,6 +11,11 @@
 #define SPI_SEND_CMD HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_RESET)
 #define SPI_SEND_DATA HAL_GPIO_WritePin(DC_GPIO_Port, DC_Pin, GPIO_PIN_SET)
 
+#define ST_DISPLAY_DC_PORT DC_GPIO_Port
+#define ST_DISPLAY_DC_PIN  DC_Pin
+#define ST_DISPLAY_CS_PORT CS_GPIO_Port
+#define ST_DISPLAY_CS_PIN  CS_Pin
+
 #define DISPLAY_SPI_PORT hspi1
 extern SPI_HandleTypeDef DISPLAY_SPI_PORT;
 

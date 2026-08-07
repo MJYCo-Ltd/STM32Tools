@@ -23,10 +23,14 @@ extern SPI_HandleTypeDef DISPLAY_SPI_PORT;
 
 #define ST7305_DC_PORT LCD_DC_GPIO_Port
 #define ST7305_DC_PIN  LCD_DC_Pin
+#define ST_DISPLAY_DC_PORT ST7305_DC_PORT
+#define ST_DISPLAY_DC_PIN  ST7305_DC_PIN
 
 #ifndef CFG_NO_CS
 #define ST7305_CS_PORT LCD_CS_GPIO_Port
 #define ST7305_CS_PIN  LCD_CS_Pin
+#define ST_DISPLAY_CS_PORT ST7305_CS_PORT
+#define ST_DISPLAY_CS_PIN  ST7305_CS_PIN
 #endif
 
 #define SPI_SEND_CMD                                                           \

@@ -22,13 +22,51 @@
 
 #define AHT20_RAW_FULL_SCALE 1048576.0f /* 2^20 */
 
-#ifdef PLATFORM_STM32
-#include "AHT20/aht20_User.c"
-#else
-AHT20_Status AHT20_I2C_Transmit(uint8_t addr7, const uint8_t *data,
-                                uint16_t length);
-AHT20_Status AHT20_I2C_Receive(uint8_t addr7, uint8_t *data, uint16_t length);
+static I2C_Bus s_default_bus;
+static const I2C_Bus *s_bus;
+
+#if defined(PLATFORM_STM32) || defined(USE_HAL_DRIVER)
+#include "main.h"
+extern I2C_HandleTypeDef hi2c1;
 #endif
+
+static const I2C_Bus *AHT20_GetBus(void) {
+#if defined(PLATFORM_STM32) || defined(USE_HAL_DRIVER)
+  if (s_bus == NULL) {
+    I2C_BusInitSTM32(&s_default_bus, &hi2c1, 100U);
+    s_bus = &s_default_bus;
+  }
+#endif
+  return s_bus;
+}
+
+void AHT20_SetBus(const I2C_Bus *bus) { s_bus = bus; }
+
+static AHT20_Status AHT20_TransferResult(I2C_BusResult result,
+                                         uint8_t receiving) {
+  if (result == I2C_BUS_OK) {
+    return AHT20_OK;
+  }
+  if (result == I2C_BUS_TIMEOUT) {
+    return AHT20_ERR_TIMEOUT;
+  }
+  if (result == I2C_BUS_INVALID_ARGUMENT) {
+    return AHT20_ERR_PARAM;
+  }
+  return (receiving != 0U) ? AHT20_ERR_READ_I2C : AHT20_ERR_WRITE_I2C;
+}
+
+static AHT20_Status AHT20_Transmit(uint8_t addr7, const uint8_t *data,
+                                   uint16_t length) {
+  return AHT20_TransferResult(
+      I2C_BusTransmit(AHT20_GetBus(), addr7, data, length), 0U);
+}
+
+static AHT20_Status AHT20_Receive(uint8_t addr7, uint8_t *data,
+                                  uint16_t length) {
+  return AHT20_TransferResult(
+      I2C_BusReceive(AHT20_GetBus(), addr7, data, length), 1U);
+}
 
 static uint8_t AHT20_CalcCrc8(const uint8_t *message, uint8_t num)
 {
@@ -57,7 +95,7 @@ static AHT20_Status AHT20_ReadStatus(uint8_t addr7, uint8_t *status)
     return AHT20_ERR_PARAM;
   }
 
-  result = AHT20_I2C_Receive(addr7, status, 1U);
+  result = AHT20_Receive(addr7, status, 1U);
   return result;
 }
 
@@ -97,7 +135,7 @@ AHT20_Status AHT20_Init(uint8_t addr7)
 
   /* Bit3=0 表示校准未使能，需发送初始化命令 */
   if ((status & AHT20_STATUS_CAL_Msk) == 0U) {
-    result = AHT20_I2C_Transmit(addr7, init_cmd, 3U);
+    result = AHT20_Transmit(addr7, init_cmd, 3U);
     if (result != AHT20_OK) {
       return result;
     }
@@ -130,7 +168,7 @@ AHT20_Status AHT20_Read(uint8_t addr7, AHT20_Data *data)
   data->temperature_c = 0.0f;
   data->humidity_rh = 0.0f;
 
-  result = AHT20_I2C_Transmit(addr7, trigger_cmd, 3U);
+  result = AHT20_Transmit(addr7, trigger_cmd, 3U);
   if (result != AHT20_OK) {
     return result;
   }
@@ -142,7 +180,7 @@ AHT20_Status AHT20_Read(uint8_t addr7, AHT20_Data *data)
     return (result == AHT20_ERR_TIMEOUT) ? AHT20_ERR_BUSY : result;
   }
 
-  result = AHT20_I2C_Receive(addr7, raw, 7U);
+  result = AHT20_Receive(addr7, raw, 7U);
   if (result != AHT20_OK) {
     return result;
   }

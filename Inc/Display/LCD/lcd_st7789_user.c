@@ -22,10 +22,14 @@ extern SPI_HandleTypeDef DISPLAY_SPI_PORT;
 /* 数据/指令选择引脚（DC：低电平=指令，高电平=数据） */
 #define ST7789_DC_PORT LCD_DC_GPIO_Port
 #define ST7789_DC_PIN LCD_DC_Pin
+#define ST_DISPLAY_DC_PORT ST7789_DC_PORT
+#define ST_DISPLAY_DC_PIN  ST7789_DC_PIN
 
 #ifndef CFG_NO_CS
 #define ST7789_CS_PORT ST7789_CS_GPIO_Port
 #define ST7789_CS_PIN ST7789_CS_Pin
+#define ST_DISPLAY_CS_PORT ST7789_CS_PORT
+#define ST_DISPLAY_CS_PIN  ST7789_CS_PIN
 #endif
 
 /* 背光控制：低电平关闭，高电平开启 */

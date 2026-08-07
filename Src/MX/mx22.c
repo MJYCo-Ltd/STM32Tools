@@ -1,7 +1,8 @@
 #include "MX/mx22.h"
 #include "MX/mx22_conf.h"
 
-#include <stdio.h>
+#include "AT/at_codec.h"
+
 #include <string.h>
 
 /* ================= 内部配置 ================= */
@@ -37,15 +38,32 @@ static mx22_status_t mx22_uart_recv(char *buf, uint16_t len) {
 
 /* 发送 AT 并判断 OK */
 static mx22_status_t mx22_send_at_ok(const char *cmd) {
-  mx22_uart_send_str(cmd);
+  if (mx22_uart_send_str(cmd) != MX22_OK)
+    return MX22_ERROR;
 
   if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
     return MX22_TIMEOUT;
 
-  if (strstr(rx_buf, "OK"))
+  if (AT_HasFinalResult(rx_buf) && strstr(rx_buf, "ERROR") == NULL)
     return MX22_OK;
 
   return MX22_ERROR;
+}
+
+static mx22_status_t mx22_query(const char *cmd, const char *prefix, char *buf,
+                                uint16_t len) {
+  uint8_t truncated = 0U;
+
+  if ((cmd == NULL) || (prefix == NULL) || (buf == NULL) || (len == 0U))
+    return MX22_ERROR;
+  if (mx22_uart_send_str(cmd) != MX22_OK)
+    return MX22_ERROR;
+  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
+    return MX22_TIMEOUT;
+  if (strstr(rx_buf, prefix) == NULL)
+    return MX22_ERROR;
+  AT_CopyText(buf, len, rx_buf, strlen(rx_buf), &truncated);
+  return (truncated == 0U) ? MX22_OK : MX22_ERROR;
 }
 
 /* ================= 模式控制 ================= */
@@ -84,32 +102,14 @@ mx22_status_t MX22_Init(void) {
 
 mx22_status_t MX22_GetVersion(char *buf, uint16_t len) {
   MX22_EnterCommandMode();
-  mx22_uart_send_str("AT+VER?\r\n");
-
-  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
-    return MX22_TIMEOUT;
-
-  if (strstr(rx_buf, "+VER:") == NULL)
-    return MX22_ERROR;
-
-  strncpy(buf, rx_buf, len - 1);
-  return MX22_OK;
+  return mx22_query("AT+VER?\r\n", "+VER:", buf, len);
 }
 
 /* ================= 蓝牙参数 ================= */
 
 mx22_status_t MX22_GetMAC(char *buf, uint16_t len) {
   MX22_EnterCommandMode();
-  mx22_uart_send_str("AT+MAC?\r\n");
-
-  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
-    return MX22_TIMEOUT;
-
-  if (strstr(rx_buf, "+MAC:") == NULL)
-    return MX22_ERROR;
-
-  strncpy(buf, rx_buf, len - 1);
-  return MX22_OK;
+  return mx22_query("AT+MAC?\r\n", "+MAC:", buf, len);
 }
 
 mx22_status_t MX22_SetSPPName(const char *name) {
@@ -118,7 +118,8 @@ mx22_status_t MX22_SetSPPName(const char *name) {
   if (!name || strlen(name) > 20)
     return MX22_ERROR;
 
-  snprintf(cmd, sizeof(cmd), "AT+DNAME=%s\r\n", name);
+  if (AT_Format(cmd, sizeof(cmd), "AT+DNAME=%s\r\n", name) != AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -130,7 +131,8 @@ mx22_status_t MX22_SetBLEName(const char *name) {
   if (!name || strlen(name) > 20)
     return MX22_ERROR;
 
-  snprintf(cmd, sizeof(cmd), "AT+LENAME=%s\r\n", name);
+  if (AT_Format(cmd, sizeof(cmd), "AT+LENAME=%s\r\n", name) != AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -157,7 +159,9 @@ mx22_status_t MX22_SetBaudrate(uint32_t baud) {
     return MX22_ERROR;
   }
 
-  snprintf(cmd, sizeof(cmd), "AT+URATE=%lu\r\n", baud);
+  if (AT_Format(cmd, sizeof(cmd), "AT+URATE=%lu\r\n",
+                (unsigned long)baud) != AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -172,14 +176,15 @@ bool MX22_IsConnected(void) {
 
 /* ================= 数据透传 ================= */
 
-mx22_status_t MX22_SendData(uint8_t *data, uint16_t len) {
+mx22_status_t MX22_SendData(const void *data, uint16_t len) {
   if (!data || len == 0)
     return MX22_ERROR;
 
   /* 文档：数传前必须进入 Data mode */
   MX22_EnterDataMode();
 
-  if (HAL_UART_Transmit(&MX22_UART, data, len, MX22_UART_TIMEOUT) != HAL_OK) {
+  if (HAL_UART_Transmit(&MX22_UART, (uint8_t *)data, len,
+                        MX22_UART_TIMEOUT) != HAL_OK) {
     return MX22_ERROR;
   }
 
@@ -190,7 +195,9 @@ mx22_status_t MX22_SendData(uint8_t *data, uint16_t len) {
 mx22_status_t MX22_EnablePairing(bool enable) {
   char cmd[32];
 
-  snprintf(cmd, sizeof(cmd), "AT+PINE=%d\r\n", enable ? 1 : 0);
+  if (AT_Format(cmd, sizeof(cmd), "AT+PINE=%d\r\n", enable ? 1 : 0) !=
+      AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -202,7 +209,8 @@ mx22_status_t MX22_SetPairingPin(const char *pin) {
   if (!pin || strlen(pin) == 0 || strlen(pin) > 16)
     return MX22_ERROR;
 
-  snprintf(cmd, sizeof(cmd), "AT+PIN=%s\r\n", pin);
+  if (AT_Format(cmd, sizeof(cmd), "AT+PIN=%s\r\n", pin) != AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -210,16 +218,7 @@ mx22_status_t MX22_SetPairingPin(const char *pin) {
 
 mx22_status_t MX22_GetPairingPin(char *buf, uint16_t len) {
   MX22_EnterCommandMode();
-  mx22_uart_send_str("AT+PIN?\r\n");
-
-  if (mx22_uart_recv(rx_buf, sizeof(rx_buf)) != MX22_OK)
-    return MX22_TIMEOUT;
-
-  if (strstr(rx_buf, "+PIN:") == NULL)
-    return MX22_ERROR;
-
-  strncpy(buf, rx_buf, len - 1);
-  return MX22_OK;
+  return mx22_query("AT+PIN?\r\n", "+PIN:", buf, len);
 }
 
 mx22_status_t MX22_WaitForConnection(uint32_t timeout_ms) {
@@ -271,7 +270,9 @@ mx22_status_t MX22_SetRadioMode(mx22_radio_mode_t mode) {
 mx22_status_t MX22_EnableBLE(bool enable) {
   char cmd[24];
 
-  snprintf(cmd, sizeof(cmd), "AT+BLE=%d\r\n", enable ? 1 : 0);
+  if (AT_Format(cmd, sizeof(cmd), "AT+BLE=%d\r\n", enable ? 1 : 0) !=
+      AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
@@ -280,7 +281,9 @@ mx22_status_t MX22_EnableBLE(bool enable) {
 mx22_status_t MX22_EnableSPP(bool enable) {
   char cmd[24];
 
-  snprintf(cmd, sizeof(cmd), "AT+SPP=%d\r\n", enable ? 1 : 0);
+  if (AT_Format(cmd, sizeof(cmd), "AT+SPP=%d\r\n", enable ? 1 : 0) !=
+      AT_CODEC_OK)
+    return MX22_ERROR;
 
   MX22_EnterCommandMode();
   return mx22_send_at_ok(cmd);
