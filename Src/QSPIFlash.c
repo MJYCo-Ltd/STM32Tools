@@ -1,272 +1,345 @@
-#include <QSPIFlash.h>
+#include "QSPIFlash.h"
+
+#include "Flash/nor_flash.h"
+
+#define CMD_WRITE_ENABLE     0x06U
+#define CMD_READ_STATUS1     0x05U
+#define CMD_READ_STATUS2     0x35U
+#define CMD_WRITE_STATUS2    0x31U
+#define CMD_READ_ID          0x9FU
+#define CMD_PAGE_PROGRAM     0x32U
+#define CMD_FAST_READ_QUAD   0xEBU
+#define CMD_SECTOR_ERASE     0x20U
+#define CMD_BLOCK_ERASE_64K  0xD8U
+#define CMD_CHIP_ERASE       0xC7U
 
 QSPI_FlashInfo QSPI_Flash;
 
-#define CMD_WRITE_ENABLE        0x06
-#define CMD_READ_STATUS1        0x05
-#define CMD_READ_STATUS2        0x35
-#define CMD_WRITE_STATUS2       0x31
-#define CMD_READ_ID             0x9F
+static NorFlash_Status ToNorStatus(HAL_StatusTypeDef status)
+{
+  if (status == HAL_OK) {
+    return NOR_FLASH_OK;
+  }
+  return (status == HAL_TIMEOUT) ? NOR_FLASH_ERR_TIMEOUT : NOR_FLASH_ERR_IO;
+}
 
-#define CMD_PAGE_PROGRAM        0x32
-#define CMD_FAST_READ_QUAD      0xEB
-
-#define CMD_SECTOR_ERASE        0x20
-#define CMD_BLOCK_ERASE         0xD8
-#define CMD_CHIP_ERASE          0xC7
+static HAL_StatusTypeDef FromNorStatus(NorFlash_Status status)
+{
+  if (status == NOR_FLASH_OK) {
+    return HAL_OK;
+  }
+  return (status == NOR_FLASH_ERR_TIMEOUT) ? HAL_TIMEOUT : HAL_ERROR;
+}
 
 static HAL_StatusTypeDef QSPI_WriteEnable(void)
 {
-    QSPI_CommandTypeDef cmd={0};
+  QSPI_CommandTypeDef command = {0};
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_WRITE_ENABLE;
-    cmd.AddressMode=QSPI_ADDRESS_NONE;
-    cmd.DataMode=QSPI_DATA_NONE;
-
-    return HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_WRITE_ENABLE;
+  command.AddressMode = QSPI_ADDRESS_NONE;
+  command.DataMode = QSPI_DATA_NONE;
+  return HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
 }
 
 static HAL_StatusTypeDef QSPI_WaitBusy(void)
 {
-    QSPI_CommandTypeDef cmd={0};
-    QSPI_AutoPollingTypeDef cfg={0};
+  QSPI_CommandTypeDef command = {0};
+  QSPI_AutoPollingTypeDef config = {0};
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_READ_STATUS1;
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_READ_STATUS1;
+  command.AddressMode = QSPI_ADDRESS_NONE;
+  command.DataMode = QSPI_DATA_1_LINE;
 
-    cmd.AddressMode=QSPI_ADDRESS_NONE;
-    cmd.DataMode=QSPI_DATA_1_LINE;
-
-    cfg.Match=0;
-    cfg.Mask=1;
-    cfg.MatchMode=QSPI_MATCH_MODE_AND;
-    cfg.Interval=0x10;
-    cfg.AutomaticStop=QSPI_AUTOMATIC_STOP_ENABLE;
-
-    return HAL_QSPI_AutoPolling(&hqspi,&cmd,&cfg,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  config.Match = 0U;
+  config.Mask = 1U;
+  config.MatchMode = QSPI_MATCH_MODE_AND;
+  config.Interval = 0x10U;
+  config.AutomaticStop = QSPI_AUTOMATIC_STOP_ENABLE;
+  return HAL_QSPI_AutoPolling(&hqspi, &command, &config,
+                              HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
 }
 
 static HAL_StatusTypeDef QSPI_EnableQuadMode(void)
 {
-    uint8_t sr2;
+  QSPI_CommandTypeDef command = {0};
+  uint8_t status2;
+  HAL_StatusTypeDef status;
 
-    QSPI_CommandTypeDef cmd={0};
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_READ_STATUS2;
+  command.AddressMode = QSPI_ADDRESS_NONE;
+  command.DataMode = QSPI_DATA_1_LINE;
+  command.NbData = 1U;
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_READ_STATUS2;
-    cmd.AddressMode=QSPI_ADDRESS_NONE;
-    cmd.DataMode=QSPI_DATA_1_LINE;
-    cmd.NbData=1;
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if (status == HAL_OK) {
+    status = HAL_QSPI_Receive(&hqspi, &status2,
+                              HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  }
+  if ((status != HAL_OK) || ((status2 & 0x02U) != 0U)) {
+    return status;
+  }
 
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-    HAL_QSPI_Receive(&hqspi,&sr2,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  status2 |= 0x02U;
+  status = QSPI_WriteEnable();
+  if (status != HAL_OK) {
+    return status;
+  }
+  command.Instruction = CMD_WRITE_STATUS2;
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if (status == HAL_OK) {
+    status = HAL_QSPI_Transmit(&hqspi, &status2,
+                               HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  }
+  return (status == HAL_OK) ? QSPI_WaitBusy() : status;
+}
 
-    if(!(sr2 & 0x02))
-    {
-        sr2|=0x02;
+static HAL_StatusTypeDef QSPI_ReadIDValue(uint32_t *jedec_id)
+{
+  QSPI_CommandTypeDef command = {0};
+  uint8_t id[3];
+  HAL_StatusTypeDef status;
 
-        QSPI_WriteEnable();
+  if (jedec_id == NULL) {
+    return HAL_ERROR;
+  }
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_READ_ID;
+  command.AddressMode = QSPI_ADDRESS_NONE;
+  command.DataMode = QSPI_DATA_1_LINE;
+  command.NbData = sizeof(id);
 
-        cmd.Instruction=CMD_WRITE_STATUS2;
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if (status == HAL_OK) {
+    status = HAL_QSPI_Receive(&hqspi, id, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  }
+  if (status == HAL_OK) {
+    *jedec_id = ((uint32_t)id[0] << 16) | ((uint32_t)id[1] << 8) | id[2];
+  }
+  return status;
+}
 
-        HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_QSPI_Transmit(&hqspi,&sr2,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+static void QSPI_PrepareFastRead(QSPI_CommandTypeDef *command,
+                                 uint32_t address, uint32_t length)
+{
+  *command = (QSPI_CommandTypeDef){0};
+  command->InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command->Instruction = CMD_FAST_READ_QUAD;
+  command->AddressMode = QSPI_ADDRESS_4_LINES;
+  command->AddressSize = QSPI_ADDRESS_24_BITS;
+  command->Address = address;
+  command->DataMode = QSPI_DATA_4_LINES;
+  command->DummyCycles = 6U;
+  command->NbData = length;
+}
 
-        QSPI_WaitBusy();
-    }
+static NorFlash_Status QSPI_ReadBackend(uint32_t address, uint8_t *data,
+                                        uint32_t length)
+{
+  QSPI_CommandTypeDef command;
+  HAL_StatusTypeDef status;
 
-    return HAL_OK;
+  QSPI_PrepareFastRead(&command, address, length);
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if (status == HAL_OK) {
+    status = HAL_QSPI_Receive(&hqspi, data, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  }
+  return ToNorStatus(status);
+}
+
+static NorFlash_Status QSPI_ProgramPageBackend(uint32_t address,
+                                               const uint8_t *data,
+                                               uint32_t length)
+{
+  QSPI_CommandTypeDef command = {0};
+  HAL_StatusTypeDef status;
+
+  status = QSPI_WriteEnable();
+  if (status != HAL_OK) {
+    return ToNorStatus(status);
+  }
+
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_PAGE_PROGRAM;
+  command.AddressMode = QSPI_ADDRESS_1_LINE;
+  command.AddressSize = QSPI_ADDRESS_24_BITS;
+  command.Address = address;
+  command.DataMode = QSPI_DATA_4_LINES;
+  command.NbData = length;
+
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if (status == HAL_OK) {
+    status = HAL_QSPI_Transmit(&hqspi, (uint8_t *)data,
+                               HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  }
+  if (status == HAL_OK) {
+    status = QSPI_WaitBusy();
+  }
+  return ToNorStatus(status);
+}
+
+static NorFlash_Status QSPI_EraseBackend(NorFlash_EraseType type,
+                                         uint32_t address)
+{
+  QSPI_CommandTypeDef command = {0};
+  HAL_StatusTypeDef status;
+
+  switch (type) {
+  case NOR_FLASH_ERASE_SECTOR:
+    command.Instruction = CMD_SECTOR_ERASE;
+    break;
+  case NOR_FLASH_ERASE_BLOCK64:
+    command.Instruction = CMD_BLOCK_ERASE_64K;
+    break;
+  default:
+    return NOR_FLASH_ERR_PARAM;
+  }
+
+  status = QSPI_WriteEnable();
+  if (status != HAL_OK) {
+    return ToNorStatus(status);
+  }
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.AddressMode = QSPI_ADDRESS_1_LINE;
+  command.AddressSize = QSPI_ADDRESS_24_BITS;
+  command.Address = address;
+  command.DataMode = QSPI_DATA_NONE;
+
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  return ToNorStatus((status == HAL_OK) ? QSPI_WaitBusy() : status);
+}
+
+static NorFlash_Status QSPI_EraseChipBackend(void)
+{
+  QSPI_CommandTypeDef command = {0};
+  HAL_StatusTypeDef status;
+
+  status = QSPI_WriteEnable();
+  if (status != HAL_OK) {
+    return ToNorStatus(status);
+  }
+  command.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+  command.Instruction = CMD_CHIP_ERASE;
+  command.AddressMode = QSPI_ADDRESS_NONE;
+  command.DataMode = QSPI_DATA_NONE;
+
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  return ToNorStatus((status == HAL_OK) ? QSPI_WaitBusy() : status);
 }
 
 uint32_t QSPI_Flash_ReadID(void)
 {
-    uint8_t id[3];
+  uint32_t id = 0U;
 
-    QSPI_CommandTypeDef cmd={0};
-
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_READ_ID;
-    cmd.AddressMode=QSPI_ADDRESS_NONE;
-    cmd.DataMode=QSPI_DATA_1_LINE;
-    cmd.NbData=3;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-    HAL_QSPI_Receive(&hqspi,id,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return (id[0]<<16)|(id[1]<<8)|id[2];
+  (void)QSPI_ReadIDValue(&id);
+  return id;
 }
 
 HAL_StatusTypeDef QSPI_Flash_Init(void)
 {
-    uint32_t id=QSPI_Flash_ReadID();
+  uint32_t capacity;
+  HAL_StatusTypeDef status = QSPI_ReadIDValue(&QSPI_Flash.ID);
 
-    QSPI_Flash.ID=id;
-
-    if((id & 0xFFFF)==0x4017)
-        QSPI_Flash.FlashSize=8*1024*1024;
-
-    if((id & 0xFFFF)==0x4018)
-        QSPI_Flash.FlashSize=16*1024*1024;
-
-    QSPI_Flash.PageSize=W25Q_PAGE_SIZE;
-    QSPI_Flash.SectorSize=W25Q_SECTOR_SIZE;
-
-    return QSPI_EnableQuadMode();
+  if (status != HAL_OK) {
+    return status;
+  }
+  capacity = NorFlash_CapacityFromJedec(QSPI_Flash.ID);
+  if ((capacity == 0U) || (capacity > UINT32_C(0x01000000))) {
+    return HAL_ERROR;
+  }
+  QSPI_Flash.FlashSize = capacity;
+  QSPI_Flash.PageSize = NOR_FLASH_PAGE_SIZE;
+  QSPI_Flash.SectorSize = NOR_FLASH_SECTOR_SIZE;
+  return QSPI_EnableQuadMode();
 }
 
-HAL_StatusTypeDef QSPI_Flash_Read(uint32_t addr,uint8_t *buf,uint32_t len)
+HAL_StatusTypeDef QSPI_Flash_Read(uint32_t address, uint8_t *data,
+                                  uint32_t length)
 {
-    QSPI_CommandTypeDef cmd={0};
+  NorFlash_Status status =
+      NorFlash_CheckRange(QSPI_Flash.FlashSize, address, length);
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_FAST_READ_QUAD;
-
-    cmd.AddressMode=QSPI_ADDRESS_4_LINES;
-    cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-    cmd.Address=addr;
-
-    cmd.DataMode=QSPI_DATA_4_LINES;
-    cmd.DummyCycles=6;
-    cmd.NbData=len;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return HAL_QSPI_Receive(&hqspi,buf,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  if ((status != NOR_FLASH_OK) || (data == NULL)) {
+    return HAL_ERROR;
+  }
+  return FromNorStatus(QSPI_ReadBackend(address, data, length));
 }
 
-HAL_StatusTypeDef QSPI_Flash_Read_DMA(uint32_t addr,uint8_t *buf,uint32_t len)
+HAL_StatusTypeDef QSPI_Flash_Read_DMA(uint32_t address, uint8_t *data,
+                                      uint32_t length)
 {
-    QSPI_CommandTypeDef cmd={0};
+  QSPI_CommandTypeDef command;
+  HAL_StatusTypeDef status;
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_FAST_READ_QUAD;
-
-    cmd.AddressMode=QSPI_ADDRESS_4_LINES;
-    cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-    cmd.Address=addr;
-
-    cmd.DataMode=QSPI_DATA_4_LINES;
-
-    cmd.DummyCycles=6;
-    cmd.NbData=len;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return HAL_QSPI_Receive_DMA(&hqspi,buf);
+  if ((data == NULL) ||
+      (NorFlash_CheckRange(QSPI_Flash.FlashSize, address, length) !=
+       NOR_FLASH_OK)) {
+    return HAL_ERROR;
+  }
+  QSPI_PrepareFastRead(&command, address, length);
+  status = HAL_QSPI_Command(&hqspi, &command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
+  return (status == HAL_OK) ? HAL_QSPI_Receive_DMA(&hqspi, data) : status;
 }
 
-HAL_StatusTypeDef QSPI_Flash_Write(uint32_t addr,uint8_t *buf,uint32_t len)
+HAL_StatusTypeDef QSPI_Flash_Write(uint32_t address, const uint8_t *data,
+                                   uint32_t length)
 {
-    QSPI_CommandTypeDef cmd={0};
+  NorFlash_Status status =
+      NorFlash_CheckRange(QSPI_Flash.FlashSize, address, length);
 
-    uint32_t current_addr=addr;
-    uint32_t end_addr=addr+len;
-    uint32_t size;
+  if ((status != NOR_FLASH_OK) || (data == NULL)) {
+    return HAL_ERROR;
+  }
+  while (length > 0U) {
+    const uint32_t chunk =
+        NorFlash_PageChunk(address, length, NOR_FLASH_PAGE_SIZE);
 
-    while(current_addr<end_addr)
-    {
-        size=W25Q_PAGE_SIZE-(current_addr%W25Q_PAGE_SIZE);
-
-        if(size>(end_addr-current_addr))
-            size=end_addr-current_addr;
-
-        QSPI_WriteEnable();
-
-        cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-        cmd.Instruction=CMD_PAGE_PROGRAM;
-
-        cmd.AddressMode=QSPI_ADDRESS_1_LINE;
-        cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-        cmd.Address=current_addr;
-
-        cmd.DataMode=QSPI_DATA_4_LINES;
-        cmd.NbData=size;
-
-        HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_QSPI_Transmit(&hqspi,buf,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-        QSPI_WaitBusy();
-
-        current_addr+=size;
-        buf+=size;
+    status = QSPI_ProgramPageBackend(address, data, chunk);
+    if (status != NOR_FLASH_OK) {
+      return FromNorStatus(status);
     }
-
-    return HAL_OK;
+    address += chunk;
+    data += chunk;
+    length -= chunk;
+  }
+  return HAL_OK;
 }
 
-HAL_StatusTypeDef QSPI_Flash_EraseSector(uint32_t addr)
+static HAL_StatusTypeDef QSPI_Erase(NorFlash_EraseType type, uint32_t address)
 {
-    QSPI_CommandTypeDef cmd={0};
+  const uint32_t erase_size = NorFlash_EraseSize(type);
+  NorFlash_Status status;
 
-    QSPI_WriteEnable();
-
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_SECTOR_ERASE;
-
-    cmd.AddressMode=QSPI_ADDRESS_1_LINE;
-    cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-    cmd.Address=addr;
-
-    cmd.DataMode=QSPI_DATA_NONE;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return QSPI_WaitBusy();
+  address = NorFlash_AlignDown(address, erase_size);
+  status = NorFlash_CheckRange(QSPI_Flash.FlashSize, address, erase_size);
+  return (status == NOR_FLASH_OK)
+             ? FromNorStatus(QSPI_EraseBackend(type, address))
+             : FromNorStatus(status);
 }
 
-HAL_StatusTypeDef QSPI_Flash_EraseBlock(uint32_t addr)
+HAL_StatusTypeDef QSPI_Flash_EraseSector(uint32_t address)
 {
-    QSPI_CommandTypeDef cmd={0};
+  return QSPI_Erase(NOR_FLASH_ERASE_SECTOR, address);
+}
 
-    QSPI_WriteEnable();
-
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_BLOCK_ERASE;
-
-    cmd.AddressMode=QSPI_ADDRESS_1_LINE;
-    cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-    cmd.Address=addr;
-
-    cmd.DataMode=QSPI_DATA_NONE;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return QSPI_WaitBusy();
+HAL_StatusTypeDef QSPI_Flash_EraseBlock(uint32_t address)
+{
+  return QSPI_Erase(NOR_FLASH_ERASE_BLOCK64, address);
 }
 
 HAL_StatusTypeDef QSPI_Flash_EraseChip(void)
 {
-    QSPI_CommandTypeDef cmd={0};
-
-    QSPI_WriteEnable();
-
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_CHIP_ERASE;
-
-    cmd.AddressMode=QSPI_ADDRESS_NONE;
-    cmd.DataMode=QSPI_DATA_NONE;
-
-    HAL_QSPI_Command(&hqspi,&cmd,HAL_QSPI_TIMEOUT_DEFAULT_VALUE);
-
-    return QSPI_WaitBusy();
+  return FromNorStatus(QSPI_EraseChipBackend());
 }
 
 HAL_StatusTypeDef QSPI_EnableMemoryMapped(void)
 {
-    QSPI_CommandTypeDef cmd={0};
-    QSPI_MemoryMappedTypeDef cfg={0};
+  QSPI_CommandTypeDef command;
+  QSPI_MemoryMappedTypeDef config = {0};
 
-    cmd.InstructionMode=QSPI_INSTRUCTION_1_LINE;
-    cmd.Instruction=CMD_FAST_READ_QUAD;
-
-    cmd.AddressMode=QSPI_ADDRESS_4_LINES;
-    cmd.AddressSize=QSPI_ADDRESS_24_BITS;
-
-    cmd.DataMode=QSPI_DATA_4_LINES;
-    cmd.DummyCycles=6;
-
-    cfg.TimeOutActivation=QSPI_TIMEOUT_COUNTER_DISABLE;
-
-    return HAL_QSPI_MemoryMapped(&hqspi,&cmd,&cfg);
+  QSPI_PrepareFastRead(&command, 0U, 0U);
+  config.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+  return HAL_QSPI_MemoryMapped(&hqspi, &command, &config);
 }

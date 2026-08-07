@@ -18,7 +18,7 @@
 
 ## SPI 显示统一接口 (Display/SPIDisplay.h)
 
-EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序**：先包含用户配置（`epd_user.c`、`lcd_st7789_user.c` 或 `lcd_st7305_user.c`），再包含 `SPIDisplay.h`。
+EPD 与 LCD 共用 SPI 传输接口。控制器驱动先包含对应的 `*_config.h`，再通过 `SPIDisplay.h` 使用兼容接口；初始化命令可由 `SPI_DisplayRunSequence()` 统一执行。
 
 | 接口 | 说明 |
 |------|------|
@@ -53,7 +53,7 @@ EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序*
 | `LCD_InvertColors(invert)` | 全屏颜色反显开关 |
 | `LCD_TearEffect(tear)` | 撕裂效应线开关 |
 
-### ST7789 用户配置 (Display/LCD/lcd_st7789_user.c)
+### ST7789 用户配置 (Display/LCD/lcd_st7789_config.h)
 
 需在工程中提供或修改：
 
@@ -87,7 +87,7 @@ EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序*
 | `EPD_IsOk()` | 自检 |
 | `EPD_GetInnerTemp()` | 获取内部温度 |
 
-### 用户配置 (Display/EPD/epd_user.c)
+### 用户配置 (Display/EPD/epd_config.h)
 
 需在工程中提供：
 
@@ -101,7 +101,7 @@ EPD 与 LCD 共用的 SPI 传输接口，头文件内联实现。**包含顺序*
 | `BUSY_GPIO_Port` / `BUSY_Pin` | 忙状态引脚 |
 | `DISPLAY_SPI_PORT` | SPI 句柄，如 `hspi1` |
 
-epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_DATA` 供 SPIDisplay.h 使用。
+`epd_config.h` 需定义 SPI 端口及 CS、DC 等板级信息，供 `SPIDisplay.h` 使用。
 
 **可重写弱函数**：
 
@@ -137,13 +137,10 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 | `CalCRC16(buffer, len)` | 计算 CRC16 |
 | `AddCRC16(buffer, len, isLittleEndian)` | 在缓冲区末尾添加 CRC |
 | `JudgeCRC16(buffer, len, isLittleEndian)` | 校验 CRC |
-| `ConvertBigEndian2Double/Word/HalfWord` | 大端转本地 |
-| `ConvertDouble/Word/HalfWord2BigEndian` | 本地转大端 |
-| `ConvertLittleEndian2*` / `Convert*2LittleEndian` | 小端转换 |
+| `ReadBE16/32` / `ReadLE16` | 按指定字节序读取固定宽度整数 |
+| `WriteBE16/32` / `WriteLE16` | 按指定字节序写入固定宽度整数 |
 | `Rand_range(start, end, align)` | 随机范围 [start, end) |
 | `Swap(a, b)` | 交换两个 uint16_t |
-
-**类型**：`DOUBLE_DATA`, `WORD_DATA`, `HALF_WORD_DATA`
 
 ---
 
@@ -280,7 +277,13 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 | `ReadDS4Value(addr, buf)` | 构建读取数据命令 |
 | `DS4Sleep()` / `DS4Wakeup()` | 睡眠/唤醒命令 |
 | `ReadDS4ValueResponse()` | 解析传感器数据 |
-| `GetShowInfo()` | 将数据转为可读字符串 |
+| `GetShowInfoSized()` | 将数据转为可读字符串，并限制输出缓冲区长度 |
+
+---
+
+## Modbus RTU 编解码 (Protocol/modbus_codec.h)
+
+提供请求组帧、CRC 追加、完整帧校验和地址/功能码匹配，供 ECSense 等 Modbus 设备复用。
 
 ---
 
@@ -329,6 +332,12 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 ## OV2640 摄像头 (Camera/ov2640.h)
 
 200 万像素摄像头，I2C 配置，DCMI 接收。需提供 `camera.h` 等 BSP 依赖。
+
+---
+
+## NOR Flash 公共辅助 (Flash/nor_flash.h)
+
+SPI 与 QSPI NOR 驱动共用 JEDEC 容量解析、地址范围检查、分页长度计算和擦除地址对齐；传输仍由各自后端实现，以便链接器裁剪未使用功能。
 
 ---
 

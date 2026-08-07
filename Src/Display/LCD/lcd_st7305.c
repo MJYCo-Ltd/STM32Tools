@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include <Display/LCD/lcd.h>
-#include <Display/LCD/lcd_st7305_user.c>
+#include <Display/LCD/lcd_st7305_config.h>
 #include <Display/SPIDisplay.h>
 
 /* ST7305 commands. */
@@ -48,6 +48,8 @@
 static uint8_t lcd_buffer[ST7305_BUFFER_SIZE];
 static ROTATION lcd_rotation = ST7305_DEFAULT_ROTATION;
 
+static void ST7305_Delay(uint32_t delay_ms) { osDelay(delay_ms); }
+
 static void ST7305_Send(uint8_t command, const uint8_t *data, size_t length) {
   SPI_SendCommand(command);
   if ((data != NULL) && (length != 0U)) {
@@ -92,66 +94,63 @@ void LCD_Reset(void) {
 }
 
 void LCD_Init(void) {
+  static const uint8_t nvm_load[] = {ST7305_NVM_LOAD_0,
+                                      ST7305_NVM_LOAD_1};
+  static const uint8_t booster[] = {0x01U};
+  static const uint8_t gate_voltage[] = {ST7305_GATE_VOLTAGE_0,
+                                         ST7305_GATE_VOLTAGE_1};
   static const uint8_t vshp[] = ST7305_VSHP_VALUES;
   static const uint8_t vslp[] = ST7305_VSLP_VALUES;
   static const uint8_t vshn[] = ST7305_VSHN_VALUES;
   static const uint8_t vsln[] = ST7305_VSLN_VALUES;
+  static const uint8_t oscillator[] = {ST7305_OSC_VALUE, 0xE9U};
+  static const uint8_t frame_rate[] = {ST7305_FRAME_RATE};
   static const uint8_t hpm_eq[] = ST7305_HPM_EQ_VALUES;
   static const uint8_t lpm_eq[] = ST7305_LPM_EQ_VALUES;
   static const uint8_t gate_timing[] = ST7305_GATE_TIMING_VALUES;
-  uint8_t data[2];
+  static const uint8_t source_eq[] = {0x13U};
+  static const uint8_t gate_lines[] = {ST7305_GATE_LINES};
+  static const uint8_t vshl_select[] = {0x00U};
+  static const uint8_t madctl[] = {ST7305_MADCTL_VALUE};
+  static const uint8_t data_format[] = {0x11U};
+  static const uint8_t gamma[] = {0x20U};
+  static const uint8_t panel[] = {0x29U};
+  static const uint8_t tear[] = {0x00U};
+  static const uint8_t auto_power_down[] = {0xFFU};
+  static const uint8_t clear_ram[] = {0x4FU};
+  static const SPI_DisplayCommand init_sequence[] = {
+      {ST7305_NVM_LOAD, nvm_load, sizeof(nvm_load), 0U},
+      {ST7305_BOOSTER, booster, sizeof(booster), 0U},
+      {ST7305_VG, gate_voltage, sizeof(gate_voltage), 0U},
+      {ST7305_VSHP, vshp, sizeof(vshp), 0U},
+      {ST7305_VSLP, vslp, sizeof(vslp), 0U},
+      {ST7305_VSHN, vshn, sizeof(vshn), 0U},
+      {ST7305_VSLN, vsln, sizeof(vsln), 0U},
+      {ST7305_OSC, oscillator, sizeof(oscillator), 0U},
+      {ST7305_FRAMERATE, frame_rate, sizeof(frame_rate), 0U},
+      {ST7305_HPM_EQ, hpm_eq, sizeof(hpm_eq), 0U},
+      {ST7305_LPM_EQ, lpm_eq, sizeof(lpm_eq), 0U},
+      {0x62U, gate_timing, sizeof(gate_timing), 0U},
+      {ST7305_SOURCE_EQ, source_eq, sizeof(source_eq), 0U},
+      {ST7305_GATESET, gate_lines, sizeof(gate_lines), 0U},
+      {ST7305_SLPOUT, NULL, 0U, 120U},
+      {ST7305_VSHLSEL, vshl_select, sizeof(vshl_select), 0U},
+      {ST7305_MADCTL, madctl, sizeof(madctl), 0U},
+      {ST7305_DTFORM, data_format, sizeof(data_format), 0U},
+      {ST7305_GAMAMS, gamma, sizeof(gamma), 0U},
+      {ST7305_PNLSET, panel, sizeof(panel), 0U},
+      {ST7305_TEON, tear, sizeof(tear), 0U},
+      {ST7305_AUTOPD, auto_power_down, sizeof(auto_power_down), 0U},
+      {ST7305_HPM, NULL, 0U, 0U},
+      {ST7305_INVOFF, NULL, 0U, 0U},
+      {ST7305_CLEAR_RAM, clear_ram, sizeof(clear_ram), 0U},
+      {ST7305_DISPON, NULL, 0U, 100U}};
 
   memset(lcd_buffer, 0, sizeof(lcd_buffer));
   LCD_Reset();
-
-  data[0] = ST7305_NVM_LOAD_0;
-  data[1] = ST7305_NVM_LOAD_1;
-  ST7305_Send(ST7305_NVM_LOAD, data, 2U);
-  data[0] = 0x01U;
-  ST7305_Send(ST7305_BOOSTER, data, 1U);
-  data[0] = ST7305_GATE_VOLTAGE_0;
-  data[1] = ST7305_GATE_VOLTAGE_1;
-  ST7305_Send(ST7305_VG, data, 2U);
-  ST7305_Send(ST7305_VSHP, vshp, sizeof(vshp));
-  ST7305_Send(ST7305_VSLP, vslp, sizeof(vslp));
-  ST7305_Send(ST7305_VSHN, vshn, sizeof(vshn));
-  ST7305_Send(ST7305_VSLN, vsln, sizeof(vsln));
-  data[0] = ST7305_OSC_VALUE;
-  data[1] = 0xE9U;
-  ST7305_Send(ST7305_OSC, data, 2U);
-  data[0] = ST7305_FRAME_RATE;
-  ST7305_Send(ST7305_FRAMERATE, data, 1U);
-  ST7305_Send(ST7305_HPM_EQ, hpm_eq, sizeof(hpm_eq));
-  ST7305_Send(ST7305_LPM_EQ, lpm_eq, sizeof(lpm_eq));
-  ST7305_Send(0x62U, gate_timing, sizeof(gate_timing));
-  data[0] = 0x13U;
-  ST7305_Send(ST7305_SOURCE_EQ, data, 1U);
-  data[0] = ST7305_GATE_LINES;
-  ST7305_Send(ST7305_GATESET, data, 1U);
-
-  SPI_SendCommand(ST7305_SLPOUT);
-  osDelay(120U);
-
-  data[0] = 0x00U;
-  ST7305_Send(ST7305_VSHLSEL, data, 1U);
-  data[0] = ST7305_MADCTL_VALUE;
-  ST7305_Send(ST7305_MADCTL, data, 1U);
-  data[0] = 0x11U; /* XDE off; every 24-bit GRAM unit uses three writes. */
-  ST7305_Send(ST7305_DTFORM, data, 1U);
-  data[0] = 0x20U; /* Monochrome mode. */
-  ST7305_Send(ST7305_GAMAMS, data, 1U);
-  data[0] = 0x29U;
-  ST7305_Send(ST7305_PNLSET, data, 1U);
-  data[0] = 0x00U;
-  ST7305_Send(ST7305_TEON, data, 1U);
-  data[0] = 0xFFU;
-  ST7305_Send(ST7305_AUTOPD, data, 1U);
-  SPI_SendCommand(ST7305_HPM);
-  SPI_SendCommand(ST7305_INVOFF);
-  data[0] = 0x4FU;
-  ST7305_Send(ST7305_CLEAR_RAM, data, 1U);
-  SPI_SendCommand(ST7305_DISPON);
-  osDelay(100U);
+  (void)SPI_DisplayRunSequence(
+      SPI_GetDisplayBus(), init_sequence,
+      sizeof(init_sequence) / sizeof(init_sequence[0]), ST7305_Delay);
 
   LCD_Refresh();
 }

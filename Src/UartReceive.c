@@ -27,10 +27,25 @@ static Uart_Info **pUartInfoArray = NULL;
 static uint8_t uUartIndex = 0;
 static uint8_t uUartCapacity = 0;
 
-#define UART_RECEIVE_QUEUE_DEPTH 16U
+#define UART_RECEIVE_QUEUE_DEPTH 16U
 
-_Static_assert((sizeof(UartQueueInfo) % sizeof(uint32_t)) == 0U,
-               "UART queue item must be 32-bit aligned");
+_Static_assert((sizeof(UartQueueInfo) % sizeof(uint32_t)) == 0U,
+               "UART queue item must be 32-bit aligned");
+
+static Uart_Info *FindUartInfo(const UART_HandleTypeDef *uart) {
+  uint8_t index;
+
+  if (uart == NULL) {
+    return NULL;
+  }
+  for (index = 0U; index < uUartIndex; ++index) {
+    Uart_Info *info = pUartInfoArray[index];
+    if ((info != NULL) && (info->pHUart == uart)) {
+      return info;
+    }
+  }
+  return NULL;
+}
 
 static HAL_StatusTypeDef StartReceive(Uart_Info *pUartInfo) {
   HAL_StatusTypeDef status;
@@ -164,15 +179,15 @@ void StopReceiveUartInfo(uint8_t uId) {
 }
 
 /// DMA满了或者数据传输完毕的回调函数
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
-  for (uint8_t index = 0; index < uUartIndex; ++index) {
-    Uart_Info *pUartInfo = pUartInfoArray[index];
-    uint8_t *ready;
-    if (pHUart != pUartInfo->pHUart) {
-      continue;
-    }
-    if (nSize > UART_RECEIVE_BUFFER_LENGTH) {
-      nSize = UART_RECEIVE_BUFFER_LENGTH;
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
+  Uart_Info *pUartInfo = FindUartInfo(pHUart);
+  uint8_t *ready;
+
+  if (pUartInfo == NULL) {
+    return;
+  }
+    if (nSize > UART_RECEIVE_BUFFER_LENGTH) {
+      nSize = UART_RECEIVE_BUFFER_LENGTH;
     }
 
     /* 先切缓冲并重启 DMA，再搬数据入队，避免回显后的 OK 落在停收窗口 */
@@ -191,19 +206,15 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
     {
       pUartInfo->stAllIOInfo.unReciveCount += nSize;
     }
-    break;
-  }
-}
-
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *pHUart) {
-  for (uint8_t index = 0; index < uUartIndex; ++index) {
-    Uart_Info *pUartInfo = pUartInfoArray[index];
-    if ((pUartInfo != NULL) && (pHUart == pUartInfo->pHUart)) {
-      (void)StartReceive(pUartInfo);
-      break;
-    }
-  }
-}
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *pHUart) {
+  Uart_Info *pUartInfo = FindUartInfo(pHUart);
+
+  if (pUartInfo != NULL) {
+    (void)StartReceive(pUartInfo);
+  }
+}
 
 /// 定时处理数据
 void ProcessUart(void) {
@@ -238,15 +249,14 @@ const IOInfo *GetUartIOInfo(uint8_t uId) {
 }
 
 /// 更新串口发送数据
-void UpdateUartSendInfo(UART_HandleTypeDef *pHUart, uint16_t unLength) {
-  for (uint8_t index = 0; index < uUartIndex; ++index) {
-    Uart_Info *pUartInfo = pUartInfoArray[index];
-    if (pHUart == pUartInfo->pHUart) {
-      pUartInfo->stAllIOInfo.unSendCount += unLength;
-    }
-  }
-}
+void UpdateUartSendInfo(UART_HandleTypeDef *pHUart, uint16_t unLength) {
+  Uart_Info *pUartInfo = FindUartInfo(pHUart);
+
+  if (pUartInfo != NULL) {
+    pUartInfo->stAllIOInfo.unSendCount += unLength;
+  }
+}
 
 /// 获取管理里面的串口数量
 uint8_t GetUartCount(void) { return (uUartIndex); }
-
+

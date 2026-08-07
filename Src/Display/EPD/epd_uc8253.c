@@ -48,7 +48,7 @@ uint8_t g_fast = 0;
 #define PANEL_SETTING_KW (1 << 4) // 黑白两色
 ///!EPD_CMD_PANEL_SETTING
 
-#include <Display/EPD/epd_user.c>
+#include <Display/EPD/epd_config.h>
 #include <Display/SPIDisplay.h>
 
 COLOR RED={255,0,0},BLACK={0,0,0};

@@ -11,16 +11,6 @@
 #include <stddef.h>
 #include <string.h>
 
-static int HasToken(const char *raw, const char *token)
-{
-  return (raw != NULL) && (strstr(raw, token) != NULL);
-}
-
-static void CopyCapped(char *dst, size_t dst_size, const char *src)
-{
-  AT_CopyText(dst, dst_size, src, (src != NULL) ? strlen(src) : 0U, NULL);
-}
-
 static void CollectPlusLines(const char *raw, const char *prefix, char *out,
                              size_t out_size)
 {
@@ -80,11 +70,12 @@ int EWM103_ResponseIsComplete(const char *raw, EWM103_Type expect)
   }
   /* Manual §5.2.5 / MQTT: wait for prompt or final SEND/MQTT result. */
   if ((expect == EWM103_TYPE_CIPSEND) || (expect == EWM103_TYPE_MQTTPUBRAW)) {
-    if (HasToken(raw, ">")) {
+    if (AT_HasToken(raw, ">")) {
       return 1;
     }
-    if (HasToken(raw, "SEND OK") || HasToken(raw, "SEND FAIL") ||
-        HasToken(raw, "+MQTTPUBRAW:OK") || HasToken(raw, "+MQTTPUBRAW:FAIL") ||
+    if (AT_HasToken(raw, "SEND OK") || AT_HasToken(raw, "SEND FAIL") ||
+        AT_HasToken(raw, "+MQTTPUBRAW:OK") ||
+        AT_HasToken(raw, "+MQTTPUBRAW:FAIL") ||
         AT_HasFinalResult(raw)) {
       return 1;
     }
@@ -92,12 +83,13 @@ int EWM103_ResponseIsComplete(const char *raw, EWM103_Type expect)
   }
   /* Manual §6.2.2: +MQTTCONN:OK / +MQTTCONN:ERROR */
   if (expect == EWM103_TYPE_MQTTCONN) {
-    return HasToken(raw, "+MQTTCONN:OK") || HasToken(raw, "+MQTTCONN:ERROR") ||
+    return AT_HasToken(raw, "+MQTTCONN:OK") ||
+           AT_HasToken(raw, "+MQTTCONN:ERROR") ||
            AT_HasFinalResult(raw);
   }
   /* Manual §5.2.4 +++ : ENTER AT MODE */
   if (expect == EWM103_TYPE_EXIT_TRANSPARENT) {
-    return HasToken(raw, "ENTER AT MODE") || AT_HasFinalResult(raw);
+    return AT_HasToken(raw, "ENTER AT MODE") || AT_HasFinalResult(raw);
   }
   /* Manual §3.2.x / §4 / §5: final result line is OK or ERROR. */
   return AT_HasFinalResult(raw);
@@ -112,23 +104,24 @@ EWM103_Result EWM103_ParseResponse(const char *raw, EWM103_Type expect,
   memset(out, 0, sizeof(*out));
   out->type = expect;
   out->value = -1;
-  CopyCapped(out->name, sizeof(out->name), EWM103_TypeName(expect));
+  AT_CopyString(out->name, sizeof(out->name), EWM103_TypeName(expect), NULL);
 
-  if (HasToken(raw, "ERROR") || HasToken(raw, "SEND FAIL") ||
-      HasToken(raw, "+MQTTCONN:ERROR") || HasToken(raw, "+MQTTPUBRAW:FAIL")) {
+  if (AT_HasErrorResult(raw) || AT_HasToken(raw, "SEND FAIL") ||
+      AT_HasToken(raw, "+MQTTCONN:ERROR") ||
+      AT_HasToken(raw, "+MQTTPUBRAW:FAIL")) {
     out->error = 1U;
     CollectNonAtBody(raw, out->text, sizeof(out->text));
     if (out->text[0] == '\0') {
-      CopyCapped(out->text, sizeof(out->text), "ERROR");
+      AT_CopyString(out->text, sizeof(out->text), "ERROR", NULL);
     }
     return EWM103_RESULT_ERROR_RESPONSE;
   }
 
   if ((expect == EWM103_TYPE_CIPSEND) || (expect == EWM103_TYPE_MQTTPUBRAW)) {
-    if (HasToken(raw, ">") && !HasToken(raw, "SEND OK") &&
-        !HasToken(raw, "+MQTTPUBRAW:OK")) {
+    if (AT_HasToken(raw, ">") && !AT_HasToken(raw, "SEND OK") &&
+        !AT_HasToken(raw, "+MQTTPUBRAW:OK")) {
       out->need_payload = 1U;
-      CopyCapped(out->text, sizeof(out->text), ">");
+      AT_CopyString(out->text, sizeof(out->text), ">", NULL);
       return EWM103_RESULT_NEED_PAYLOAD;
     }
   }
@@ -217,9 +210,9 @@ EWM103_Result EWM103_ParseResponse(const char *raw, EWM103_Type expect,
     CollectPlusLines(raw, "+UART_DEF", out->text, sizeof(out->text));
     break;
   case EWM103_TYPE_MQTTCONN:
-    if (HasToken(raw, "+MQTTCONN:OK")) {
+    if (AT_HasToken(raw, "+MQTTCONN:OK")) {
       out->value = 1;
-      CopyCapped(out->text, sizeof(out->text), "connected");
+      AT_CopyString(out->text, sizeof(out->text), "connected", NULL);
     } else {
       CollectPlusLines(raw, "+MQTTCONN", out->text, sizeof(out->text));
     }
@@ -230,15 +223,15 @@ EWM103_Result EWM103_ParseResponse(const char *raw, EWM103_Type expect,
   default:
     CollectNonAtBody(raw, out->text, sizeof(out->text));
     if (out->text[0] == '\0') {
-      CopyCapped(out->text, sizeof(out->text), "OK");
+      AT_CopyString(out->text, sizeof(out->text), "OK", NULL);
     }
     break;
   }
 
-  if (HasToken(raw, "+IPD")) {
+  if (AT_HasToken(raw, "+IPD")) {
     CollectPlusLines(raw, "+IPD", out->payload, sizeof(out->payload));
   }
-  if (HasToken(raw, "+MQTTSUBRECV")) {
+  if (AT_HasToken(raw, "+MQTTSUBRECV")) {
     CollectPlusLines(raw, "+MQTTSUBRECV", out->payload, sizeof(out->payload));
   }
   return EWM103_RESULT_OK;

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "Common.h"
 #include "ECSense.h"
+#include "Protocol/modbus_codec.h"
 
 /// 指令类型枚举
 typedef enum {
@@ -39,14 +40,14 @@ static const uint8_t s_ModifyAddrRespHeader[] = {
     0x44};
 #define MODIFY_ADDR_RESP_HEADER_SIZE (sizeof(s_ModifyAddrRespHeader))
 
-static const uint8_t s_ReadCmdHeader[] = {MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_READ,0x20,0x00,0x00,0x08};
-#define READ_CMD_HEADER_SIZE (sizeof(s_ReadCmdHeader))
+static const uint8_t s_ReadPdu[] = {ECSENSE_DS4_CMD_READ, 0x20, 0x00, 0x00,
+                                    0x08};
 
-static const uint8_t s_SleepCmd[]={MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_WRITE,0x20,0x60,0x00,0x01,0x02,0x00,0x01};
-#define SLEEP_HEADER_SIZE (sizeof(s_SleepCmd))
+static const uint8_t s_SleepPdu[] = {ECSENSE_DS4_CMD_WRITE, 0x20, 0x60, 0x00,
+                                     0x01, 0x02, 0x00, 0x01};
 
-static const uint8_t s_WakeUpCmd[]={MODBUS_ADDR_MIN,ECSENSE_DS4_CMD_WRITE,0x20,0x70,0x00,0x02,0x04,0x00,0x01,0x00,0x01};
-#define WAKEUP_HEADER_SIZE (sizeof(s_WakeUpCmd))
+static const uint8_t s_WakeUpPdu[] = {ECSENSE_DS4_CMD_WRITE, 0x20, 0x70, 0x00,
+                                      0x02, 0x04, 0x00, 0x01, 0x00, 0x01};
 
 static const char* s_csUnKnow="UNKNOWN";
 /// 传感器类型到气体字符串的查找表
@@ -134,8 +135,8 @@ static const struct {
 
 /// 根据传感器类型获取对应的气体字符串
 const char *ECSense_GetGasString(ECSense_DS4_Type type) {
-  static uint8_t i;
-  for (i = 0; i < SENSOR_GAS_STRING_MAP_SIZE; i++) {
+  size_t i;
+  for (i = 0U; i < SENSOR_GAS_STRING_MAP_SIZE; ++i) {
     if (s_SensorGasStringMap[i].type == type) {
       return s_SensorGasStringMap[i].gasString;
     }
@@ -145,8 +146,8 @@ const char *ECSense_GetGasString(ECSense_DS4_Type type) {
 
 /// 根据传感器单位类型获取对应的字符串
 const char *ECSense_GetUnitString(ECSense_DS4_Unit unitType) {
-  static uint8_t i;
-  for (i = 0; i < SENSOR_UNIT_STRING_MAP_SIZE; i++) {
+  size_t i;
+  for (i = 0U; i < SENSOR_UNIT_STRING_MAP_SIZE; ++i) {
     if (s_SensorUnitStringMap[i].type == unitType) {
       return s_SensorUnitStringMap[i].unitString;
     }
@@ -167,22 +168,22 @@ uint16_t ModifyAddr(uint8_t newAddr, uint8_t *pOutBuffer) {
 
   // 1. 复制指令头
   memcpy(pOutBuffer, s_ModifyAddrCmdHeader, MODIFY_ADDR_CMD_HEADER_SIZE);
-  uint16_t index = MODIFY_ADDR_CMD_HEADER_SIZE;
+  const size_t dataLength = MODIFY_ADDR_CMD_HEADER_SIZE + 1U;
 
   // 2. 添加地址
-  pOutBuffer[index] = newAddr;
-  index += 3;
+  pOutBuffer[MODIFY_ADDR_CMD_HEADER_SIZE] = newAddr;
 
   // 3. 计算CRC（对指令头+地址计算CRC）
-  AddCRC16(pOutBuffer, index, 1);
-  return (index); // 返回总长度
+  return (uint16_t)Modbus_AppendCrc(
+      pOutBuffer, dataLength, dataLength + MODBUS_RTU_CRC_SIZE);
 }
 
 /// 解析修改Modbus地址的返回响应
 uint8_t ModifyAddrResponse(const uint8_t *pResponse, uint16_t uResponseLen,
                            uint8_t *pAddr) {
   /// 检查最小长度：指令头(10) + 地址(1) + CRC(2)
-  if (uResponseLen < (MODIFY_ADDR_RESP_HEADER_SIZE + 3)) {
+  if ((pResponse == NULL) || (pAddr == NULL) ||
+      (uResponseLen < (MODIFY_ADDR_RESP_HEADER_SIZE + 3U))) {
     return 0;
   }
 
@@ -201,7 +202,7 @@ uint8_t ModifyAddrResponse(const uint8_t *pResponse, uint16_t uResponseLen,
   }
 
   // 4. 验证CRC（对指令头+地址计算CRC）
-  if (0 == JudgeCRC16(pResponse, MODIFY_ADDR_RESP_HEADER_SIZE + 3, 1)) {
+  if (!Modbus_ValidateFrame(pResponse, MODIFY_ADDR_RESP_HEADER_SIZE + 3U)) {
     return 0; // CRC校验失败
   }
 
@@ -212,86 +213,82 @@ uint8_t ModifyAddrResponse(const uint8_t *pResponse, uint16_t uResponseLen,
 
 /// 获取读取DS4值的缓存
 uint16_t ReadDS4Value(uint8_t nAddr, uint8_t *pOutBuffer) {
-  // 验证地址范围
-  if (nAddr < MODBUS_ADDR_MIN || nAddr > MODBUS_ADDR_MAX) {
+  if ((pOutBuffer == NULL) || (nAddr < MODBUS_ADDR_MIN) ||
+      (nAddr > MODBUS_ADDR_MAX)) {
     return 0;
   }
-
-  memcpy(pOutBuffer, s_ReadCmdHeader, READ_CMD_HEADER_SIZE);
-  uint16_t index = READ_CMD_HEADER_SIZE + 2;
-  pOutBuffer[0] = nAddr;
-  AddCRC16(pOutBuffer, index, 1);
-
-  return (index);
+  return (uint16_t)Modbus_BuildRequest(
+      nAddr, s_ReadPdu, sizeof(s_ReadPdu), pOutBuffer,
+      1U + sizeof(s_ReadPdu) + MODBUS_RTU_CRC_SIZE);
 }
 
 uint8_t ReadDS4ValueResponse(const uint8_t *pResponse, uint16_t uResponseLen,
                              ECSense_DS4_Value *pEcsValue) {
-  if (uResponseLen < 21) {
+  uint8_t address;
+  uint32_t floatBits;
+
+  if ((pResponse == NULL) || (pEcsValue == NULL) || (uResponseLen < 21U)) {
     return (0);
   }
-  pEcsValue->uAddr = pResponse[0];
-  if (pEcsValue->uAddr < MODBUS_ADDR_MIN ||
-      pEcsValue->uAddr > MODBUS_ADDR_MAX) {
+  address = pResponse[0];
+  if ((address < MODBUS_ADDR_MIN) || (address > MODBUS_ADDR_MAX)) {
+    return (0);
+  }
+  if (!Modbus_ResponseMatches(pResponse, 21U, address,
+                              ECSENSE_DS4_CMD_READ)) {
     return (0);
   }
 
-  if (ECSENSE_DS4_CMD_READ != pResponse[1]) {
-    return (0);
-  }
-
-  if (0 == JudgeCRC16(pResponse, 21, 1)) {
-    return (0); // CRC校验失败
-  }
-
-  WORD_DATA data;
-  ConvertBigEndian2Word(pResponse + 3, &data);
-  pEcsValue->fSmoothValue = data.fData;
-
-  HALF_WORD_DATA halfData;
-  ConvertBigEndian2HalfWord(pResponse + 7, &halfData);
-  pEcsValue->uMaxRange = halfData.n16Data;
+  pEcsValue->uAddr = address;
+  floatBits = ReadBE32(pResponse + 3U);
+  memcpy(&pEcsValue->fSmoothValue, &floatBits,
+         sizeof(pEcsValue->fSmoothValue));
+  pEcsValue->uMaxRange = ReadBE16(pResponse + 7U);
 
   pEcsValue->emGasType = pResponse[10];
   pEcsValue->emUnitType = pResponse[12];
 
   pEcsValue->uHealth = pResponse[14];
-  ConvertBigEndian2Word(pResponse + 15, &data);
-  pEcsValue->fRealValue = data.fData;
+  floatBits = ReadBE32(pResponse + 15U);
+  memcpy(&pEcsValue->fRealValue, &floatBits, sizeof(pEcsValue->fRealValue));
 
   return (1);
 }
 
-uint16_t DS4Sleep(uint8_t nAddr,uint8_t* pOutBuffer){
-  if (nAddr < MODBUS_ADDR_MIN || nAddr > MODBUS_ADDR_MAX) {
+uint16_t DS4Sleep(uint8_t nAddr, uint8_t *pOutBuffer) {
+  if ((pOutBuffer == NULL) || (nAddr < MODBUS_ADDR_MIN) ||
+      (nAddr > MODBUS_ADDR_MAX)) {
     return 0;
   }
-
-  memcpy(pOutBuffer, s_SleepCmd, SLEEP_HEADER_SIZE);
-  uint16_t index = SLEEP_HEADER_SIZE + 2;
-  pOutBuffer[0] = nAddr;
-  AddCRC16(pOutBuffer, index, 1);
-
-  return (index);
+  return (uint16_t)Modbus_BuildRequest(
+      nAddr, s_SleepPdu, sizeof(s_SleepPdu), pOutBuffer,
+      1U + sizeof(s_SleepPdu) + MODBUS_RTU_CRC_SIZE);
 }
 
-uint16_t DS4Wakeup(uint8_t nAddr,uint8_t* pOutBuffer){
-  if (nAddr < MODBUS_ADDR_MIN || nAddr > MODBUS_ADDR_MAX) {
+uint16_t DS4Wakeup(uint8_t nAddr, uint8_t *pOutBuffer) {
+  uint8_t pdu[sizeof(s_WakeUpPdu)];
+
+  if ((pOutBuffer == NULL) || (nAddr < MODBUS_ADDR_MIN) ||
+      (nAddr > MODBUS_ADDR_MAX)) {
     return 0;
   }
-
-  memcpy(pOutBuffer, s_WakeUpCmd, WAKEUP_HEADER_SIZE);
-  uint16_t index = WAKEUP_HEADER_SIZE + 2;
-  pOutBuffer[0] = pOutBuffer[8] = nAddr;
-  AddCRC16(pOutBuffer, index, 1);
-
-  return (index);
+  memcpy(pdu, s_WakeUpPdu, sizeof(pdu));
+  pdu[7] = nAddr;
+  return (uint16_t)Modbus_BuildRequest(
+      nAddr, pdu, sizeof(pdu), pOutBuffer,
+      1U + sizeof(pdu) + MODBUS_RTU_CRC_SIZE);
 }
 
 /// 将数据转换成可读的信息
-uint16_t GetShowInfo(const ECSense_DS4_Value *pDS4Value, char *pBuffer) {
-  static int nScale = 1000;
-  return sprintf(pBuffer,
+uint16_t GetShowInfoSized(const ECSense_DS4_Value *pDS4Value, char *pBuffer,
+                          size_t bufferSize) {
+  const int nScale = 1000;
+  int length;
+
+  if ((pDS4Value == NULL) || (pBuffer == NULL) || (bufferSize == 0U)) {
+    return 0U;
+  }
+  length = snprintf(pBuffer, bufferSize,
                  "Addr: %d;Gas: %s;SValue: %d.%d%s;MaxValue: %d;Health: "
                  "%d;RValue: %d.%d%s",
                  pDS4Value->uAddr, ECSense_GetGasString(pDS4Value->emGasType),
@@ -302,4 +299,10 @@ uint16_t GetShowInfo(const ECSense_DS4_Value *pDS4Value, char *pBuffer) {
                  (int)(pDS4Value->fRealValue * nScale) / nScale,
                  (int)(pDS4Value->fRealValue * nScale) % nScale,
                  ECSense_GetUnitString(pDS4Value->emUnitType));
+  if ((length < 0) || ((size_t)length >= bufferSize) ||
+      ((unsigned int)length > UINT16_MAX)) {
+    pBuffer[bufferSize - 1U] = '\0';
+    return 0U;
+  }
+  return (uint16_t)length;
 }

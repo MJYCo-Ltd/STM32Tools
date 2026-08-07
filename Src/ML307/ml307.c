@@ -204,9 +204,9 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
       (expect == ML307_TYPE_MQTT_DISCONNECT)) {
     if (ML307_MqttResponseHasError(packet) != 0) {
       out->error = 1U;
-      (void)strncpy(out->name, "ERROR", sizeof(out->name) - 1U);
-      (void)strncpy(out->text, "Module rejected command",
-                    sizeof(out->text) - 1U);
+      AT_CopyString(out->name, sizeof(out->name), "ERROR", NULL);
+      AT_CopyString(out->text, sizeof(out->text), "Module rejected command",
+                    NULL);
       return ML307_RESULT_ERROR_RESPONSE;
     }
 
@@ -218,9 +218,9 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
       out->value = mqtt.state;
       out->message_id = mqtt.message_id;
       out->qos = mqtt.qos;
-      (void)strncpy(out->name, "MQTT", sizeof(out->name) - 1U);
-      (void)strncpy(out->topic, mqtt.topic, sizeof(out->topic) - 1U);
-      (void)strncpy(out->payload, mqtt.payload, sizeof(out->payload) - 1U);
+      AT_CopyString(out->name, sizeof(out->name), "MQTT", NULL);
+      AT_CopyString(out->topic, sizeof(out->topic), mqtt.topic, NULL);
+      AT_CopyString(out->payload, sizeof(out->payload), mqtt.payload, NULL);
       if (mqtt.type == ML307_MQTT_EVENT_CONNECTION) {
         out->ok = (mqtt.state == 0) ? 1U : 0U;
         out->error = (mqtt.state == 0) ? 0U : 1U;
@@ -231,15 +231,15 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
     }
 
     out->ok = 1U;
-    (void)strncpy(out->name, ML307_TypeName(expect), sizeof(out->name) - 1U);
-    (void)strncpy(out->text, "OK", sizeof(out->text) - 1U);
+    AT_CopyString(out->name, sizeof(out->name), ML307_TypeName(expect), NULL);
+    AT_CopyString(out->text, sizeof(out->text), "OK", NULL);
     if (ML307_MqttParseUrc(packet, &mqtt) == ML307_RESULT_OK) {
       out->id = mqtt.connect_id;
       out->value = mqtt.state;
       out->message_id = mqtt.message_id;
       out->qos = mqtt.qos;
-      (void)strncpy(out->topic, mqtt.topic, sizeof(out->topic) - 1U);
-      (void)strncpy(out->payload, mqtt.payload, sizeof(out->payload) - 1U);
+      AT_CopyString(out->topic, sizeof(out->topic), mqtt.topic, NULL);
+      AT_CopyString(out->payload, sizeof(out->payload), mqtt.payload, NULL);
     }
     return ML307_RESULT_OK;
   }
@@ -249,15 +249,14 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
     if (ML307_ResponseIsComplete(packet) == 0) {
       return ML307_RESULT_NOT_FOUND;
     }
-    if ((strstr(packet, "ERROR") != NULL) ||
-        (strstr(packet, "+CME ERROR:") != NULL)) {
+    if (AT_HasErrorResult(packet)) {
       out->error = 1U;
-      (void)strncpy(out->name, "ERROR", sizeof(out->name) - 1U);
+      AT_CopyString(out->name, sizeof(out->name), "ERROR", NULL);
       return ML307_RESULT_ERROR_RESPONSE;
     }
     out->ok = 1U;
-    (void)strncpy(out->name, "SLEEP", sizeof(out->name) - 1U);
-    (void)strncpy(out->text, "OK", sizeof(out->text) - 1U);
+    AT_CopyString(out->name, sizeof(out->name), "SLEEP", NULL);
+    AT_CopyString(out->text, sizeof(out->text), "OK", NULL);
     return ML307_RESULT_OK;
   }
 
@@ -272,8 +271,8 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
   parse_result = ML307_ParseResponse(packet, expected_type, &parsed);
   out->ok = parsed.has_ok;
   out->error = parsed.has_error;
-  (void)strncpy(out->name, parsed.type, sizeof(out->name) - 1U);
-  (void)strncpy(out->text, parsed.info, sizeof(out->text) - 1U);
+  AT_CopyString(out->name, sizeof(out->name), parsed.type, NULL);
+  AT_CopyString(out->text, sizeof(out->text), parsed.info, NULL);
 
   if (parse_result == ML307_PARSE_ERROR_RESPONSE) {
     return ML307_RESULT_ERROR_RESPONSE;

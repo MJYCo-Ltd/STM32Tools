@@ -123,11 +123,7 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
 
 int ML307_MqttResponseHasError(const char *raw)
 {
-  if (raw == NULL) {
-    return 0;
-  }
-  return (strstr(raw, "+CME ERROR:") != NULL) ||
-         (strstr(raw, "\r\nERROR\r\n") != NULL);
+  return AT_HasErrorResult(raw);
 }
 
 int ML307_MqttConnectResponseIsComplete(const char *raw, uint8_t connect_id)

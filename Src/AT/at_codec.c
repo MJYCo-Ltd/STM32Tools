@@ -137,6 +137,12 @@ int AT_LineStartsWith(const AT_Line *line, const char *prefix)
          (strncmp(line->data, prefix, prefix_length) == 0);
 }
 
+int AT_HasToken(const char *response, const char *token)
+{
+  return (response != NULL) && (token != NULL) &&
+         (strstr(response, token) != NULL);
+}
+
 int AT_HasFinalResult(const char *response)
 {
   const char *cursor = response;
@@ -145,6 +151,22 @@ int AT_HasFinalResult(const char *response)
   while ((cursor != NULL) && (*cursor != '\0')) {
     cursor = AT_ReadLine(cursor, &line);
     if (AT_LineEquals(&line, "OK") || AT_LineEquals(&line, "ERROR") ||
+        AT_LineStartsWith(&line, "+CME ERROR:") ||
+        AT_LineStartsWith(&line, "+CMS ERROR:")) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int AT_HasErrorResult(const char *response)
+{
+  const char *cursor = response;
+  AT_Line line;
+
+  while ((cursor != NULL) && (*cursor != '\0')) {
+    cursor = AT_ReadLine(cursor, &line);
+    if (AT_LineEquals(&line, "ERROR") ||
         AT_LineStartsWith(&line, "+CME ERROR:") ||
         AT_LineStartsWith(&line, "+CMS ERROR:")) {
       return 1;
@@ -179,6 +201,13 @@ void AT_CopyText(char *destination, size_t destination_size,
     memcpy(destination, source, copy_length);
   }
   destination[copy_length] = '\0';
+}
+
+void AT_CopyString(char *destination, size_t destination_size,
+                   const char *source, uint8_t *truncated)
+{
+  AT_CopyText(destination, destination_size, source,
+              (source != NULL) ? strlen(source) : 0U, truncated);
 }
 
 void AT_AppendLine(char *destination, size_t destination_size,

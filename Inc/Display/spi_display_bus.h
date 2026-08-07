@@ -10,6 +10,14 @@ typedef int (*SPI_DisplayTransfer)(const SPI_DisplayBus *bus,
                                    const uint8_t *data, size_t length,
                                    uint8_t use_dma);
 typedef void (*SPI_DisplayControl)(const SPI_DisplayBus *bus, uint8_t active);
+typedef void (*SPI_DisplayDelay)(uint32_t delay_ms);
+
+typedef struct {
+  uint8_t command;
+  const uint8_t *data;
+  uint16_t data_length;
+  uint16_t delay_ms;
+} SPI_DisplayCommand;
 
 struct SPI_DisplayBus {
   void *spi_handle;
@@ -27,6 +35,9 @@ struct SPI_DisplayBus {
 int SPI_DisplayWriteCommand(const SPI_DisplayBus *bus, uint8_t command);
 int SPI_DisplayWriteData(const SPI_DisplayBus *bus, const uint8_t *data,
                          size_t length);
+int SPI_DisplayRunSequence(const SPI_DisplayBus *bus,
+                           const SPI_DisplayCommand *commands, size_t count,
+                           SPI_DisplayDelay delay);
 
 void SPI_DisplayBusInitSTM32(SPI_DisplayBus *bus, void *spi_handle,
                              void *cs_port, uint16_t cs_pin, void *dc_port,

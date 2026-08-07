@@ -6,14 +6,15 @@
  * Agriculture (STM32F411 + SPI2) must use W25Q/w25q.h instead — F411 has no QSPI.
  */
 #include "stm32h7xx_hal.h"
+#include "Flash/nor_flash.h"
 
 extern QSPI_HandleTypeDef hqspi;
 
 #define QSPI_FLASH_BASE        0x90000000
 
-#define W25Q_PAGE_SIZE         256
-#define W25Q_SECTOR_SIZE       4096
-#define W25Q_BLOCK_SIZE        65536
+#define W25Q_PAGE_SIZE         NOR_FLASH_PAGE_SIZE
+#define W25Q_SECTOR_SIZE       NOR_FLASH_SECTOR_SIZE
+#define W25Q_BLOCK_SIZE        NOR_FLASH_BLOCK64_SIZE
 
 typedef struct
 {
@@ -31,7 +32,7 @@ uint32_t QSPI_Flash_ReadID(void);
 HAL_StatusTypeDef QSPI_Flash_Read(uint32_t addr,uint8_t *buf,uint32_t len);
 HAL_StatusTypeDef QSPI_Flash_Read_DMA(uint32_t addr,uint8_t *buf,uint32_t len);
 
-HAL_StatusTypeDef QSPI_Flash_Write(uint32_t addr,uint8_t *buf,uint32_t len);
+HAL_StatusTypeDef QSPI_Flash_Write(uint32_t addr,const uint8_t *buf,uint32_t len);
 
 HAL_StatusTypeDef QSPI_Flash_EraseSector(uint32_t addr);
 HAL_StatusTypeDef QSPI_Flash_EraseBlock(uint32_t addr);

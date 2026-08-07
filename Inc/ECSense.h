@@ -11,7 +11,10 @@
 #ifndef __YTY_ECSENSE_H_
 #define __YTY_ECSENSE_H_
 
+#include <stddef.h>
 #include <stdint.h>
+
+#define ECSENSE_SHOW_INFO_BUFFER_SIZE 160U
 
 /// 传感器类型枚举
 typedef enum {
@@ -149,6 +152,7 @@ uint8_t ReadDS4ValueResponse(const uint8_t *pResponse, uint16_t uResponseLen, EC
  * @param pBuffer
  * @return 转换的字符长度，如果转换失败返回0
  */
-uint16_t GetShowInfo(const ECSense_DS4_Value* pDS4Value,char* pBuffer);
+uint16_t GetShowInfoSized(const ECSense_DS4_Value *pDS4Value, char *pBuffer,
+                          size_t bufferSize);
 
 #endif//__YTY_ECSENSE_H_

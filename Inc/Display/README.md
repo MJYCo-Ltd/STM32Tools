@@ -1,12 +1,12 @@
 # Display（SPIDisplay / Graphics / LCD / EPD）
 
 目标
-- 提供可在 LCD 与 EPD 之间复用的 SPI/绘图接口，将硬件差异抽象到用户配置文件（`epd_user.c`、`lcd_st7789_user.c`）。
+- 提供可在 LCD 与 EPD 之间复用的 SPI/绘图接口，将硬件差异抽象到配置头文件（`epd_config.h`、`lcd_st7789_config.h`）。
 
 主要文件
 - `Inc/Display/SPIDisplay.h` — 统一 SPI 传输接口（内联实现，依赖用户宏）。
 - `Inc/Display/Graphics.h`  — 基于 `DrawPixel` 的通用绘图接口（直线/圆/填充/字符）。
-- `Inc/Display/EPD/` 和 `Inc/Display/LCD/` — 各屏驱动与用户配置示例（`epd_user.c`、`lcd_st7789_user.c`）。
+- `Inc/Display/EPD/` 和 `Inc/Display/LCD/` — 各屏驱动与板级配置头文件。
 
 用户必须实现或配置的宏
 - `SPI_SELECT()` / `SPI_UNSELECT()` — 片选操作（GPIO）
@@ -38,8 +38,8 @@ EPD_PowerOff();
 ```
 
 LCD 使用要点（ST7789 示例）
-- 在 `lcd_st7789_user.c` 中定义分辨率宏（`USING_135X240` / `USING_240X240` / `USING_170X320`）和 `DISPLAY_SPI_PORT`、DC、BL 引脚。
-- 包含 `lcd_st7789_user.c` 后再包含 `SPIDisplay.h` 可直接调用 `SPI_Send*` 接口。
+- 在 `lcd_st7789_config.h` 中定义分辨率宏（`USING_135X240` / `USING_240X240` / `USING_170X320`）和 `DISPLAY_SPI_PORT`、DC、BL 引脚。
+- 控制器驱动会包含对应配置头文件，并通过 `SPIDisplay.h` 调用统一的 `SPI_Send*` 接口。
 
 性能与移植建议
 - 如果目标平台 RAM 充足，开启 `USE_BUFFER` 并使用 DMA 分块传输大图块；否则在小分辨率或频繁更新场景下使用直接 SPI 传输。

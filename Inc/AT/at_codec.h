@@ -46,13 +46,19 @@ void AT_TrimLine(AT_Line *line);
 int AT_LineEquals(const AT_Line *line, const char *token);
 int AT_LineStartsWith(const AT_Line *line, const char *prefix);
 
+/** Null-safe token search for module-specific prompts and URCs. */
+int AT_HasToken(const char *response, const char *token);
+
 /** Detect standard final result lines: OK, ERROR, +CME ERROR, +CMS ERROR. */
 int AT_HasFinalResult(const char *response);
+int AT_HasErrorResult(const char *response);
 
 /** Bounded text operations for decoded response fields. */
 void AT_CopyText(char *destination, size_t destination_size,
                  const char *source, size_t source_length,
                  uint8_t *truncated);
+void AT_CopyString(char *destination, size_t destination_size,
+                   const char *source, uint8_t *truncated);
 void AT_AppendLine(char *destination, size_t destination_size,
                    const char *line, size_t line_length,
                    uint8_t *truncated);

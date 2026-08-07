@@ -14,16 +14,16 @@
 
 #include <stdint.h>
 
+#include "Flash/nor_flash.h"
 #include "main.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define W25Q_PAGE_SIZE 256U
-#define W25Q_SECTOR_SIZE 4096U
-#define W25Q_BLOCK32_SIZE 32768U
-#define W25Q_BLOCK64_SIZE 65536U
+#define W25Q_PAGE_SIZE NOR_FLASH_PAGE_SIZE
+#define W25Q_SECTOR_SIZE NOR_FLASH_SECTOR_SIZE
+#define W25Q_BLOCK64_SIZE NOR_FLASH_BLOCK64_SIZE
 
 /** W25Q16JV: manufacturer EFh, memory type 40h, capacity 15h */
 #define W25Q16_JEDEC_ID 0xEF4015UL
