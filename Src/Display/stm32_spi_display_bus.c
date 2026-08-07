@@ -32,12 +32,12 @@ static int STM32_Transfer(const SPI_DisplayBus *bus, const uint8_t *data,
       status = HAL_SPI_Transmit(spi, (uint8_t *)data, chunk, HAL_MAX_DELAY);
     }
     if (status != HAL_OK) {
-      return 0;
+      return -1;
     }
     data += chunk;
     length -= chunk;
   }
-  return 1;
+  return 0;
 }
 
 void SPI_DisplayBusInitSTM32(SPI_DisplayBus *bus, void *spi_handle,

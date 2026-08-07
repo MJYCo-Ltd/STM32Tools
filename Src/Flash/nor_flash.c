@@ -51,3 +51,20 @@ uint32_t NorFlash_AlignDown(uint32_t address, uint32_t alignment)
 {
   return (alignment == 0U) ? address : address - (address % alignment);
 }
+
+uint32_t NorFlash_AlignUp(uint32_t address, uint32_t alignment)
+{
+  uint32_t rem;
+
+  if ((alignment == 0U) || (address == 0U)) {
+    return address;
+  }
+  rem = address % alignment;
+  if (rem == 0U) {
+    return address;
+  }
+  if (address > (UINT32_MAX - (alignment - rem))) {
+    return UINT32_MAX;
+  }
+  return address + (alignment - rem);
+}

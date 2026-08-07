@@ -51,6 +51,33 @@ uint8_t JudgeCRC16(const uint8_t *buffer, uint16_t length,
   return (expected == actual) ? 1U : 0U;
 }
 
+uint32_t CalCRC32Update(uint32_t crc, const void *data, size_t length)
+{
+  const uint8_t *bytes = (const uint8_t *)data;
+  size_t i;
+  uint8_t bit;
+
+  if ((data == NULL) && (length != 0U)) {
+    return crc;
+  }
+  for (i = 0U; i < length; ++i) {
+    crc ^= bytes[i];
+    for (bit = 0U; bit < 8U; ++bit) {
+      if ((crc & 1U) != 0U) {
+        crc = (crc >> 1U) ^ 0xEDB88320UL;
+      } else {
+        crc >>= 1U;
+      }
+    }
+  }
+  return crc;
+}
+
+uint32_t CalCRC32(const void *data, size_t length)
+{
+  return CalCRC32Update(0xFFFFFFFFUL, data, length) ^ 0xFFFFFFFFUL;
+}
+
 uint16_t ReadBE16(const uint8_t *data)
 {
   return ((uint16_t)data[0] << 8) | data[1];

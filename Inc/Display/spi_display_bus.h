@@ -35,6 +35,7 @@ struct SPI_DisplayBus {
 int SPI_DisplayWriteCommand(const SPI_DisplayBus *bus, uint8_t command);
 int SPI_DisplayWriteData(const SPI_DisplayBus *bus, const uint8_t *data,
                          size_t length);
+/* Returns 0 on success, negative on error. */
 int SPI_DisplayRunSequence(const SPI_DisplayBus *bus,
                            const SPI_DisplayCommand *commands, size_t count,
                            SPI_DisplayDelay delay);

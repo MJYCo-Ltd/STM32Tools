@@ -31,6 +31,7 @@ uint32_t NorFlash_PageChunk(uint32_t address, uint32_t remaining,
                             uint32_t page_size);
 uint32_t NorFlash_EraseSize(NorFlash_EraseType type);
 uint32_t NorFlash_AlignDown(uint32_t address, uint32_t alignment);
+uint32_t NorFlash_AlignUp(uint32_t address, uint32_t alignment);
 
 #ifdef __cplusplus
 }
