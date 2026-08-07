@@ -1,6 +1,10 @@
 #ifndef __QSPI_FLASH_H
 #define __QSPI_FLASH_H
 
+/*
+ * STM32 QUADSPI (H7 / F7 / L4+ …) driver for W25Q in Quad mode.
+ * Agriculture (STM32F411 + SPI2) must use W25Q/w25q.h instead — F411 has no QSPI.
+ */
 #include "stm32h7xx_hal.h"
 
 extern QSPI_HandleTypeDef hqspi;

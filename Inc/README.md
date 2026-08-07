@@ -332,24 +332,30 @@ epd_user.c 需定义 `SPI_SELECT`、`SPI_UNSELECT`、`SPI_SEND_CMD`、`SPI_SEND_
 
 ---
 
-## QSPI Flash (QSPIFlash.h)
+## QSPI Flash (QSPIFlash.h) — STM32 QUADSPI only
 
-W25Q 系列 QSPI Flash，适用于 STM32H7 等支持 QSPI 的型号。
+W25Q 四线模式，依赖 `hqspi`。**F411 请用 `W25Q/w25q.h`。**
 
 | 接口 | 说明 |
 |------|------|
-| `QSPI_Flash_Init()` | 初始化 |
-| `QSPI_Flash_ReadID()` | 读取器件 ID |
-| `QSPI_Flash_Read(addr, buf, len)` | 读取数据 |
-| `QSPI_Flash_Read_DMA(addr, buf, len)` | DMA 读取 |
-| `QSPI_Flash_Write(addr, buf, len)` | 写入数据 |
-| `QSPI_Flash_EraseSector(addr)` | 擦除扇区 (4KB) |
-| `QSPI_Flash_EraseBlock(addr)` | 擦除块 (64KB) |
-| `QSPI_Flash_EraseChip()` | 全片擦除 |
-| `QSPI_EnableMemoryMapped()` | 使能内存映射模式 |
+| `QSPI_Flash_Init()` | 读 ID、开 Quad |
+| `QSPI_Flash_Read/Write` | 四线读写 |
+| `QSPI_Flash_EraseSector/Block/Chip` | 擦除 |
+| `QSPI_EnableMemoryMapped()` | 内存映射 |
 
-**常量**：`QSPI_FLASH_BASE`(0x90000000)、`W25Q_PAGE_SIZE`(256)、`W25Q_SECTOR_SIZE`(4096)、`W25Q_BLOCK_SIZE`(65536)  
-需在工程中定义 `hqspi` 句柄。
+---
+
+## W25Q SPI NOR (W25Q/w25q.h)
+
+标准 SPI（1-1-1），手册 W25Q16JV Table 1。
+
+| 接口 | 说明 |
+|------|------|
+| `W25Q_Init(dev, hspi, cs_port, cs_pin)` | 读 JEDEC ID，填容量 |
+| `W25Q_ReadID` / `W25Q_Read` / `W25Q_Write` | ID / 读 / 页编程写入 |
+| `W25Q_EraseSector` / `EraseBlock64` / `EraseChip` | 4KB / 64KB / 整片擦除 |
+
+常量：`W25Q_PAGE_SIZE` 256、`W25Q_SECTOR_SIZE` 4096、`W25Q16_JEDEC_ID` `0xEF4015`。
 
 ---
 
