@@ -39,7 +39,7 @@ EPD_PowerOff();
 
 - FreeRTOS：不要在任务栈中定义大数组；动态分配请使用 `pvPortMalloc` 并在任务上下文中申请。
 - UART：使用仓库提供的 `UartReceive` 模块（DMA ReceiveToIdle + 双缓冲），在 IDLE 事件中先重启 DMA 再入队以降低丢字节风险。
-- Flash：`QSPIFlash` 仅用于带 QUADSPI 的 MCU（如 H7）。STM32F411 等板级 SPI NOR 请用 `W25Q/w25q.h`（W25Q16 标准 SPI：`9Fh`/`03h`/`02h`/`20h` 等）。
+- QSPI Flash：使用内存映射模式需定义 `hqspi` 并保证目标芯片支持。
 - 摄像头：OV5640/OV2640 需提供摄像头相关引脚与 BSP 适配函数（见 `Inc/Camera/ov5640_user.h`）。
 
 进一步阅读
