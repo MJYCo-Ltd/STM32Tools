@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "AT/at_codec.h"
 #include "ML307/ml307_at.h"
 #include "ML307/ml307_mqtt.h"
 #include "ML307/ml307_parser.h"
@@ -65,19 +66,25 @@ static int ParseCesqRsrp(const char *info)
 static ML307_Result FinishPack(char *packet, size_t packet_size, size_t *length,
                                ML307_Result result)
 {
-  if (result != ML307_RESULT_OK) {
-    if ((packet != NULL) && (packet_size > 0U)) {
-      packet[0] = '\0';
-    }
-    if (length != NULL) {
-      *length = 0U;
-    }
-    return result;
+  AT_CodecResult codec_result;
+
+  if (result == ML307_RESULT_OK) {
+    codec_result = AT_CODEC_OK;
+  } else if (result == ML307_RESULT_BUFFER_TOO_SMALL) {
+    codec_result = AT_CODEC_BUFFER_TOO_SMALL;
+  } else if (result == ML307_RESULT_INVALID_ARGUMENT) {
+    codec_result = AT_CODEC_INVALID_ARGUMENT;
+  } else {
+    codec_result = AT_CODEC_FORMAT_ERROR;
   }
-  if (length != NULL) {
-    *length = strlen(packet);
+  codec_result = AT_FinishPacket(packet, packet_size, length, codec_result);
+  if (codec_result == AT_CODEC_BUFFER_TOO_SMALL) {
+    return ML307_RESULT_BUFFER_TOO_SMALL;
   }
-  return ML307_RESULT_OK;
+  if (codec_result == AT_CODEC_INVALID_ARGUMENT) {
+    return ML307_RESULT_INVALID_ARGUMENT;
+  }
+  return result;
 }
 
 const char *ML307_TypeName(ML307_Type type)

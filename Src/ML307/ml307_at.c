@@ -6,8 +6,9 @@
  */
 #include "ML307/ml307_at.h"
 
+#include "AT/at_codec.h"
+
 #include <stdarg.h>
-#include <stdio.h>
 #include <string.h>
 
 #define Q_EXEC ML307_AT_FORM_EXECUTE
@@ -136,37 +137,22 @@ static ML307_Result ML307_Format(char *output, size_t output_size,
                                  const char *fmt, ...)
 {
   va_list args;
-  int written;
-
-  if ((output == NULL) || (output_size == 0U) || (fmt == NULL)) {
-    return ML307_RESULT_INVALID_ARGUMENT;
-  }
+  AT_CodecResult result;
 
   va_start(args, fmt);
-  written = vsnprintf(output, output_size, fmt, args);
+  result = AT_FormatV(output, output_size, fmt, args);
   va_end(args);
 
-  if (written < 0) {
-    return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
+  switch (result) {
+  case AT_CODEC_OK:
+    return ML307_RESULT_OK;
+  case AT_CODEC_BUFFER_TOO_SMALL:
+    return ML307_RESULT_BUFFER_TOO_SMALL;
+  case AT_CODEC_FORMAT_ERROR:
+  case AT_CODEC_INVALID_ARGUMENT:
+  default:
+    return ML307_RESULT_INVALID_ARGUMENT;
   }
-  if ((size_t)written >= output_size) {
-    return ML307_Fail(output, output_size, ML307_RESULT_BUFFER_TOO_SMALL);
-  }
-  return ML307_RESULT_OK;
-}
-
-static int ML307_IsSingleLine(const char *text)
-{
-  if (text == NULL) {
-    return 0;
-  }
-  while (*text != '\0') {
-    if ((*text == '\r') || (*text == '\n')) {
-      return 0;
-    }
-    ++text;
-  }
-  return 1;
 }
 
 static int ML307_FormAllowed(const ML307_CmdInfo *info, ML307_AtForm form)
@@ -199,7 +185,7 @@ static ML307_Result ML307_BuildBasic(char *output, size_t output_size,
   case ML307_AT_FORM_EXECUTE:
     if (argument != NULL) {
       /* ATE0 / ATV1 / ATD... / AT&F0 */
-      if (!ML307_IsSingleLine(argument)) {
+      if (!AT_IsSingleLine(argument)) {
         return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
       }
       return ML307_Format(output, output_size, "%s%s" ML307_COMMAND_TERMINATOR,
@@ -209,7 +195,7 @@ static ML307_Result ML307_BuildBasic(char *output, size_t output_size,
                         info->stem);
 
   case ML307_AT_FORM_SET:
-    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
+    if ((argument == NULL) || !AT_IsSingleLine(argument)) {
       return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
     }
     if (strncmp(info->stem, "ATS", 3) == 0) {
@@ -242,7 +228,7 @@ static ML307_Result ML307_BuildPlus(char *output, size_t output_size,
                         info->stem);
   case ML307_AT_FORM_EXECUTE:
     if (argument != NULL) {
-      if (!ML307_IsSingleLine(argument)) {
+      if (!AT_IsSingleLine(argument)) {
         return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
       }
       return ML307_Format(output, output_size,
@@ -252,7 +238,7 @@ static ML307_Result ML307_BuildPlus(char *output, size_t output_size,
     return ML307_Format(output, output_size, "AT+%s" ML307_COMMAND_TERMINATOR,
                         info->stem);
   case ML307_AT_FORM_SET:
-    if ((argument == NULL) || !ML307_IsSingleLine(argument)) {
+    if ((argument == NULL) || !AT_IsSingleLine(argument)) {
       return ML307_Fail(output, output_size, ML307_RESULT_INVALID_ARGUMENT);
     }
     return ML307_Format(output, output_size,

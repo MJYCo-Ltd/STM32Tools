@@ -6,101 +6,43 @@
  */
 #include "ML307/ml307_parser.h"
 
+#include "AT/at_codec.h"
+
 #include <stddef.h>
 #include <string.h>
 
-static size_t ML307_LineLength(const char *line)
-{
-  size_t length = 0U;
-
-  while ((line[length] != '\0') && (line[length] != '\r') &&
-         (line[length] != '\n')) {
-    ++length;
-  }
-  return length;
-}
-
-static const char *ML307_NextLine(const char *line, size_t length)
-{
-  const char *next = line + length;
-
-  while ((*next == '\r') || (*next == '\n')) {
-    ++next;
-  }
-  return next;
-}
-
 static void ML307_TrimLine(const char **line, size_t *length)
 {
-  while ((*length > 0U) && ((**line == ' ') || (**line == '\t'))) {
-    ++(*line);
-    --(*length);
-  }
-  while ((*length > 0U) &&
-         (((*line)[*length - 1U] == ' ') ||
-          ((*line)[*length - 1U] == '\t'))) {
-    --(*length);
-  }
+  AT_Line value = {*line, *length};
+  AT_TrimLine(&value);
+  *line = value.data;
+  *length = value.length;
 }
 
 static int ML307_LineEquals(const char *line, size_t length, const char *token)
 {
-  const size_t token_length = strlen(token);
-  return (length == token_length) && (strncmp(line, token, length) == 0);
+  const AT_Line value = {line, length};
+  return AT_LineEquals(&value, token);
 }
 
 static int ML307_LineStartsWith(const char *line, size_t length,
                                 const char *prefix)
 {
-  const size_t prefix_length = strlen(prefix);
-  return (length >= prefix_length) &&
-         (strncmp(line, prefix, prefix_length) == 0);
+  const AT_Line value = {line, length};
+  return AT_LineStartsWith(&value, prefix);
 }
 
 static void ML307_Copy(char *destination, size_t destination_size,
                        const char *source, size_t source_length,
                        uint8_t *truncated)
 {
-  size_t copy_length = source_length;
-
-  if (copy_length >= destination_size) {
-    copy_length = destination_size - 1U;
-    *truncated = 1U;
-  }
-  if (copy_length > 0U) {
-    memcpy(destination, source, copy_length);
-  }
-  destination[copy_length] = '\0';
+  AT_CopyText(destination, destination_size, source, source_length, truncated);
 }
 
 static void ML307_AppendLine(ML307_ParsedResponse *out, const char *line,
                              size_t length)
 {
-  size_t used = strlen(out->info);
-  size_t available;
-  size_t copy_length;
-
-  if (length == 0U) {
-    return;
-  }
-  if (used >= (sizeof(out->info) - 1U)) {
-    out->truncated = 1U;
-    return;
-  }
-  if (used > 0U) {
-    out->info[used++] = '\n';
-    out->info[used] = '\0';
-  }
-  available = sizeof(out->info) - used - 1U;
-  copy_length = length;
-  if (copy_length > available) {
-    copy_length = available;
-    out->truncated = 1U;
-  }
-  if (copy_length > 0U) {
-    memcpy(&out->info[used], line, copy_length);
-    out->info[used + copy_length] = '\0';
-  }
+  AT_AppendLine(out->info, sizeof(out->info), line, length, &out->truncated);
 }
 
 static int ML307_IsEchoLine(const char *line, size_t length)
@@ -140,26 +82,7 @@ static int ML307_IsPlainExpected(const char *expected_type)
 
 int ML307_ResponseIsComplete(const char *raw)
 {
-  const char *cursor;
-
-  if (raw == NULL) {
-    return 0;
-  }
-  cursor = raw;
-  while (*cursor != '\0') {
-    const char *line = cursor;
-    size_t length = ML307_LineLength(line);
-    cursor = ML307_NextLine(line, length);
-    ML307_TrimLine(&line, &length);
-
-    if (ML307_LineEquals(line, length, "OK") ||
-        ML307_LineEquals(line, length, "ERROR") ||
-        ML307_LineStartsWith(line, length, "+CME ERROR:") ||
-        ML307_LineStartsWith(line, length, "+CMS ERROR:")) {
-      return 1;
-    }
-  }
-  return 0;
+  return AT_HasFinalResult(raw);
 }
 
 ML307_ParseResult ML307_ParseResponse(const char *raw,
@@ -182,12 +105,14 @@ ML307_ParseResult ML307_ParseResponse(const char *raw,
   cursor = raw;
 
   while (*cursor != '\0') {
-    const char *line = cursor;
-    size_t length = ML307_LineLength(line);
+    AT_Line parsed_line;
+    const char *line;
+    size_t length;
     const char *colon;
 
-    cursor = ML307_NextLine(line, length);
-    ML307_TrimLine(&line, &length);
+    cursor = AT_ReadLine(cursor, &parsed_line);
+    line = parsed_line.data;
+    length = parsed_line.length;
     if (length == 0U) {
       continue;
     }

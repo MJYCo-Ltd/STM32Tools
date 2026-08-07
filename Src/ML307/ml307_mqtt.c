@@ -1,5 +1,7 @@
 #include <ML307/ml307_mqtt.h>
 
+#include <AT/at_codec.h>
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,24 +10,21 @@
 static ML307_Result MqttFormat(char *output, size_t output_size,
                                const char *format, ...)
 {
-  int written;
+  AT_CodecResult result;
   va_list args;
 
-  if ((output == NULL) || (output_size == 0U) || (format == NULL)) {
-    return ML307_RESULT_INVALID_ARGUMENT;
-  }
   va_start(args, format);
-  written = vsnprintf(output, output_size, format, args);
+  result = AT_FormatV(output, output_size, format, args);
   va_end(args);
-  if (written < 0) {
-    output[0] = '\0';
-    return ML307_RESULT_INVALID_VALUE;
+
+  if (result == AT_CODEC_OK) {
+    return ML307_RESULT_OK;
   }
-  if ((size_t)written >= output_size) {
-    output[0] = '\0';
+  if (result == AT_CODEC_BUFFER_TOO_SMALL) {
     return ML307_RESULT_BUFFER_TOO_SMALL;
   }
-  return ML307_RESULT_OK;
+  return (result == AT_CODEC_FORMAT_ERROR) ? ML307_RESULT_INVALID_VALUE
+                                           : ML307_RESULT_INVALID_ARGUMENT;
 }
 
 static int MqttStringIsValid(const char *value, size_t max_length)
