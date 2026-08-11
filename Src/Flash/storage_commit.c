@@ -4,22 +4,23 @@
 
 #include <string.h>
 
-uint32_t Storage_CrcExcludingCommit(const void *object, size_t total_size,
-                                    size_t crc_field_offset)
+Storage_Status Storage_ComputeCrcExcludingCommit(
+    const void *object, size_t total_size, size_t crc_field_offset,
+    uint32_t *crc_out)
 {
   uint8_t tmp[256];
-  uint32_t crc;
 
-  if ((object == NULL) || (total_size < (sizeof(uint32_t) * 2U)) ||
+  if ((object == NULL) || (crc_out == NULL) ||
+      (total_size < (sizeof(uint32_t) * 2U)) ||
       (total_size > sizeof(tmp)) ||
-      ((crc_field_offset + sizeof(uint32_t)) > (total_size - sizeof(uint32_t)))) {
-    return 0U;
+      (crc_field_offset > (total_size - (sizeof(uint32_t) * 2U)))) {
+    return STORAGE_ERR_PARAM;
   }
   memcpy(tmp, object, total_size);
   memset(tmp + crc_field_offset, 0, sizeof(uint32_t));
   memset(tmp + total_size - sizeof(uint32_t), 0xFF, sizeof(uint32_t));
-  crc = Storage_Crc32(tmp, total_size - sizeof(uint32_t));
-  return crc;
+  *crc_out = Storage_Crc32(tmp, total_size - sizeof(uint32_t));
+  return STORAGE_OK;
 }
 
 Storage_Status Storage_PrepareCommitObject(void *object, size_t total_size,
@@ -29,13 +30,17 @@ Storage_Status Storage_PrepareCommitObject(void *object, size_t total_size,
   uint32_t crc;
 
   if ((object == NULL) || (total_size < (sizeof(uint32_t) * 2U)) ||
-      ((crc_field_offset + sizeof(uint32_t)) > (total_size - sizeof(uint32_t))) ||
+      (total_size > 256U) ||
+      (crc_field_offset > (total_size - (sizeof(uint32_t) * 2U))) ||
       ((crc_field_offset % sizeof(uint32_t)) != 0U)) {
     return STORAGE_ERR_PARAM;
   }
 
   bytes = (uint8_t *)object;
-  crc = Storage_CrcExcludingCommit(object, total_size, crc_field_offset);
+  if (Storage_ComputeCrcExcludingCommit(object, total_size, crc_field_offset,
+                                        &crc) != STORAGE_OK) {
+    return STORAGE_ERR_PARAM;
+  }
   memcpy(bytes + crc_field_offset, &crc, sizeof(crc));
   memset(bytes + total_size - sizeof(uint32_t), 0xFF, sizeof(uint32_t));
   return STORAGE_OK;

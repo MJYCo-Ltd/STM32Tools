@@ -13,10 +13,12 @@ extern "C" {
 
 /**
  * CRC32 over [0, total_size - 4) with the u32 at crc_field_offset as 0.
- * Does not modify object.
+ * Does not modify object.  The status return keeps a legitimate CRC value of
+ * zero distinct from invalid input.
  */
-uint32_t Storage_CrcExcludingCommit(const void *object, size_t total_size,
-                                    size_t crc_field_offset);
+Storage_Status Storage_ComputeCrcExcludingCommit(
+    const void *object, size_t total_size, size_t crc_field_offset,
+    uint32_t *crc_out);
 
 /**
  * Compute CRC32 over [0, total_size - 4) with the u32 at crc_field_offset

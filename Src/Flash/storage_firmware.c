@@ -16,13 +16,11 @@ uint32_t StorageFirmware_ImageCapacity(uint32_t slot_size)
   return slot_size - STORAGE_FW_MANIFEST_SIZE;
 }
 
-static uint32_t ManifestHeaderCrc(const StorageFirmwareManifest *m)
+static Storage_Status ManifestHeaderCrc(const StorageFirmwareManifest *m,
+                                        uint32_t *crc_out)
 {
-  if (m == NULL) {
-    return 0U;
-  }
-  return Storage_CrcExcludingCommit(
-      m, sizeof(*m), offsetof(StorageFirmwareManifest, header_crc32));
+  return Storage_ComputeCrcExcludingCommit(
+      m, sizeof(*m), offsetof(StorageFirmwareManifest, header_crc32), crc_out);
 }
 
 Storage_Status StorageFirmware_InitSlot(StorageFirmwareSlot *slot,
@@ -150,6 +148,7 @@ Storage_Status StorageFirmware_ReadManifest(StorageFirmwareSlot *slot,
                                             StorageFirmwareManifest *manifest)
 {
   Storage_Status st;
+  uint32_t header_crc;
 
   if ((slot == NULL) || (manifest == NULL)) {
     return STORAGE_ERR_PARAM;
@@ -160,7 +159,8 @@ Storage_Status StorageFirmware_ReadManifest(StorageFirmwareSlot *slot,
   }
   if ((manifest->magic != STORAGE_FW_MANIFEST_MAGIC) ||
       (manifest->commit_marker != STORAGE_COMMIT_MARKER) ||
-      (ManifestHeaderCrc(manifest) != manifest->header_crc32)) {
+      (ManifestHeaderCrc(manifest, &header_crc) != STORAGE_OK) ||
+      (header_crc != manifest->header_crc32)) {
     return STORAGE_ERR_CRC;
   }
   return STORAGE_OK;

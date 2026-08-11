@@ -590,3 +590,6 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+#ifndef STM32TOOLS_BUILD_LEGACY_EXAMPLE
+#error "STM32TOOLS/main.c is a legacy example; define STM32TOOLS_BUILD_LEGACY_EXAMPLE to build it"
+#endif

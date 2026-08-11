@@ -16,7 +16,8 @@ typedef struct _Uart_Info {
   uint8_t *pBufferAlt;           /// 交替缓冲（IDLE 后立刻切到此缓冲继续收）
   UartQueueInfo staging;         /// ISR 入队暂存（每路独立）
   UartQueueInfo process_frame;   /// 任务侧出队暂存（勿与 ISR staging 共用）
-  uint8_t restart_pending;       /// StartReceive 失败时延后重试
+  uint8_t restart_pending;       /// StartReceive 失败时延后重试
+  uint8_t frame_pending;
 #ifdef USE_FREERTOS
   osMessageQueueId_t hQueueId;   /// 串口获取消息队列
 #endif
@@ -113,7 +114,11 @@ uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
       (NULL == pCallback) || (uUartIndex >= uUartCapacity)) {
     return (0);
   }
-  Uart_Info *pUartInfo = RequestSpace(sizeof(*pUartInfo));
+  if (FindUartInfo(pHUart) != NULL) {
+    return 0U;
+  }
+
+  Uart_Info *pUartInfo = RequestSpace(sizeof(*pUartInfo));
   if (NULL == pUartInfo) {
     return (0);
   } else {
@@ -128,7 +133,8 @@ uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback) {
     /// 绑定
     pUartInfo->pHUart = pHUart;
     pUartInfo->pCallback = pCallback;
-    pUartInfo->restart_pending = 0U;
+    pUartInfo->restart_pending = 0U;
+    pUartInfo->frame_pending = 0U;
     pUartInfo->pBufferAlt = NULL;
 
     pUartInfo->pBuffer = RequestSpace(UART_RECEIVE_BUFFER_LENGTH);
@@ -200,12 +206,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *pHUart, uint16_t nSize) {
 
     memcpy(pUartInfo->staging.buffer, ready, nSize);
     pUartInfo->staging.nLength = nSize;
-#ifdef USE_FREERTOS
-    if (osOK == UartQueuePutLatest(pUartInfo->hQueueId, &pUartInfo->staging))
-#endif
-    {
-      pUartInfo->stAllIOInfo.unReciveCount += nSize;
-    }
+#ifdef USE_FREERTOS
+    if (osOK == UartQueuePutLatest(pUartInfo->hQueueId, &pUartInfo->staging)) {
+      pUartInfo->stAllIOInfo.unReciveCount += nSize;
+    }
+#else
+    pUartInfo->frame_pending = 1U;
+    pUartInfo->stAllIOInfo.unReciveCount += nSize;
+#endif
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *pHUart) {
@@ -234,8 +242,32 @@ void ProcessUart(void) {
       }
     }
   }
-#endif
-}
+#else
+  for (uint8_t index = 0U; index < uUartIndex; ++index) {
+    Uart_Info *pUartInfo = pUartInfoArray[index];
+    if ((pUartInfo == NULL) || (pUartInfo->pHUart == NULL)) {
+      continue;
+    }
+    if (pUartInfo->restart_pending != 0U) {
+      (void)StartReceive(pUartInfo);
+    }
+    if (pUartInfo->frame_pending != 0U) {
+      const uint32_t primask = __get_PRIMASK();
+      __disable_irq();
+      pUartInfo->process_frame = pUartInfo->staging;
+      pUartInfo->frame_pending = 0U;
+      if (primask == 0U) {
+        __enable_irq();
+      }
+      pUartInfo->pCallback(pUartInfo->pHUart,
+                           pUartInfo->process_frame.buffer,
+                           pUartInfo->process_frame.nLength);
+      pUartInfo->stAllIOInfo.unDealCount +=
+          pUartInfo->process_frame.nLength;
+    }
+  }
+#endif
+}
 
 /// 获取串口接收数据信息
 const IOInfo *GetUartIOInfo(uint8_t uId) {

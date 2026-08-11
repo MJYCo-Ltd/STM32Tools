@@ -11,6 +11,12 @@
 #define __DISPLAY_H__
 
 #include <stdint.h>
+
+#if (defined(STM32TOOLS_DISPLAY_BACKEND_ST7305) +                         \
+     defined(STM32TOOLS_DISPLAY_BACKEND_ST7789) +                         \
+     defined(STM32TOOLS_DISPLAY_BACKEND_UC8253)) > 1
+#error "Select exactly one STM32TOOLS display backend"
+#endif
 typedef struct {
     uint8_t uRed;
     uint8_t uGreen;

@@ -1,3 +1,7 @@
+#ifndef STM32TOOLS_DISPLAY_BACKEND_ST7789
+#error "Compile lcd_st7789.c only with STM32TOOLS_DISPLAY_BACKEND_ST7789"
+#endif
+
 #include <cmsis_os.h>
 #include <Common.h>
 #include <Display/LCD/lcd.h>
@@ -41,6 +45,18 @@ static const SPI_DisplayCommand s_st7789_init_sequence[] = {
     {ST7789_DISPON, NULL, 0U, 50U}};
 
 static void ST7789_Delay(uint32_t delay_ms) { osDelay(delay_ms); }
+
+void LCD_Reset(void) {
+#ifndef CFG_NO_REST
+  ST7789_RST_Clr();
+  osDelay(10U);
+  ST7789_RST_Set();
+  osDelay(20U);
+#else
+  SPI_SendCommand(ST7789_SWRESET);
+  osDelay(120U);
+#endif
+}
 
 /// 设置显示旋转方向
 void LCD_SetRotation(ROTATION m) {
@@ -91,16 +107,7 @@ void LCD_Init(void) {
   memset(lcd_buffer, LCD_GRAYBLUE, sizeof(lcd_buffer));
 #endif
 
-#ifndef CFG_NO_REST
-  osDelay(10U);
-  ST7789_RST_Clr();
-  osDelay(10U);
-  ST7789_RST_Set();
-  osDelay(20U);
-#else
-  SPI_SendCommand(ST7789_SWRESET);
-#endif
-  osDelay(1000U);
+  LCD_Reset();
   (void)SPI_DisplayRunSequence(
       SPI_GetDisplayBus(), s_st7789_init_sequence,
       sizeof(s_st7789_init_sequence) / sizeof(s_st7789_init_sequence[0]),
@@ -112,18 +119,45 @@ void LCD_Init(void) {
 }
 
 /// 刷新帧缓冲区数据
-void LCD_Refresh() {
-  LCD_SetAddressWindow(0, 0, ST7789_WIDTH - 1, ST7789_HEIGHT - 1);
+void LCD_Refresh(void) {
+  LCD_RefreshArea(0U, 0U, ST7789_WIDTH, ST7789_HEIGHT);
+}
 
+void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
+                     uint16_t height) {
+  uint16_t row;
+  uint16_t x1;
+  uint16_t y1;
+
+  if ((width == 0U) || (height == 0U) || (x >= ST7789_WIDTH) ||
+      (y >= ST7789_HEIGHT)) {
+    return;
+  }
+  x1 = (uint16_t)(x + width - 1U);
+  y1 = (uint16_t)(y + height - 1U);
+  if ((x1 < x) || (x1 >= ST7789_WIDTH)) {
+    x1 = ST7789_WIDTH - 1U;
+  }
+  if ((y1 < y) || (y1 >= ST7789_HEIGHT)) {
+    y1 = ST7789_HEIGHT - 1U;
+  }
+  LCD_SetAddressWindow(x, y, x1, y1);
 #ifdef USE_BUFFER
-    SPI_SendBuffer(lcd_buffer, sizeof(lcd_buffer));
+  for (row = y; row <= y1; ++row) {
+    const size_t offset = ((size_t)row * ST7789_WIDTH + x) * 2U;
+    SPI_SendBuffer(&lcd_buffer[offset], (size_t)(x1 - x + 1U) * 2U);
+  }
 #else
-  uint16_t j;
-  for (i = 0; i < ST7789_WIDTH; i++)
-    for (j = 0; j < ST7789_HEIGHT; j++) {
-      uint8_t data[] = {LCD_BLACK >> 8, LCD_BLACK & 0xFF};
-      SPI_SendBuffer(data, sizeof(data));
+  {
+    const uint8_t black[] = {(uint8_t)(LCD_BLACK >> 8),
+                             (uint8_t)(LCD_BLACK & 0xFFU)};
+    uint16_t column;
+    for (row = y; row <= y1; ++row) {
+      for (column = x; column <= x1; ++column) {
+        SPI_SendBuffer(black, sizeof(black));
+      }
     }
+  }
 #endif
 }
 
@@ -131,7 +165,7 @@ void LCD_Refresh() {
 void DrawPixel(const Pixel *pPixel) {
   uint8_t colorData[2];
 
-  if ((pPixel->x < 0) || (pPixel->x >= ST7789_WIDTH) || (pPixel->y < 0) ||
+  if ((pPixel == NULL) || (pPixel->x >= ST7789_WIDTH) ||
       (pPixel->y >= ST7789_HEIGHT))
     return;
 #ifdef USE_BUFFER

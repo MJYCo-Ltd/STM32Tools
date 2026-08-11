@@ -12,14 +12,12 @@ int Storage_SeqIsNewer(uint32_t a, uint32_t b)
   return ((int32_t)(a - b) > 0) ? 1 : 0;
 }
 
-uint32_t StorageRecord_HeaderCrc(const StorageRecordHeader *header)
+Storage_Status StorageRecord_HeaderCrc(const StorageRecordHeader *header,
+                                       uint32_t *crc_out)
 {
-  if (header == NULL) {
-    return 0U;
-  }
-  return Storage_CrcExcludingCommit(
-      header, sizeof(*header),
-      offsetof(StorageRecordHeader, header_crc32));
+  return Storage_ComputeCrcExcludingCommit(
+      header, sizeof(*header), offsetof(StorageRecordHeader, header_crc32),
+      crc_out);
 }
 
 static Storage_Status IsErasedRange(const StoragePartitionMap *map,
@@ -53,6 +51,7 @@ static Storage_Status ValidateHeader(const StorageRecordHeader *header,
                                      uint32_t record_offset)
 {
   uint32_t total;
+  uint32_t header_crc;
 
   if ((header->magic != STORAGE_RECORD_MAGIC) ||
       (header->format_version != STORAGE_RECORD_FORMAT_V1) ||
@@ -62,7 +61,8 @@ static Storage_Status ValidateHeader(const StorageRecordHeader *header,
   if (header->commit_marker != STORAGE_COMMIT_MARKER) {
     return STORAGE_ERR_STATE;
   }
-  if (StorageRecord_HeaderCrc(header) != header->header_crc32) {
+  if ((StorageRecord_HeaderCrc(header, &header_crc) != STORAGE_OK) ||
+      (header_crc != header->header_crc32)) {
     return STORAGE_ERR_CRC;
   }
   if ((header->payload_length >
@@ -92,6 +92,10 @@ Storage_Status StorageRecord_WriteAt(
   if ((map == NULL) || ((payload == NULL) && (payload_length != 0U))) {
     return STORAGE_ERR_PARAM;
   }
+  if (payload_length >
+      (UINT32_MAX - (uint32_t)sizeof(StorageRecordHeader))) {
+    return STORAGE_ERR_RANGE;
+  }
   need = (uint32_t)sizeof(StorageRecordHeader) + payload_length;
   if ((offset + need) < offset || ((offset + need) > max_end)) {
     return STORAGE_ERR_NO_SPACE;
@@ -109,8 +113,11 @@ Storage_Status StorageRecord_WriteAt(
   header.payload_length = payload_length;
   header.payload_crc32 =
       (payload_length == 0U) ? 0U : Storage_Crc32(payload, payload_length);
-  (void)Storage_PrepareCommitObject(&header, sizeof(header),
-                                    offsetof(StorageRecordHeader, header_crc32));
+  st = Storage_PrepareCommitObject(
+      &header, sizeof(header), offsetof(StorageRecordHeader, header_crc32));
+  if (st != STORAGE_OK) {
+    return st;
+  }
 
   st = Storage_Write(map, partition, offset, &header,
                      (uint32_t)sizeof(header) - sizeof(uint32_t));
@@ -210,7 +217,8 @@ Storage_Status StorageRecord_FindLatest(
 
   memset(&best, 0, sizeof(best));
   cursor = region_offset;
-  while ((cursor + (uint32_t)sizeof(StorageRecordHeader)) <= region_end) {
+  while ((cursor <= region_end) &&
+         ((region_end - cursor) >= (uint32_t)sizeof(StorageRecordHeader))) {
     StorageRecordHeader header;
     Storage_Status st;
     uint32_t next;
@@ -309,14 +317,9 @@ Storage_Status StorageRecord_ReadPayload(
   if (st != STORAGE_OK) {
     return st;
   }
-  st = ValidateHeader(&header, UINT32_MAX, record_offset);
+  st = ValidateHeader(&header, map->parts[partition].size, record_offset);
   if (st != STORAGE_OK) {
-    /* ValidateHeader with UINT32_MAX only checks overflow vs end loosely */
-    if ((header.magic != STORAGE_RECORD_MAGIC) ||
-        (header.commit_marker != STORAGE_COMMIT_MARKER) ||
-        (StorageRecord_HeaderCrc(&header) != header.header_crc32)) {
-      return STORAGE_ERR_CRC;
-    }
+    return st;
   }
   if (header.payload_length > payload_buf_size) {
     return STORAGE_ERR_RANGE;

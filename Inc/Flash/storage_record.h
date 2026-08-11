@@ -38,7 +38,8 @@ typedef struct {
 /** True if sequence a is strictly newer than b (unsigned wrap-safe). */
 int Storage_SeqIsNewer(uint32_t a, uint32_t b);
 
-uint32_t StorageRecord_HeaderCrc(const StorageRecordHeader *header);
+Storage_Status StorageRecord_HeaderCrc(const StorageRecordHeader *header,
+                                       uint32_t *crc_out);
 
 Storage_Status StorageRecord_Append(
     const StoragePartitionMap *map, uint32_t partition, uint32_t region_offset,

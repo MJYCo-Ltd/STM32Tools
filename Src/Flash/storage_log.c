@@ -17,14 +17,12 @@ static uint32_t SectorBase(const StorageLog *log, uint32_t index)
   return log->region_offset + (index * NOR_FLASH_SECTOR_SIZE);
 }
 
-static uint32_t SectorHeaderCrc(const StorageLogSectorHeader *header)
+static Storage_Status SectorHeaderCrc(const StorageLogSectorHeader *header,
+                                      uint32_t *crc_out)
 {
-  if (header == NULL) {
-    return 0U;
-  }
-  return Storage_CrcExcludingCommit(
-      header, sizeof(*header),
-      offsetof(StorageLogSectorHeader, header_crc32));
+  return Storage_ComputeCrcExcludingCommit(
+      header, sizeof(*header), offsetof(StorageLogSectorHeader, header_crc32),
+      crc_out);
 }
 
 static Storage_Status ReadSectorHeader(const StorageLog *log, uint32_t index,
@@ -36,11 +34,16 @@ static Storage_Status ReadSectorHeader(const StorageLog *log, uint32_t index,
 
 static int SectorHeaderValid(const StorageLogSectorHeader *header)
 {
+  uint32_t header_crc;
+
   if ((header->magic != STORAGE_LOG_SECTOR_MAGIC) ||
       (header->commit_marker != STORAGE_COMMIT_MARKER)) {
     return 0;
   }
-  return (SectorHeaderCrc(header) == header->header_crc32) ? 1 : 0;
+  return ((SectorHeaderCrc(header, &header_crc) == STORAGE_OK) &&
+          (header_crc == header->header_crc32))
+             ? 1
+             : 0;
 }
 
 static Storage_Status CommitSectorHeader(StorageLog *log, uint32_t index,
@@ -190,6 +193,10 @@ Storage_Status StorageLog_Append(StorageLog *log, const void *payload,
   if ((log == NULL) || ((payload == NULL) && (payload_length != 0U))) {
     return STORAGE_ERR_PARAM;
   }
+  if (payload_length >
+      (UINT32_MAX - (uint32_t)sizeof(StorageRecordHeader))) {
+    return STORAGE_ERR_RANGE;
+  }
   need = (uint32_t)sizeof(StorageRecordHeader) + payload_length;
   if ((log->write_offset_in_sector + need) > NOR_FLASH_SECTOR_SIZE) {
     st = RotateSector(log);
@@ -264,8 +271,10 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
       uint32_t cursor = data_off;
       uint32_t end = data_off + data_size;
       uint32_t guard = 0U;
-      while ((cursor + sizeof(StorageRecordHeader)) <= end) {
+      while ((cursor <= end) &&
+             ((end - cursor) >= (uint32_t)sizeof(StorageRecordHeader))) {
         StorageRecordHeader rh;
+        uint32_t header_crc;
         st = Storage_Read(log->map, log->partition, cursor, &rh, sizeof(rh));
         if (st != STORAGE_OK) {
           return st;
@@ -275,7 +284,8 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
         }
         if ((rh.magic == STORAGE_RECORD_MAGIC) &&
             (rh.commit_marker == STORAGE_COMMIT_MARKER) &&
-            (StorageRecord_HeaderCrc(&rh) == rh.header_crc32) &&
+            (StorageRecord_HeaderCrc(&rh, &header_crc) == STORAGE_OK) &&
+            (header_crc == rh.header_crc32) &&
             (all_n < (sizeof(all) / sizeof(all[0])))) {
           all[all_n].sequence = rh.sequence;
           all[all_n].offset = cursor;

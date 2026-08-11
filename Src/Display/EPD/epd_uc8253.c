@@ -353,3 +353,6 @@ __attribute__((weak)) uint8_t EPD_IsOk() {
   HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1, HAL_MAX_DELAY);
   return (data);
 }
+#ifndef STM32TOOLS_DISPLAY_BACKEND_UC8253
+#error "Compile epd_uc8253.c only with STM32TOOLS_DISPLAY_BACKEND_UC8253"
+#endif

@@ -195,3 +195,6 @@ void Timer_100ms(void *argument)
 /* USER CODE BEGIN Application */
 /* USER CODE END Application */
 
+#ifndef STM32TOOLS_BUILD_LEGACY_EXAMPLE
+#error "STM32TOOLS/Src/freertos.c belongs to the legacy example application"
+#endif

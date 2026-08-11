@@ -1,3 +1,7 @@
+#ifndef STM32TOOLS_DISPLAY_BACKEND_ST7305
+#error "Compile lcd_st7305.c only with STM32TOOLS_DISPLAY_BACKEND_ST7305"
+#endif
+
 #include <cmsis_os.h>
 #include <string.h>
 

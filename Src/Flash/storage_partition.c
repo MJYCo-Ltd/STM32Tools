@@ -77,7 +77,10 @@ Storage_Status StoragePartition_Init(StoragePartitionMap *map,
 {
   Storage_Status st;
 
-  if ((map == NULL) || (backend == NULL) || (parts == NULL)) {
+  if ((map == NULL) || (backend == NULL) || (parts == NULL) ||
+      (backend->read == NULL) || (backend->write == NULL) ||
+      (backend->erase_sector == NULL) ||
+      ((backend->lock == NULL) != (backend->unlock == NULL))) {
     return STORAGE_ERR_PARAM;
   }
   st = StoragePartition_ValidateTable(parts, part_count, media_size);
