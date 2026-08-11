@@ -81,6 +81,16 @@ int EWM103_ResponseIsComplete(const char *raw, EWM103_Type expect)
     }
     return 0;
   }
+  /* Manual §4.2.2 CWJAP: may print WIFI CONNECTED / WIFI GOT IP then OK.
+   * Accept GOT IP early so join does not wait forever if OK is delayed. */
+  if (expect == EWM103_TYPE_CWJAP) {
+    return AT_HasToken(raw, "WIFI GOT IP") || AT_HasToken(raw, "+CWJAP:") ||
+           AT_HasFinalResult(raw);
+  }
+  /* Manual §4.2.3 CWLAP: many +CWLAP lines then OK/ERROR. */
+  if (expect == EWM103_TYPE_CWLAP) {
+    return AT_HasFinalResult(raw);
+  }
   /* Manual §6.2.2: +MQTTCONN:OK / +MQTTCONN:ERROR */
   if (expect == EWM103_TYPE_MQTTCONN) {
     return AT_HasToken(raw, "+MQTTCONN:OK") ||
@@ -136,6 +146,15 @@ EWM103_Result EWM103_ParseResponse(const char *raw, EWM103_Type expect,
     break;
   case EWM103_TYPE_CWJAP:
     CollectPlusLines(raw, "+CWJAP", out->text, sizeof(out->text));
+    if (out->text[0] == '\0') {
+      CollectNonAtBody(raw, out->text, sizeof(out->text));
+    }
+    if (AT_HasToken(raw, "WIFI GOT IP") || AT_HasToken(raw, "WIFI CONNECTED")) {
+      out->ok = 1U;
+      if (out->text[0] == '\0') {
+        AT_CopyString(out->text, sizeof(out->text), "WIFI GOT IP", NULL);
+      }
+    }
     break;
   case EWM103_TYPE_CWLAP:
     CollectPlusLines(raw, "+CWLAP", out->text, sizeof(out->text));

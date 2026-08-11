@@ -177,8 +177,9 @@ EWM103_Result EWM103_AtBuild(const EWM103_Content *c, char *packet,
                   "AT+CIPAPMAC=\"%s\"" EWM103_COMMAND_TERMINATOR, S(c->s0));
 
   case EWM103_TYPE_CIPDOMAIN:
+    /* Manual §5.2.1 示例：AT+CIPDOMAIN=www.baidu.com（无引号） */
     return Format(packet, packet_size,
-                  "AT+CIPDOMAIN=\"%s\"" EWM103_COMMAND_TERMINATOR, S(c->s0));
+                  "AT+CIPDOMAIN=%s" EWM103_COMMAND_TERMINATOR, S(c->s0));
   case EWM103_TYPE_CIPSTART:
     if (c->mux != 0U) {
       return Format(
