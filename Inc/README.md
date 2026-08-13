@@ -223,6 +223,21 @@ EPD 与 LCD 共用 SPI 传输接口。控制器驱动先包含对应的 `*_confi
 
 ---
 
+## Bootloader (Bootloader/bootloader.h)
+
+外置 NOR OTA 安装与跳转（产品 Cube 工程链接，见 [`../Bootloader/README.md`](../Bootloader/README.md)）。
+
+| 接口 | 说明 |
+|------|------|
+| `Bootloader_Run(cfg)` | 读升级状态 → 装 Candidate / 回滚 → `JumpToApp` |
+| `Bootloader_IsAppValid` / `Bootloader_JumpToApp` | 向量表检查与跳转 |
+| `Bootloader_InstallSlot` | 从 `StorageFirmware` 槽写入内部 App Flash |
+| `BootloaderFlash_*` | F4 内部 Flash 擦写（`bootloader_flash_stm32f4.c`） |
+
+默认映射：Bootloader `0x08000000`/128KB，App `0x08020000`/384KB。
+
+---
+
 ## AT 公共编解码 (AT/at_codec.h)
 
 供 ML307 / EWM103 等模组共用的 AT 文本辅助：
