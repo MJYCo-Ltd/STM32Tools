@@ -76,6 +76,12 @@ int AT_IsSingleLine(const char *text)
   return (strchr(text, '\r') == NULL) && (strchr(text, '\n') == NULL);
 }
 
+static int AT_IsLineJunk(unsigned char c)
+{
+  /* 模组偶发插入 TAB/0xFF/其它控制符；空白与非打印均视为可修剪 */
+  return (c < 0x20U) || (c == 0x7FU) || (c == 0xFFU);
+}
+
 const char *AT_ReadLine(const char *cursor, AT_Line *line)
 {
   const char *end;
@@ -84,13 +90,14 @@ const char *AT_ReadLine(const char *cursor, AT_Line *line)
     return NULL;
   }
   end = cursor;
-  while ((*end != '\0') && (*end != '\r') && (*end != '\n')) {
+  while ((*end != '\0') && (*end != '\r') && (*end != '\n') &&
+         ((unsigned char)*end != 0xFFU)) {
     ++end;
   }
   line->data = cursor;
   line->length = (size_t)(end - cursor);
   AT_TrimLine(line);
-  while ((*end == '\r') || (*end == '\n')) {
+  while ((*end == '\r') || (*end == '\n') || ((unsigned char)*end == 0xFFU)) {
     ++end;
   }
   return end;
@@ -102,13 +109,12 @@ void AT_TrimLine(AT_Line *line)
     return;
   }
   while ((line->length > 0U) &&
-         ((*line->data == ' ') || (*line->data == '\t'))) {
+         AT_IsLineJunk((unsigned char)line->data[0])) {
     ++line->data;
     --line->length;
   }
   while ((line->length > 0U) &&
-         ((line->data[line->length - 1U] == ' ') ||
-          (line->data[line->length - 1U] == '\t'))) {
+         AT_IsLineJunk((unsigned char)line->data[line->length - 1U])) {
     --line->length;
   }
 }
@@ -148,11 +154,28 @@ int AT_HasFinalResult(const char *response)
   const char *cursor = response;
   AT_Line line;
 
+  if (response == NULL) {
+    return 0;
+  }
   while ((cursor != NULL) && (*cursor != '\0')) {
     cursor = AT_ReadLine(cursor, &line);
+    /* 仅整行匹配 OK/ERROR；已修剪 TAB/0xFF 等噪声，兼容有/无回显 */
     if (AT_LineEquals(&line, "OK") || AT_LineEquals(&line, "ERROR") ||
         AT_LineStartsWith(&line, "+CME ERROR:") ||
         AT_LineStartsWith(&line, "+CMS ERROR:")) {
+      return 1;
+    }
+  }
+  /* 兜底：模组把 OK 粘在无换行的噪声尾上时 */
+  if (strstr(response, "\rOK") != NULL || strstr(response, "\nOK") != NULL ||
+      strstr(response, "OK\r") != NULL || strstr(response, "OK\n") != NULL) {
+    return 1;
+  }
+  {
+    const char *p = strstr(response, "OK");
+    if ((p != NULL) && ((p == response) || AT_IsLineJunk((unsigned char)p[-1])) &&
+        ((p[2] == '\0') || AT_IsLineJunk((unsigned char)p[2]) ||
+         (p[2] == '\r') || (p[2] == '\n'))) {
       return 1;
     }
   }

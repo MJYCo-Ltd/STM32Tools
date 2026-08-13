@@ -68,8 +68,8 @@ EWM103_Result EWM103_AtBuild(const EWM103_Content *c, char *packet,
   case EWM103_TYPE_AT:
     return Format(packet, packet_size, "AT" EWM103_COMMAND_TERMINATOR);
   case EWM103_TYPE_CMD:
-    return (c->query != 0U) ? BuildQuery(packet, packet_size, "CMD")
-                            : BuildQuery(packet, packet_size, "CMD");
+    /* 手册 §3.2.2：查询指令 AT+CMD?（执行 AT+CMD 会 ERROR） */
+    return BuildQuery(packet, packet_size, "CMD");
   case EWM103_TYPE_RST:
     return BuildExec(packet, packet_size, "RST");
   case EWM103_TYPE_GMR:
