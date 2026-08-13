@@ -4,6 +4,7 @@
 #define EPD_WIDTH 240
 #define EPD_HEIGHT 416
 #define EPD_BUFFER_SIZE 12480
+#define EPD_BUSY_TIMEOUT_MS 5000U
 
 #define SPI_SELECT HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET)
 #define SPI_UNSELECT HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET)
@@ -29,7 +30,11 @@ __attribute__((weak)) void EPD_Rest(void) {
 
 /// 根据手册BUSY_N 高电平为空闲
 __attribute__((weak)) void EPD_WaitUntilIdle(void) {
+  const uint32_t started_at = HAL_GetTick();
   while (HAL_GPIO_ReadPin(BUSY_GPIO_Port, BUSY_Pin) == GPIO_PIN_RESET) {
+    if ((HAL_GetTick() - started_at) >= EPD_BUSY_TIMEOUT_MS) {
+      return;
+    }
     osDelay(1);
   }
 }

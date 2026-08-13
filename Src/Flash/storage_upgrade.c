@@ -32,6 +32,8 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
     best = payload;
     best_seq = loc_a.sequence;
     have = 1U;
+  } else if (st != STORAGE_ERR_NOT_FOUND) {
+    return st;
   }
   st = StorageRecord_FindLatest(log->map, log->partition, UPGRADE_META_B_OFF,
                                 NOR_FLASH_SECTOR_SIZE, &loc_b, &payload,
@@ -42,6 +44,8 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
       best_seq = loc_b.sequence;
       have = 1U;
     }
+  } else if (st != STORAGE_ERR_NOT_FOUND) {
+    return st;
   }
   if (log->partition_size > UPGRADE_LOG_OFF) {
     st = StorageRecord_FindLatest(
@@ -55,6 +59,8 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
         best_seq = loc_log.sequence;
         have = 1U;
       }
+    } else if (st != STORAGE_ERR_NOT_FOUND) {
+      return st;
     }
   }
 
@@ -114,7 +120,8 @@ Storage_Status StorageUpgrade_Init(StorageUpgradeLog *log,
                                    uint32_t partition_size)
 {
   if ((log == NULL) || (map == NULL) ||
-      (partition_size < (NOR_FLASH_SECTOR_SIZE * 2U))) {
+      (partition_size < (NOR_FLASH_SECTOR_SIZE * 2U)) ||
+      ((partition_size % NOR_FLASH_SECTOR_SIZE) != 0U)) {
     return STORAGE_ERR_PARAM;
   }
   memset(log, 0, sizeof(*log));

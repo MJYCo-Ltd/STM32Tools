@@ -28,8 +28,6 @@ static Uart_Info **pUartInfoArray = NULL;
 static uint8_t uUartIndex = 0;
 static uint8_t uUartCapacity = 0;
 
-#define UART_RECEIVE_QUEUE_DEPTH 16U
-
 _Static_assert((sizeof(UartQueueInfo) % sizeof(uint32_t)) == 0U,
                "UART queue item must be 32-bit aligned");
 

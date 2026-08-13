@@ -78,10 +78,15 @@ const osTimerAttr_t sendTaskInfo_attributes = {
 /* USER CODE BEGIN PV */
 void ReciveUartData(UART_HandleTypeDef *pHUart, uint8_t *pData,
                     uint16_t nLength) {
-  while (HAL_OK != HAL_UART_Transmit_DMA(pHUart, pData, nLength)) {
+  uint32_t attempt;
+
+  for (attempt = 0U; attempt < 3U; ++attempt) {
+    if (HAL_UART_Transmit_DMA(pHUart, pData, nLength) == HAL_OK) {
+      UpdateUartSendInfo(pHUart, nLength);
+      return;
+    }
     osDelay(1);
   }
-  UpdateUartSendInfo(pHUart, nLength);
 }
 /* USER CODE END PV */
 

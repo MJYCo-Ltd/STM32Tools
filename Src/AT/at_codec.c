@@ -78,8 +78,30 @@ int AT_IsSingleLine(const char *text)
 
 static int AT_IsLineJunk(unsigned char c)
 {
-  /* 模组偶发插入 TAB/0xFF/其它控制符；空白与非打印均视为可修剪 */
-  return (c < 0x20U) || (c == 0x7FU) || (c == 0xFFU);
+  /* 模组偶发插入 TAB/空格/0xFF；空白与非打印均视为可修剪 */
+  return (c <= 0x20U) || (c == 0x7FU) || (c == 0xFFU);
+}
+
+/* OK 须为独立 token，避免 BOOK 等子串误命中 */
+static int AT_IsStandaloneOkAt(const char *response, const char *p)
+{
+  unsigned char before;
+  unsigned char after;
+
+  if ((response == NULL) || (p == NULL) || (strncmp(p, "OK", 2) != 0)) {
+    return 0;
+  }
+  before = (p == response) ? 0U : (unsigned char)p[-1];
+  after = (unsigned char)p[2];
+  if ((p != response) && (before != '\r') && (before != '\n') &&
+      (AT_IsLineJunk(before) == 0)) {
+    return 0;
+  }
+  if ((after != '\0') && (after != '\r') && (after != '\n') &&
+      (AT_IsLineJunk(after) == 0)) {
+    return 0;
+  }
+  return 1;
 }
 
 const char *AT_ReadLine(const char *cursor, AT_Line *line)
@@ -166,17 +188,14 @@ int AT_HasFinalResult(const char *response)
       return 1;
     }
   }
-  /* 兜底：模组把 OK 粘在无换行的噪声尾上时 */
-  if (strstr(response, "\rOK") != NULL || strstr(response, "\nOK") != NULL ||
-      strstr(response, "OK\r") != NULL || strstr(response, "OK\n") != NULL) {
-    return 1;
-  }
+  /* 兜底：模组把 OK 粘在无换行的噪声尾上时（仅独立 token） */
   {
-    const char *p = strstr(response, "OK");
-    if ((p != NULL) && ((p == response) || AT_IsLineJunk((unsigned char)p[-1])) &&
-        ((p[2] == '\0') || AT_IsLineJunk((unsigned char)p[2]) ||
-         (p[2] == '\r') || (p[2] == '\n'))) {
-      return 1;
+    const char *p = response;
+    while ((p = strstr(p, "OK")) != NULL) {
+      if (AT_IsStandaloneOkAt(response, p) != 0) {
+        return 1;
+      }
+      p += 2;
     }
   }
   return 0;

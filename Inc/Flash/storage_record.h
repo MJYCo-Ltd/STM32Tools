@@ -57,6 +57,11 @@ Storage_Status StorageRecord_FindLatest(
     uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
     uint32_t payload_buf_size);
 
+/** Validate one committed record, including its payload CRC. */
+Storage_Status StorageRecord_ValidateAt(
+    const StoragePartitionMap *map, uint32_t partition, uint32_t record_offset,
+    uint32_t max_end, StorageRecordLoc *out_loc);
+
 Storage_Status StorageRecord_ReadPayload(
     const StoragePartitionMap *map, uint32_t partition, uint32_t record_offset,
     void *payload_buf, uint32_t payload_buf_size, uint32_t *payload_length);

@@ -134,12 +134,11 @@ Storage_Status Storage_Write(const StoragePartitionMap *map, uint32_t partition,
   if (st != STORAGE_OK) {
     return st;
   }
-  st = StorageBackend_CheckVoltage(map->backend);
-  if (st != STORAGE_OK) {
-    return st;
-  }
   StorageBackend_Lock(map->backend);
-  st = map->backend->write(map->backend->ctx, phys, buffer, length);
+  st = StorageBackend_CheckVoltage(map->backend);
+  if (st == STORAGE_OK) {
+    st = map->backend->write(map->backend->ctx, phys, buffer, length);
+  }
   StorageBackend_Unlock(map->backend);
   return st;
 }
@@ -157,12 +156,11 @@ Storage_Status Storage_EraseSector(const StoragePartitionMap *map,
   if (st != STORAGE_OK) {
     return st;
   }
-  st = StorageBackend_CheckVoltage(map->backend);
-  if (st != STORAGE_OK) {
-    return st;
-  }
   StorageBackend_Lock(map->backend);
-  st = map->backend->erase_sector(map->backend->ctx, phys);
+  st = StorageBackend_CheckVoltage(map->backend);
+  if (st == STORAGE_OK) {
+    st = map->backend->erase_sector(map->backend->ctx, phys);
+  }
   StorageBackend_Unlock(map->backend);
   return st;
 }
@@ -180,15 +178,14 @@ Storage_Status Storage_EraseBlock64(const StoragePartitionMap *map,
   if (st != STORAGE_OK) {
     return st;
   }
-  st = StorageBackend_CheckVoltage(map->backend);
-  if (st != STORAGE_OK) {
-    return st;
-  }
   StorageBackend_Lock(map->backend);
-  if (map->backend->erase_block64 == NULL) {
-    st = STORAGE_ERR_IO;
-  } else {
-    st = map->backend->erase_block64(map->backend->ctx, phys);
+  st = StorageBackend_CheckVoltage(map->backend);
+  if (st == STORAGE_OK) {
+    if (map->backend->erase_block64 == NULL) {
+      st = STORAGE_ERR_IO;
+    } else {
+      st = map->backend->erase_block64(map->backend->ctx, phys);
+    }
   }
   StorageBackend_Unlock(map->backend);
   return st;

@@ -1,0 +1,24 @@
+using sysbus
+
+mach create "stm32f103-c8t6"
+machine LoadPlatformDescription @platforms/cpus/stm32f103.repl
+
+# 重设 Flash 和 RAM 大小以匹配 C8T6
+sysbus.flash Size 0x10000       # 64KB Flash
+sysbus.sram  Size 0x5000        # 20KB RAM
+
+# 加载程序
+sysbus LoadELF @your_program.elf
+
+# 创建 UART（对应 USART1）
+emulation CreateUart "uart1"
+emulation CreateUart "uart2"
+emulation CreateUart "uart3"
+connector Connect sysbus.usart1 uart1
+connector Connect sysbus.usart2 uart2
+connector Connect sysbus.usart3 uart3
+
+showAnalyzer uart1
+showAnalyzer uart2
+showAnalyzer uart3
+start

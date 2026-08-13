@@ -5,6 +5,7 @@ STM32Tools 是一个基于 STM32CubeMX 的嵌入式模块工具集合，面向�
 主要目标：
 - 为不同显示（LCD / EPD）提供统一绘图与 SPI 接口
 - 提供对常见传感器（AHT20 / TMP117 / ECSense）和无线模块（ML307 / EWM103 / RF24L01 / MX-22）的抽象接口
+- EWM103 含 BluFi 指令（`BLEINIT` / `BLUFI`）；公共 AT 解析见 `AT/at_codec`
 - 提供高可靠的 UART 接收（DMA ReceiveToIdle + 双缓冲）以降低 AT 回显/OK 分帧导致的丢字节
 
 目录（精简）：
@@ -14,7 +15,7 @@ STM32Tools/
 ├── Inc/                    # 公共头文件、模块接口与移植说明（见 Inc/README.md）
 ├── Src/                    # 源文件实现
 ├── Test/                   # 测试（若有）
-├── main.c                  # 示例入口，展示各模块初始化/使用方式
+├── main.c                  # 旧版整板示例，仅在显式启用 legacy 宏时构建
 ├── LICENSE                 # 许可证
 └── README.md               # 本文件
 ```
@@ -23,7 +24,9 @@ STM32Tools/
 
 1. 用 STM32CubeMX 生成工程框架或将本仓库源码整合到已有工程。
 2. 在工程中配置 HAL/FreeRTOS（若使用），并根据硬件实现 Inc 中需要的用户配置（比如 `epd_user.c` / `lcd_st7789_user.c` / `ov5640_user.h` 中的引脚与 SPI/I2C 句柄）。
-3. 在主循环或 FreeRTOS 任务中调用示例 `main.c` 中展示的初始化流程。
+3. 在主循环或 FreeRTOS 任务中初始化所需模块。根目录 `main.c` 和
+   `Src/freertos.c` 仅保留作旧硬件参考，不属于可复用库源码，也不应被
+   应用工程自动收集。
 
 示例（EPD 全屏刷写）：
 

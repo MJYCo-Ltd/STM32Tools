@@ -7,6 +7,7 @@
 #define TMP117_REG_TEMP_RES      0x00U
 #define TMP117_REG_CONFIGURATION 0x01U
 #define TMP117_CFG_MOD0_Pos      10U
+#define TMP117_I2C_TIMEOUT_MS    100U
 
 static I2C_Bus s_default_bus;
 static const I2C_Bus *s_bus;
@@ -19,7 +20,7 @@ extern I2C_HandleTypeDef hi2c1;
 static const I2C_Bus *TMP117_GetBus(void) {
 #if defined(PLATFORM_STM32) || defined(USE_HAL_DRIVER)
   if (s_bus == NULL) {
-    I2C_BusInitSTM32(&s_default_bus, &hi2c1, HAL_MAX_DELAY);
+    I2C_BusInitSTM32(&s_default_bus, &hi2c1, TMP117_I2C_TIMEOUT_MS);
     s_bus = &s_default_bus;
   }
 #endif

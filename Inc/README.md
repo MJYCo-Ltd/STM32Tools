@@ -210,7 +210,30 @@ EPD 与 LCD 共用 SPI 传输接口。控制器驱动先包含对应的 `*_confi
 | `EWM103_IsComplete(packet, expect)` | 按行识别 `OK`/`ERROR` 等最终结果 |
 | `EWM103_TypeName(type)` | 类型名字符串 |
 
-覆盖系统（`AT`/`GMR`/`ATE`/`SLEEP`…）、WiFi、TCP-IP、MQTT 等手册指令。
+覆盖系统（`AT`/`GMR`/`ATE`/`SLEEP`…）、WiFi、TCP-IP、MQTT，以及 BluFi：
+
+| 类型 | 指令 |
+|------|------|
+| `EWM103_TYPE_BLEINIT` | `AT+BLEINIT=<0\|1>` |
+| `EWM103_TYPE_BLUFI` | `AT+BLUFI=<0\|1>` |
+
+`content.query != 0` 时组查询形（如 `AT+CWJAP?`）。Agriculture 终端配网使用 BluFi，不使用 `BLEPAIR*`。
+
+更细说明见 [`EWM103/README.md`](EWM103/README.md)。
+
+---
+
+## AT 公共编解码 (AT/at_codec.h)
+
+供 ML307 / EWM103 等模组共用的 AT 文本辅助：
+
+| 接口 | 说明 |
+|------|------|
+| `AT_Format` / `AT_FinishPacket` | 安全组包 |
+| `AT_ReadLine` / `AT_TrimLine` | 按行读取；修剪 TAB/空格/控制符/0xFF |
+| `AT_HasFinalResult` | 整行 `OK`/`ERROR`/`+CME`/`+CMS`；独立 `OK` token 兜底 |
+| `AT_HasErrorResult` | 错误最终结果 |
+| `AT_CopyText` / `AT_AppendLine` | 有界拷贝与多行拼接 |
 
 ---
 

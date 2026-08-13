@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <Common.h>
 #include <Display/Graphics.h>
-static Pixel pixel;
 
 // 边缘追踪器
 typedef struct {
@@ -33,28 +32,51 @@ void StepEdge(EdgeState *e) {
 // ========== 水平直线 ==========
 __attribute__((weak)) void DrawHLine(uint16_t x0, uint16_t y0, uint16_t x1,
                                      COLOR color) {
-  for (uint16_t index = x0; index <= x1; ++index) {
+  Pixel pixel;
+  uint16_t index;
+
+  if (x0 > x1) {
+    return;
+  }
+  index = x0;
+  for (;;) {
     pixel.x = index;
     pixel.y = y0;
     pixel.color = color;
     DrawPixel(&pixel);
+    if (index == x1) {
+      break;
+    }
+    ++index;
   }
 }
 
 // ========== 垂直线 ==========
 __attribute__((weak)) void DrawVLine(uint16_t x0, uint16_t y0, uint16_t y1,
                                      COLOR color) {
-  for (uint16_t index = y0; index <= y1; ++index) {
+  Pixel pixel;
+  uint16_t index;
+
+  if (y0 > y1) {
+    return;
+  }
+  index = y0;
+  for (;;) {
     pixel.x = x0;
     pixel.y = index;
     pixel.color = color;
     DrawPixel(&pixel);
+    if (index == y1) {
+      break;
+    }
+    ++index;
   }
 }
 
 // ========== 直线（Bresenham） ==========
 __attribute__((weak)) void DrawLine(uint16_t x0, uint16_t y0, uint16_t x1,
                                     uint16_t y1, COLOR color) {
+  Pixel pixel;
 
   if (y0 == y1) {
     DrawHLine(x0 < x1 ? x0 : x1, y0, x0 < x1 ? x1 : x0, color);
@@ -65,8 +87,8 @@ __attribute__((weak)) void DrawLine(uint16_t x0, uint16_t y0, uint16_t x1,
     return;
   }
 
-  int dx = abs(x1 - x0);
-  int dy = -abs(y1 - y0);
+  int dx = abs((int32_t)x1 - (int32_t)x0);
+  int dy = -abs((int32_t)y1 - (int32_t)y0);
   int sx = (x0 < x1) ? 1 : -1;
   int sy = (y0 < y1) ? 1 : -1;
   int err = dx + dy;
@@ -92,6 +114,11 @@ __attribute__((weak)) void DrawLine(uint16_t x0, uint16_t y0, uint16_t x1,
 // ========== 矩形 ==========
 __attribute__((weak)) void DrawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                   COLOR color) {
+  if ((w == 0U) || (h == 0U) ||
+      (((uint32_t)x + w - 1U) > UINT16_MAX) ||
+      (((uint32_t)y + h - 1U) > UINT16_MAX)) {
+    return;
+  }
   DrawLine(x, y, x + w - 1, y, color);
   DrawLine(x, y + h - 1, x + w - 1, y + h - 1, color);
   DrawLine(x, y, x, y + h - 1, color);
@@ -101,6 +128,12 @@ __attribute__((weak)) void DrawRect(uint16_t x, uint16_t y, uint16_t w, uint16_t
 // ========== 填充矩形 ==========
 __attribute__((weak)) void DrawFilledRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                         COLOR color) {
+  Pixel pixel;
+  if ((w == 0U) || (h == 0U) ||
+      (((uint32_t)x + w - 1U) > UINT16_MAX) ||
+      (((uint32_t)y + h - 1U) > UINT16_MAX)) {
+    return;
+  }
   pixel.y = y;
   pixel.color = color;
   for (uint16_t i = 0; i < h; i++, pixel.y++) {
@@ -113,9 +146,17 @@ __attribute__((weak)) void DrawFilledRect(uint16_t x, uint16_t y, uint16_t w, ui
 
 // ========== 圆形（中点算法） ==========
 __attribute__((weak)) void DrawCircle(uint16_t x0, uint16_t y0, uint16_t r, COLOR color) {
-  int16_t x = r;
-  int16_t y = 0;
-  int16_t err = 0;
+  Pixel pixel;
+  int32_t x;
+  int32_t y = 0;
+  int32_t err = 0;
+
+  if ((r > INT16_MAX) || (r > x0) || (r > y0) ||
+      (((uint32_t)x0 + r) > UINT16_MAX) ||
+      (((uint32_t)y0 + r) > UINT16_MAX)) {
+    return;
+  }
+  x = r;
   pixel.color = color;
 
   while (x >= y) {
@@ -154,9 +195,16 @@ __attribute__((weak)) void DrawCircle(uint16_t x0, uint16_t y0, uint16_t r, COLO
 // ========== 填充圆形 ==========
 __attribute__((weak)) void DrawFilledCircle(uint16_t x0, uint16_t y0, uint16_t r,
                           COLOR color) {
-  int16_t x = r;
-  int16_t y = 0;
-  int16_t err = 0;
+  int32_t x;
+  int32_t y = 0;
+  int32_t err = 0;
+
+  if ((r > INT16_MAX) || (r > x0) || (r > y0) ||
+      (((uint32_t)x0 + r) > UINT16_MAX) ||
+      (((uint32_t)y0 + r) > UINT16_MAX)) {
+    return;
+  }
+  x = r;
 
   while (x >= y) {
     DrawLine(x0 - x, y0 + y, x0 + x, y0 + y, color);
@@ -185,6 +233,10 @@ __attribute__((weak)) void DrawTriangle(uint16_t x0, uint16_t y0, uint16_t x1, u
 // ========== 填充三角形 ==========
 __attribute__((weak)) void DrawFilledTriangle(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
                         uint16_t x2, uint16_t y2, COLOR color) {
+    if ((x0 > INT16_MAX) || (y0 > INT16_MAX) || (x1 > INT16_MAX) ||
+        (y1 > INT16_MAX) || (x2 > INT16_MAX) || (y2 > INT16_MAX)) {
+        return;
+    }
     // 1. 排序 (y0 <= y1 <= y2)
     if (y0 > y1) { Swap(&y0, &y1); Swap(&x0, &x1); }
     if (y1 > y2) { Swap(&y1, &y2); Swap(&x1, &x2); }
@@ -199,11 +251,11 @@ __attribute__((weak)) void DrawFilledTriangle(uint16_t x0, uint16_t y0, uint16_t
     // 3. 填充上半部分 (y0 -> y1)
     if (y1 > y0) {
         InitEdge(&e01, x0, y0, x1, y1);
-        for (int16_t y = y0; y < y1; y++) {
+        for (int32_t y = y0; y < y1; y++) {
             int16_t startX = e02.x;
             int16_t endX = e01.x;
             if (startX > endX) { int16_t t = startX; startX = endX; endX = t; }
-            DrawHLine(startX, y, endX - startX + 1, color);
+            DrawHLine((uint16_t)startX, (uint16_t)y, (uint16_t)endX, color);
             StepEdge(&e02);
             StepEdge(&e01);
         }
@@ -211,11 +263,11 @@ __attribute__((weak)) void DrawFilledTriangle(uint16_t x0, uint16_t y0, uint16_t
 
     // 4. 填充下半部分 (y1 -> y2)
     InitEdge(&e12, x1, y1, x2, y2);
-    for (int16_t y = y1; y <= y2; y++) {
+    for (int32_t y = y1; y <= y2; y++) {
         int16_t startX = e02.x;
         int16_t endX = e12.x;
         if (startX > endX) { int16_t t = startX; startX = endX; endX = t; }
-        DrawHLine(startX, y, endX - startX + 1, color);
+        DrawHLine((uint16_t)startX, (uint16_t)y, (uint16_t)endX, color);
         StepEdge(&e02);
         StepEdge(&e12);
     }
@@ -322,6 +374,7 @@ static const uint8_t font5x7[] = {
 
 // 绘制单个字符
 __attribute__((weak)) void DrawChar(uint16_t x, uint16_t y, char c, COLOR color) {
+  Pixel pixel;
   if (c < 32 || c > 126)
     c = '?';
   const uint8_t *chr = &font5x7[(c - 32) * 5];
@@ -340,8 +393,14 @@ __attribute__((weak)) void DrawChar(uint16_t x, uint16_t y, char c, COLOR color)
 
 // 绘制字符串
 __attribute__((weak)) void DrawString(uint16_t x, uint16_t y, const char *str, COLOR color) {
+  if (str == NULL) {
+    return;
+  }
   while (*str) {
     DrawChar(x, y, *str, color);
+    if (x > (UINT16_MAX - 6U)) {
+      break;
+    }
     x += 6; // 字间距
     str++;
   }

@@ -131,10 +131,10 @@ const char *EWM103_TypeName(EWM103_Type type)
     return "MQTTCLEAN";
   case EWM103_TYPE_WEBSERVER:
     return "WEBSERVER";
-  case EWM103_TYPE_BLEPAIRSTART:
-    return "BLEPAIRSTART";
-  case EWM103_TYPE_BLEPAIRSTOP:
-    return "BLEPAIRSTOP";
+  case EWM103_TYPE_BLEINIT:
+    return "BLEINIT";
+  case EWM103_TYPE_BLUFI:
+    return "BLUFI";
   default:
     return "?";
   }

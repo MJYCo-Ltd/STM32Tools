@@ -23,6 +23,8 @@ extern "C" {
 #endif
 #include "main.h"
 #include "i2c.h"
+
+#define OV5640_USER_I2C_TIMEOUT_MS 100U
 #include <Camera/ov5640.h>
 
 #define OV5640_I2C_HANDLE hi2c1
@@ -44,7 +46,7 @@ static inline int32_t OV5640_USER_GetTick(){
 static inline int32_t OV5640_USER_WriteReg(uint16_t devAddr, uint16_t Reg,
                                            uint8_t *pData, uint16_t Length) {
     if (HAL_I2C_Mem_Write(&hi2c1, devAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData,
-                         Length, HAL_MAX_DELAY) == HAL_OK) {
+                         Length, OV5640_USER_I2C_TIMEOUT_MS) == HAL_OK) {
         return OV5640_OK;
     }
 
@@ -54,7 +56,7 @@ static inline int32_t OV5640_USER_WriteReg(uint16_t devAddr, uint16_t Reg,
 static inline int32_t OV5640_USER_ReadReg(uint16_t devAddr, uint16_t Reg,
                                           uint8_t *pData, uint16_t Length) {
     if (HAL_I2C_Mem_Read(&hi2c1, devAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData,
-                         Length, HAL_MAX_DELAY) == HAL_OK) {
+                         Length, OV5640_USER_I2C_TIMEOUT_MS) == HAL_OK) {
         return OV5640_OK;
     }
 

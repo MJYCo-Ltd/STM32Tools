@@ -10,6 +10,8 @@
 #include "main.h"
 #include <string.h>
 
+#define DEBUG_UART_MAX_ATTEMPTS 3U
+
 volatile uint8_t rtc_5min_flag = 0;
 void SystemClock_Config(void);
 
@@ -19,26 +21,24 @@ STMSTATUS G_LOCAL = {0, 0, 0, 0};
 
 /// 发送信息给串口
 void SendDebugInfo(const uint8_t *pData, uint16_t uLength) {
-  if (GetUartCount() < 1)
+  UART_HandleTypeDef *pHUart;
+  uint32_t attempt;
+
+  if ((pData == NULL) || (uLength == 0U) || (GetUartCount() < 1U)) {
     return;
-  UART_HandleTypeDef *pHUart = GetUart(1);
-  while (HAL_OK != HAL_UART_Transmit(pHUart, pData, uLength, 30)) {
+  }
+  pHUart = GetUart(1U);
+  if (pHUart == NULL) {
+    return;
+  }
+  for (attempt = 0U; attempt < DEBUG_UART_MAX_ATTEMPTS; ++attempt) {
+    if (HAL_UART_Transmit(pHUart, pData, uLength, 30U) == HAL_OK) {
+      UpdateUartSendInfo(pHUart, uLength);
+      return;
+    }
     YTY_DELAY_MS(1);
   }
-  UpdateUartSendInfo(pHUart, uLength);
 }
-/*
-extern TIM_HandleTypeDef htim10;
-unsigned long g_TotalTime = 0;
-void configureTimerForRunTimeStats(void) {
-  HAL_TIM_Base_Start_IT(&htim10);
-  g_TotalTime = 0;
-}
-
-unsigned long getRunTimeCounterValue(void) {
-  return (g_TotalTime + __HAL_TIM_GET_COUNTER(&htim10));
-}
-*/
 /// 请求空间
 void *RequestSpace(size_t unSize) {
   void *pBuffer = YTY_MALLOC(unSize);

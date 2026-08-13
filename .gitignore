@@ -1,0 +1,29 @@
+# Generated host-test build trees
+/Test/build/
+/Test/out/
+
+# CMake and compiler outputs
+/build/
+/out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.obj
+*.o
+*.exe
+*.ilk
+*.pdb
+*.bin
+*.elf
+*.hex
+*.map
+
+# IDE and editor state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*~

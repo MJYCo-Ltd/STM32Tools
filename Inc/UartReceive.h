@@ -22,6 +22,9 @@
 #include "Auxiliary.h"
 
 #define UART_RECEIVE_BUFFER_LENGTH 200U
+#ifndef UART_RECEIVE_QUEUE_DEPTH
+#define UART_RECEIVE_QUEUE_DEPTH 8U
+#endif
 /// 定义串口传输
 typedef struct _Uart_Queue_Info {
     uint8_t buffer[UART_RECEIVE_BUFFER_LENGTH];

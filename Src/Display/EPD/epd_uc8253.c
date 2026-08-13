@@ -337,8 +337,8 @@ __attribute__((weak)) uint8_t EPD_GetInnerTemp(void) {
   SPI_SendCommand(EPD_CMD_TEMPERATURE_SENSOR_CALIBRATION);
   EPD_WaitUntilIdle();
 
-  uint8_t data;
-  HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1, HAL_MAX_DELAY);
+  uint8_t data = 0U;
+  (void)HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1U, 1000U);
 
   EPD_PowerOff();
   return (data);
@@ -349,8 +349,8 @@ __attribute__((weak)) uint8_t EPD_IsOk() {
   SPI_SendCommand(EPD_CMD_PANEL_GLASS_CHECK);
   EPD_WaitUntilIdle();
 
-  uint8_t data;
-  HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1, HAL_MAX_DELAY);
+  uint8_t data = 0U;
+  (void)HAL_SPI_Receive(&DISPLAY_SPI_PORT, &data, 1U, 1000U);
   return (data);
 }
 #ifndef STM32TOOLS_DISPLAY_BACKEND_UC8253

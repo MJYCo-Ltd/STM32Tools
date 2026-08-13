@@ -198,6 +198,10 @@ Storage_Status StorageLog_Append(StorageLog *log, const void *payload,
     return STORAGE_ERR_RANGE;
   }
   need = (uint32_t)sizeof(StorageRecordHeader) + payload_length;
+  if (need >
+      (NOR_FLASH_SECTOR_SIZE - (uint32_t)sizeof(StorageLogSectorHeader))) {
+    return STORAGE_ERR_RANGE;
+  }
   if ((log->write_offset_in_sector + need) > NOR_FLASH_SECTOR_SIZE) {
     st = RotateSector(log);
     if (st != STORAGE_OK) {
@@ -239,8 +243,6 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
   uint32_t i;
   uint32_t count;
   uint32_t n = 0U;
-  StorageRecordLoc all[64];
-  uint32_t all_n = 0U;
 
   if ((log == NULL) || (out_locs == NULL) || (out_count == NULL) ||
       (max_count == 0U)) {
@@ -249,7 +251,6 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
   count = SectorCount(log);
   for (i = 0U; i < count; ++i) {
     StorageLogSectorHeader header;
-    StorageRecordLoc loc;
     uint32_t data_off;
     uint32_t data_size;
     Storage_Status st = ReadSectorHeader(log, i, &header);
@@ -259,22 +260,16 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
     data_off = SectorBase(log, i) + (uint32_t)sizeof(StorageLogSectorHeader);
     data_size =
         NOR_FLASH_SECTOR_SIZE - (uint32_t)sizeof(StorageLogSectorHeader);
-    /* Collect by repeatedly finding; for host tests keep simple: one latest
-       per sector is not enough — scan with FindLatest only gets one.
-       Use sequential walk via FindLatest on shrinking regions is heavy;
-       call FindLatest then walk is incomplete. For v1 collect latest from
-       each sector then sort by sequence. */
-    st = StorageRecord_FindLatest(log->map, log->partition, data_off, data_size,
-                                  &loc, NULL, 0U);
-    if (st == STORAGE_OK) {
-      /* Walk all records in sector by re-scanning from data_off */
+    {
       uint32_t cursor = data_off;
-      uint32_t end = data_off + data_size;
+      const uint32_t end = data_off + data_size;
       uint32_t guard = 0U;
       while ((cursor <= end) &&
              ((end - cursor) >= (uint32_t)sizeof(StorageRecordHeader))) {
         StorageRecordHeader rh;
-        uint32_t header_crc;
+        StorageRecordLoc candidate;
+        uint32_t next;
+
         st = Storage_Read(log->map, log->partition, cursor, &rh, sizeof(rh));
         if (st != STORAGE_OK) {
           return st;
@@ -282,27 +277,42 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
         if (rh.magic == STORAGE_ERASED_U32) {
           break;
         }
-        if ((rh.magic == STORAGE_RECORD_MAGIC) &&
-            (rh.commit_marker == STORAGE_COMMIT_MARKER) &&
-            (StorageRecord_HeaderCrc(&rh, &header_crc) == STORAGE_OK) &&
-            (header_crc == rh.header_crc32) &&
-            (all_n < (sizeof(all) / sizeof(all[0])))) {
-          all[all_n].sequence = rh.sequence;
-          all[all_n].offset = cursor;
-          all[all_n].payload_length = rh.payload_length;
-          all[all_n].valid = 1U;
-          ++all_n;
+        if (rh.magic != STORAGE_RECORD_MAGIC) {
+          cursor += 4U;
+          continue;
         }
-        if (rh.magic == STORAGE_RECORD_MAGIC) {
-          uint32_t next =
-              cursor + (uint32_t)sizeof(StorageRecordHeader) + rh.payload_length;
+
+        st = StorageRecord_ValidateAt(log->map, log->partition, cursor, end,
+                                      &candidate);
+        if (st == STORAGE_OK) {
+          if (n < max_count) {
+            out_locs[n++] = candidate;
+          } else {
+            uint32_t oldest = 0U;
+            uint32_t j;
+            for (j = 1U; j < n; ++j) {
+              if (Storage_SeqIsNewer(out_locs[oldest].sequence,
+                                     out_locs[j].sequence) != 0) {
+                oldest = j;
+              }
+            }
+            if (Storage_SeqIsNewer(candidate.sequence,
+                                   out_locs[oldest].sequence) != 0) {
+              out_locs[oldest] = candidate;
+            }
+          }
+          next = cursor + (uint32_t)sizeof(StorageRecordHeader) +
+                 candidate.payload_length;
           next = NorFlash_AlignUp(next, 4U);
           if (next <= cursor) {
             break;
           }
           cursor = next;
-        } else {
+        } else if ((st == STORAGE_ERR_CRC) || (st == STORAGE_ERR_STATE) ||
+                   (st == STORAGE_ERR_RANGE)) {
           cursor += 4U;
+        } else {
+          return st;
         }
         if (++guard > (data_size / 4U)) {
           break;
@@ -310,26 +320,21 @@ Storage_Status StorageLog_GetRecent(StorageLog *log, uint32_t max_count,
       }
     }
   }
-  /* Pick max_count newest */
-  while (n < max_count) {
-    uint32_t best = 0U;
-    uint8_t have = 0U;
-    for (i = 0U; i < all_n; ++i) {
-      if (all[i].valid == 0U) {
-        continue;
-      }
-      if ((have == 0U) ||
-          (Storage_SeqIsNewer(all[i].sequence, all[best].sequence) != 0)) {
-        best = i;
-        have = 1U;
+  /* Sort newest first. */
+  for (i = 0U; i < n; ++i) {
+    uint32_t best = i;
+    uint32_t j;
+    for (j = i + 1U; j < n; ++j) {
+      if (Storage_SeqIsNewer(out_locs[j].sequence,
+                             out_locs[best].sequence) != 0) {
+        best = j;
       }
     }
-    if (have == 0U) {
-      break;
+    if (best != i) {
+      StorageRecordLoc tmp = out_locs[i];
+      out_locs[i] = out_locs[best];
+      out_locs[best] = tmp;
     }
-    out_locs[n] = all[best];
-    all[best].valid = 0U;
-    ++n;
   }
   *out_count = n;
   return STORAGE_OK;

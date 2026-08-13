@@ -3,6 +3,8 @@
 #include "Base.h"
 #include "main.h"
 
+#define SPI_DISPLAY_TRANSFER_TIMEOUT_MS 1000U
+
 static void STM32_Select(const SPI_DisplayBus *bus, uint8_t active) {
   if (bus->cs_port != NULL) {
     HAL_GPIO_WritePin((GPIO_TypeDef *)bus->cs_port, bus->cs_pin,
@@ -11,25 +13,42 @@ static void STM32_Select(const SPI_DisplayBus *bus, uint8_t active) {
 }
 
 static void STM32_DataMode(const SPI_DisplayBus *bus, uint8_t data_mode) {
-  HAL_GPIO_WritePin((GPIO_TypeDef *)bus->dc_port, bus->dc_pin,
-                    (data_mode != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  if (bus->dc_port != NULL) {
+    HAL_GPIO_WritePin((GPIO_TypeDef *)bus->dc_port, bus->dc_pin,
+                      (data_mode != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  }
 }
 
 static int STM32_Transfer(const SPI_DisplayBus *bus, const uint8_t *data,
                           size_t length, uint8_t use_dma) {
-  SPI_HandleTypeDef *spi = (SPI_HandleTypeDef *)bus->spi_handle;
+  SPI_HandleTypeDef *spi;
+
+  if ((bus == NULL) || (data == NULL)) {
+    return -1;
+  }
+  spi = (SPI_HandleTypeDef *)bus->spi_handle;
+  if (spi == NULL) {
+    return -1;
+  }
 
   while (length > 0U) {
     uint16_t chunk = (length > UINT16_MAX) ? UINT16_MAX : (uint16_t)length;
     HAL_StatusTypeDef status;
 
     if (use_dma != 0U) {
+      const uint32_t started_at = HAL_GetTick();
       status = HAL_SPI_Transmit_DMA(spi, (uint8_t *)data, chunk);
       while ((status == HAL_OK) && (HAL_SPI_GetState(spi) != HAL_SPI_STATE_READY)) {
+        if ((HAL_GetTick() - started_at) >=
+            SPI_DISPLAY_TRANSFER_TIMEOUT_MS) {
+          (void)HAL_SPI_Abort(spi);
+          return -1;
+        }
         YTY_DELAY_MS(1U);
       }
     } else {
-      status = HAL_SPI_Transmit(spi, (uint8_t *)data, chunk, HAL_MAX_DELAY);
+      status = HAL_SPI_Transmit(spi, (uint8_t *)data, chunk,
+                                SPI_DISPLAY_TRANSFER_TIMEOUT_MS);
     }
     if (status != HAL_OK) {
       return -1;

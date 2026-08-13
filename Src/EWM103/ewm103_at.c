@@ -354,10 +354,14 @@ EWM103_Result EWM103_AtBuild(const EWM103_Content *c, char *packet,
     return Format(packet, packet_size,
                   "AT+WEBSERVER=1,%u,%lu" EWM103_COMMAND_TERMINATOR,
                   (unsigned int)c->port, (unsigned long)c->u0);
-  case EWM103_TYPE_BLEPAIRSTART:
-    return BuildExec(packet, packet_size, "BLEPAIRSTART");
-  case EWM103_TYPE_BLEPAIRSTOP:
-    return BuildExec(packet, packet_size, "BLEPAIRSTOP");
+  case EWM103_TYPE_BLEINIT:
+    /* 1=Server，0=释放协议栈 */
+    return Format(packet, packet_size, "AT+BLEINIT=%u" EWM103_COMMAND_TERMINATOR,
+                  (unsigned int)(c->mode != 0U ? 1U : 0U));
+  case EWM103_TYPE_BLUFI:
+    /* 1=启动配网，0=关闭 */
+    return Format(packet, packet_size, "AT+BLUFI=%u" EWM103_COMMAND_TERMINATOR,
+                  (unsigned int)(c->mode != 0U ? 1U : 0U));
   default:
     return Fail(packet, packet_size, EWM103_RESULT_INVALID_VALUE);
   }

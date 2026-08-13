@@ -78,6 +78,75 @@ static Storage_Status ValidateHeader(const StorageRecordHeader *header,
   return STORAGE_OK;
 }
 
+static Storage_Status ValidatePayload(const StoragePartitionMap *map,
+                                      uint32_t partition,
+                                      uint32_t payload_offset,
+                                      const StorageRecordHeader *header)
+{
+  uint8_t tmp[64];
+  uint32_t left;
+  uint32_t pos;
+  uint32_t crc;
+  Storage_Status st;
+
+  if ((map == NULL) || (header == NULL)) {
+    return STORAGE_ERR_PARAM;
+  }
+  if (header->payload_length == 0U) {
+    return (header->payload_crc32 == 0U) ? STORAGE_OK : STORAGE_ERR_CRC;
+  }
+
+  left = header->payload_length;
+  pos = payload_offset;
+  crc = 0xFFFFFFFFUL;
+  while (left > 0U) {
+    const uint32_t n =
+        (left > sizeof(tmp)) ? (uint32_t)sizeof(tmp) : left;
+    st = Storage_Read(map, partition, pos, tmp, n);
+    if (st != STORAGE_OK) {
+      return st;
+    }
+    crc = Storage_Crc32Update(crc, tmp, n);
+    pos += n;
+    left -= n;
+  }
+  return ((crc ^ 0xFFFFFFFFUL) == header->payload_crc32) ? STORAGE_OK
+                                                          : STORAGE_ERR_CRC;
+}
+
+Storage_Status StorageRecord_ValidateAt(
+    const StoragePartitionMap *map, uint32_t partition, uint32_t record_offset,
+    uint32_t max_end, StorageRecordLoc *out_loc)
+{
+  StorageRecordHeader header;
+  Storage_Status st;
+
+  if ((map == NULL) || (out_loc == NULL)) {
+    return STORAGE_ERR_PARAM;
+  }
+  memset(out_loc, 0, sizeof(*out_loc));
+  st = Storage_Read(map, partition, record_offset, &header, sizeof(header));
+  if (st != STORAGE_OK) {
+    return st;
+  }
+  st = ValidateHeader(&header, max_end, record_offset);
+  if (st != STORAGE_OK) {
+    return st;
+  }
+  st = ValidatePayload(map, partition,
+                       record_offset + (uint32_t)sizeof(StorageRecordHeader),
+                       &header);
+  if (st != STORAGE_OK) {
+    return st;
+  }
+
+  out_loc->sequence = header.sequence;
+  out_loc->offset = record_offset;
+  out_loc->payload_length = header.payload_length;
+  out_loc->valid = 1U;
+  return STORAGE_OK;
+}
+
 Storage_Status StorageRecord_WriteAt(
     const StoragePartitionMap *map, uint32_t partition, uint32_t offset,
     uint32_t max_end, uint32_t sequence, const void *payload,
@@ -206,6 +275,7 @@ Storage_Status StorageRecord_FindLatest(
   const uint32_t max_steps = (region_size / 4U) + 1U;
   StorageRecordLoc best;
   Storage_Status found = STORAGE_ERR_NOT_FOUND;
+  Storage_Status st;
 
   if ((map == NULL) || (out_loc == NULL) || (region_size == 0U)) {
     return STORAGE_ERR_PARAM;
@@ -220,9 +290,7 @@ Storage_Status StorageRecord_FindLatest(
   while ((cursor <= region_end) &&
          ((region_end - cursor) >= (uint32_t)sizeof(StorageRecordHeader))) {
     StorageRecordHeader header;
-    Storage_Status st;
     uint32_t next;
-    uint8_t payload_ok = 1U;
 
     if (++steps > max_steps) {
       break;
@@ -243,41 +311,10 @@ Storage_Status StorageRecord_FindLatest(
       cursor = (cursor + 4U);
       continue;
     }
-    if ((payload_buf != NULL) && (header.payload_length > 0U)) {
-      if (header.payload_length > payload_buf_size) {
-        payload_ok = 0U;
-      } else {
-        st = Storage_Read(map, partition,
-                          cursor + (uint32_t)sizeof(StorageRecordHeader),
-                          payload_buf, header.payload_length);
-        if (st != STORAGE_OK) {
-          return st;
-        }
-        if (Storage_Crc32(payload_buf, header.payload_length) !=
-            header.payload_crc32) {
-          payload_ok = 0U;
-        }
-      }
-    } else if (header.payload_length > 0U) {
-      uint8_t tmp[64];
-      uint32_t left = header.payload_length;
-      uint32_t pos = cursor + (uint32_t)sizeof(StorageRecordHeader);
-      uint32_t crc = 0xFFFFFFFFUL;
-      while (left > 0U) {
-        uint32_t n = (left > sizeof(tmp)) ? (uint32_t)sizeof(tmp) : left;
-        st = Storage_Read(map, partition, pos, tmp, n);
-        if (st != STORAGE_OK) {
-          return st;
-        }
-        crc = Storage_Crc32Update(crc, tmp, n);
-        pos += n;
-        left -= n;
-      }
-      if ((crc ^ 0xFFFFFFFFUL) != header.payload_crc32) {
-        payload_ok = 0U;
-      }
-    }
-    if (payload_ok != 0U) {
+    st = ValidatePayload(
+        map, partition, cursor + (uint32_t)sizeof(StorageRecordHeader),
+        &header);
+    if (st == STORAGE_OK) {
       if ((found != STORAGE_OK) ||
           (Storage_SeqIsNewer(header.sequence, best.sequence) != 0)) {
         best.sequence = header.sequence;
@@ -285,11 +322,10 @@ Storage_Status StorageRecord_FindLatest(
         best.payload_length = header.payload_length;
         best.valid = 1U;
         found = STORAGE_OK;
-        if ((payload_buf != NULL) && (header.payload_length > 0U) &&
-            (header.payload_length <= payload_buf_size)) {
-          /* payload_buf already filled when size allowed */
-        }
       }
+    } else if ((st != STORAGE_ERR_CRC) && (st != STORAGE_ERR_STATE) &&
+               (st != STORAGE_ERR_RANGE)) {
+      return st;
     }
     next = cursor + (uint32_t)sizeof(StorageRecordHeader) +
            header.payload_length;
@@ -300,6 +336,14 @@ Storage_Status StorageRecord_FindLatest(
     cursor = next;
   }
   *out_loc = best;
+  if ((found == STORAGE_OK) && (payload_buf != NULL) &&
+      (best.payload_length > 0U)) {
+    st = StorageRecord_ReadPayload(map, partition, best.offset, payload_buf,
+                                   payload_buf_size, NULL);
+    if (st != STORAGE_OK) {
+      return st;
+    }
+  }
   return found;
 }
 
