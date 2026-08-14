@@ -6,7 +6,7 @@ STM32Tools 是一个基于 STM32CubeMX 的嵌入式模块工具集合，面向�
 - 为不同显示（LCD / EPD）提供统一绘图与 SPI 接口
 - 提供对常见传感器（AHT20 / TMP117 / ECSense）和无线模块（ML307 / EWM103 / RF24L01 / MX-22）的抽象接口
 - EWM103 含 BluFi 指令（`BLEINIT` / `BLUFI`）；公共 AT 解析见 `AT/at_codec`
-- Bootloader 逻辑库见 `Bootloader/`（外置 Flash OTA 安装 / 试运行 / 跳转 App）
+- Bootloader 逻辑库见 `Bootloader/`（外置 Flash OTA 安装 / IWDG 策略 / 试运行 / 跳转 App）
 - 提供高可靠的 UART 接收（DMA ReceiveToIdle + 双缓冲）以降低 AT 回显/OK 分帧导致的丢字节
 
 目录（精简）：

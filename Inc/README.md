@@ -229,12 +229,18 @@ EPD 与 LCD 共用 SPI 传输接口。控制器驱动先包含对应的 `*_confi
 
 | 接口 | 说明 |
 |------|------|
-| `Bootloader_Run(cfg)` | 读升级状态 → 装 Candidate / 回滚 → `JumpToApp` |
-| `Bootloader_IsAppValid` / `Bootloader_JumpToApp` | 向量表检查与跳转 |
-| `Bootloader_InstallSlot` | 从 `StorageFirmware` 槽写入内部 App Flash |
-| `BootloaderFlash_*` | F4 内部 Flash 擦写（`bootloader_flash_stm32f4.c`） |
+| `Bootloader_Run(cfg)` | 读升级状态 → `BootloaderPolicy_Decide` → 持久化 → 装 Candidate / 回滚 / `JumpToApp` / HOLD |
+| `Bootloader_IsAppValid` / `Bootloader_JumpToApp` | 向量表检查与跳转（跳转前由调用方喂狗） |
+| `Bootloader_InstallSlot` | 从 `StorageFirmware` 槽写入内部 App Flash（按扇区擦） |
+| `BootloaderFlash_SetFeed` / `Erase` / `Program` | F4 内部 Flash；擦除一次一个扇区并喂狗 |
+| `BootloaderIwdg_*` | 启动 / Feed / 捕获复位标志 / `SafeHold` |
+| `BootloaderPolicy_Decide` | 可宿主测试的回退策略（无 HAL） |
 
-默认映射：Bootloader `0x08000000`/128KB，App `0x08020000`/384KB。
+`BootloaderConfig` 需填 `watchdog_feed`、`reset_flags`、以及 `max_trial_boots` / `max_phase_attempts` / `max_watchdog_storm`（0 则用 memmap 默认 3 / 3 / 8）。
+
+默认映射：Bootloader `0x08000000`/128KB（扇区 0–4），App `0x08020000`/384KB（扇区 5–7）。
+
+`StorageBackend.poll`：每个外部扇区/块擦除前的可选钩子，产品侧绑 IWDG Feed。
 
 ---
 

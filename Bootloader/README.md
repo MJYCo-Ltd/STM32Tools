@@ -29,12 +29,28 @@
 
 依赖：`Flash/storage_*`、`W25Q`、`Common`、STM32 HAL Flash。
 
-产品侧：Agriculture [`Hardware/Bootloader`](../../Agriculture/Hardware/Bootloader/README.md) 已提供可编译裸机工程（链本库）。
+产品侧：Agriculture [`Hardware/Bootloader`](../../Agriculture/Hardware/Bootloader/README.md) 已提供可编译裸机工程（链本库）。设计说明见 Agriculture [`Hardware/docs/BOOTLOADER_IWDG.md`](../../Agriculture/Hardware/docs/BOOTLOADER_IWDG.md)。
 
-1. `STM32F411xx_FLASH.ld`：`FLASH ORIGIN=0x08020000, LENGTH=384K`  
+产品工程需要：
+
+1. App 链接脚本 `STM32F411xx_FLASH.ld`：`FLASH ORIGIN=0x08020000, LENGTH=384K`  
 2. `system_stm32f4xx.c`：开启 `USER_VECT_TAB_ADDRESS`，`VECT_TAB_OFFSET=0x20000`  
-3. 下载镜像到 W25Q Candidate，写 Manifest（`target_address=0x08020000`），状态置 `INSTALLING` 后复位  
-4. 试运行成功后调用 `UpgradeControl_Confirm()`
+3. Bootloader 目标必须单独使用 `STM32F411xx_BOOT.ld`（`ORIGIN=0x08000000`）。父工程若把 App 的 `-T` 放进 `CMAKE_EXE_LINKER_FLAGS`，GNU ld 以第一次 `FLASH` 为准，BL 会错误地链到 `0x08020000`  
+4. 下载镜像到 W25Q Candidate，写 Manifest（`target_address=0x08020000`），状态置 `INSTALLING` 后复位  
+5. App 本地可用后调用 `UpgradeControl_OnHealthyBoot()`（不要在 `main()` 一进来就 `Confirm`）
+
+## IWDG 与策略常量
+
+| 宏 | 默认 | 含义 |
+|---|---|---|
+| IWDG prescaler / reload | 128 / 4095 | 典型超时 ≈ 16.4 s，只覆盖**单** 128 KB 扇区擦除 |
+| `BOOTLOADER_MAX_TRIAL_BOOTS` | 3 | 未健康确认的试运行次数 |
+| `BOOTLOADER_MAX_PHASE_ATTEMPTS` | 3 | 同一安装/回滚阶段允许擦写次数 |
+| `BOOTLOADER_MAX_WATCHDOG_STORM` | 8 | 已确认镜像连续 IWDG 次数，超限回滚或 SafeHold |
+
+`UpgradeStatePayload` 另含 `reset_reason`、`watchdog_resets`、`phase_attempts`。`persist` 为真时必须先写入外部 Flash，再擦内部 Flash 或跳 App。
+
+`StorageBackend.poll` 在每个外部扇区/块擦除前调用，供产品绑 IWDG。内部擦除走 `BootloaderFlash_SetFeed`。
 
 ## 状态机（与 `storage_upgrade.h` 对齐）
 
@@ -75,4 +91,6 @@ App 侧：不要单独做高优先级“只喂狗”任务，那会掩盖业务�
 
 1. 先烧 Bootloader 到 `0x08000000`  
 2. 再烧 Application 到 `0x08020000`（或合并 bin）  
-3. OTA：仅写外部 Flash Candidate，复位后由 Bootloader 换槽
+3. OTA：仅写外部 Flash Candidate，复位后由 Bootloader 换槽  
+
+宿主测试：`Test/storage_test` 含 `TestBootloaderPolicy`（安装 attempts、IWDG+PIN 不误清、风暴回滚、POR 清 `watchdog_resets`）。
