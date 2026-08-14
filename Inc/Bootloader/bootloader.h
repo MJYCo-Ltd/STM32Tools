@@ -19,7 +19,9 @@ typedef enum {
   BOOTLOADER_ERR_STORAGE,
   BOOTLOADER_ERR_MANIFEST,
   BOOTLOADER_ERR_FLASH,
-  BOOTLOADER_ERR_ROLLBACK
+  BOOTLOADER_ERR_ROLLBACK,
+  BOOTLOADER_ERR_PHASE_LIMIT,
+  BOOTLOADER_ERR_WATCHDOG_STORM
 } Bootloader_Status;
 
 /**
@@ -37,6 +39,10 @@ typedef struct {
   uint32_t app_flash_base;
   uint32_t app_flash_size;
   uint32_t max_trial_boots;
+  uint32_t max_phase_attempts;
+  uint32_t max_watchdog_storm;
+  uint32_t reset_flags;
+  void (*watchdog_feed)(void);
 } BootloaderConfig;
 
 /** True if stack pointer / Reset_Handler at app_base look like a valid vector table. */
@@ -47,7 +53,8 @@ void Bootloader_JumpToApp(uint32_t app_base);
 
 /**
  * Program one external firmware slot into internal Application Flash.
- * Erases [target, target+length) then copies image bytes.
+ * Erases one internal sector at a time (feeding IWDG between sectors),
+ * then copies image bytes.
  */
 Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
                                          const StorageFirmwareManifest *manifest,
@@ -56,7 +63,7 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
 
 /**
  * Read upgrade log from external Flash, install/rollback if needed, then jump.
- * On fatal error with no valid app, returns a status (caller may hang/blink).
+ * On fatal error with no valid app, returns a status (caller should SafeHold).
  */
 Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg);
 

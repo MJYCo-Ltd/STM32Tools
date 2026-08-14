@@ -14,8 +14,13 @@ typedef enum {
   BOOTLOADER_FLASH_ERR_HAL
 } BootloaderFlash_Status;
 
+typedef void (*BootloaderFlash_FeedFn)(void);
+
+void BootloaderFlash_SetFeed(BootloaderFlash_FeedFn fn);
+
 /**
  * MCU-port: erase then program a contiguous Application region in internal Flash.
+ * Erase is one sector at a time so IWDG can be fed between sectors.
  * Implementations must refuse addresses inside the Bootloader region.
  */
 BootloaderFlash_Status BootloaderFlash_Erase(uint32_t address, uint32_t length);

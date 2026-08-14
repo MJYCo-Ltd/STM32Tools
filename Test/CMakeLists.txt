@@ -35,6 +35,7 @@ add_executable(storage_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Flash/storage_upgrade.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Flash/storage_commit.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Flash/storage_bank.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Bootloader/bootloader_policy.c
 )
 
 target_include_directories(storage_test PRIVATE

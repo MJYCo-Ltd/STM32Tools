@@ -2,6 +2,13 @@
 
 #include <stddef.h>
 
+void StorageBackend_Poll(const StorageBackend *backend)
+{
+  if ((backend != NULL) && (backend->poll != NULL)) {
+    backend->poll(backend->ctx);
+  }
+}
+
 void StorageBackend_Lock(const StorageBackend *backend)
 {
   if ((backend != NULL) && (backend->lock != NULL)) {

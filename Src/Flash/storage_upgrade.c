@@ -21,6 +21,7 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
   UpgradeStatePayload best;
 
   memset(&best, 0, sizeof(best));
+  memset(&payload, 0, sizeof(payload));
   memset(&log->latest, 0, sizeof(log->latest));
   log->has_latest = 0U;
   log->next_sequence = 1U;
@@ -35,6 +36,7 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
   } else if (st != STORAGE_ERR_NOT_FOUND) {
     return st;
   }
+  memset(&payload, 0, sizeof(payload));
   st = StorageRecord_FindLatest(log->map, log->partition, UPGRADE_META_B_OFF,
                                 NOR_FLASH_SECTOR_SIZE, &loc_b, &payload,
                                 sizeof(payload));
@@ -48,6 +50,7 @@ static Storage_Status LoadLatest(StorageUpgradeLog *log)
     return st;
   }
   if (log->partition_size > UPGRADE_LOG_OFF) {
+    memset(&payload, 0, sizeof(payload));
     st = StorageRecord_FindLatest(
         log->map, log->partition, UPGRADE_LOG_OFF,
         log->partition_size - UPGRADE_LOG_OFF, &loc_log, &payload,

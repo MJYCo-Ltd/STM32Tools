@@ -35,7 +35,11 @@ typedef struct StorageBackend {
   void (*unlock)(void *ctx);
   /** Return 1 if erase/write is allowed, 0 to deny. NULL means always OK. */
   int (*voltage_ok)(void *ctx);
+  /** Optional IWDG / progress poll. Called before each sector/block erase. */
+  void (*poll)(void *ctx);
 } StorageBackend;
+
+void StorageBackend_Poll(const StorageBackend *backend);
 
 void StorageBackend_Lock(const StorageBackend *backend);
 void StorageBackend_Unlock(const StorageBackend *backend);

@@ -157,6 +157,7 @@ Storage_Status Storage_EraseSector(const StoragePartitionMap *map,
     return st;
   }
   StorageBackend_Lock(map->backend);
+  StorageBackend_Poll(map->backend);
   st = StorageBackend_CheckVoltage(map->backend);
   if (st == STORAGE_OK) {
     st = map->backend->erase_sector(map->backend->ctx, phys);
@@ -179,6 +180,7 @@ Storage_Status Storage_EraseBlock64(const StoragePartitionMap *map,
     return st;
   }
   StorageBackend_Lock(map->backend);
+  StorageBackend_Poll(map->backend);
   st = StorageBackend_CheckVoltage(map->backend);
   if (st == STORAGE_OK) {
     if (map->backend->erase_block64 == NULL) {

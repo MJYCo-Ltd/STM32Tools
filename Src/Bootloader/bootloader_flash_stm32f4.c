@@ -11,6 +11,20 @@
 
 #include <string.h>
 
+static BootloaderFlash_FeedFn g_feed;
+
+void BootloaderFlash_SetFeed(BootloaderFlash_FeedFn fn)
+{
+  g_feed = fn;
+}
+
+static void Feed(void)
+{
+  if (g_feed != NULL) {
+    g_feed();
+  }
+}
+
 static uint32_t SectorOf(uint32_t address)
 {
   if (address < 0x08004000UL) {
@@ -60,7 +74,8 @@ BootloaderFlash_Status BootloaderFlash_Erase(uint32_t address, uint32_t length)
   uint32_t sector_error = 0U;
   uint32_t first;
   uint32_t last;
-  HAL_StatusTypeDef st;
+  uint32_t sector;
+  HAL_StatusTypeDef st = HAL_OK;
 
   if (RangeOk(address, length) == 0U) {
     return BOOTLOADER_FLASH_ERR_RANGE;
@@ -74,13 +89,20 @@ BootloaderFlash_Status BootloaderFlash_Erase(uint32_t address, uint32_t length)
 
   erase.TypeErase = FLASH_TYPEERASE_SECTORS;
   erase.Banks = FLASH_BANK_1;
-  erase.Sector = first;
-  erase.NbSectors = (last - first) + 1U;
+  erase.NbSectors = 1U;
   erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
 
   HAL_FLASH_Unlock();
-  st = HAL_FLASHEx_Erase(&erase, &sector_error);
+  for (sector = first; sector <= last; ++sector) {
+    Feed();
+    erase.Sector = sector;
+    st = HAL_FLASHEx_Erase(&erase, &sector_error);
+    if (st != HAL_OK) {
+      break;
+    }
+  }
   HAL_FLASH_Lock();
+  Feed();
   return (st == HAL_OK) ? BOOTLOADER_FLASH_OK : BOOTLOADER_FLASH_ERR_HAL;
 }
 
@@ -98,6 +120,9 @@ BootloaderFlash_Status BootloaderFlash_Program(uint32_t address,
   HAL_FLASH_Unlock();
   while ((offset + 4U) <= length) {
     uint32_t word;
+    if ((offset & 0x3FFU) == 0U) {
+      Feed();
+    }
     memcpy(&word, &data[offset], sizeof(word));
     st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address + offset, word);
     if (st != HAL_OK) {
@@ -114,5 +139,6 @@ BootloaderFlash_Status BootloaderFlash_Program(uint32_t address,
     offset += 1U;
   }
   HAL_FLASH_Lock();
+  Feed();
   return (st == HAL_OK) ? BOOTLOADER_FLASH_OK : BOOTLOADER_FLASH_ERR_HAL;
 }

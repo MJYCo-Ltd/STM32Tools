@@ -35,6 +35,8 @@ typedef struct STORAGE_STRUCT_PACKED {
   uint32_t trial_boot_count;
   uint32_t last_error;
   uint32_t reset_reason;
+  uint32_t watchdog_resets;
+  uint32_t phase_attempts;
 } UpgradeStatePayload;
 STORAGE_PACK_END
 

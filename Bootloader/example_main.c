@@ -79,6 +79,10 @@ int main(void)
   cfg.app_flash_base = BOOTLOADER_APP_FLASH_BASE;
   cfg.app_flash_size = BOOTLOADER_APP_FLASH_SIZE;
   cfg.max_trial_boots = BOOTLOADER_MAX_TRIAL_BOOTS;
+  cfg.max_phase_attempts = BOOTLOADER_MAX_PHASE_ATTEMPTS;
+  cfg.max_watchdog_storm = BOOTLOADER_MAX_WATCHDOG_STORM;
+  cfg.reset_flags = 0U;
+  cfg.watchdog_feed = NULL;
 
   st = Bootloader_Run(&cfg);
   (void)st;

@@ -11,6 +11,7 @@
 #include "Flash/storage_partition.h"
 #include "Flash/storage_record.h"
 #include "Flash/storage_upgrade.h"
+#include "Bootloader/bootloader_policy.h"
 
 #define RAM_FLASH_SIZE (256UL * 1024UL)
 
@@ -249,6 +250,98 @@ static void TestAddOverflow(void)
   assert(NorFlash_CheckRange(0U, 0U, 1U) == NOR_FLASH_ERR_PARAM);
 }
 
+static void FillPolicyIn(BootloaderPolicyIn *in, uint32_t state,
+                         uint32_t flags, uint8_t app_valid)
+{
+  memset(in, 0, sizeof(*in));
+  in->state = state;
+  in->reset_flags = flags;
+  in->app_valid = app_valid;
+  in->max_trial_boots = 3U;
+  in->max_phase_attempts = 3U;
+  in->max_watchdog_storm = 8U;
+}
+
+static void TestBootloaderPolicy(void)
+{
+  BootloaderPolicyIn in;
+  BootloaderPolicyOut out;
+
+  /* Idle + valid App → jump, no persist */
+  FillPolicyIn(&in, UPGRADE_STATE_IDLE, BOOTLOADER_RST_POR, 1U);
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_JUMP);
+  assert(out.persist == 0U);
+
+  /* No App → hold */
+  FillPolicyIn(&in, UPGRADE_STATE_IDLE, BOOTLOADER_RST_POR, 0U);
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_HOLD);
+
+  /* Installing: persist attempts before erase */
+  FillPolicyIn(&in, UPGRADE_STATE_INSTALLING, BOOTLOADER_RST_SFT, 1U);
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_INSTALL);
+  assert(out.persist == 1U);
+  assert(out.phase_attempts == 1U);
+  assert(out.state == (uint32_t)UPGRADE_STATE_INSTALLING);
+
+  /* IWDG during install does not clear attempts; third retry then rollback */
+  FillPolicyIn(&in, UPGRADE_STATE_INSTALLING, BOOTLOADER_RST_IWDG, 0U);
+  in.phase_attempts = 2U;
+  in.watchdog_resets = 2U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_INSTALL);
+  assert(out.phase_attempts == 3U);
+  assert(out.watchdog_resets == 3U);
+
+  FillPolicyIn(&in, UPGRADE_STATE_INSTALLING, BOOTLOADER_RST_IWDG, 0U);
+  in.phase_attempts = 3U;
+  in.watchdog_resets = 3U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_ROLLBACK);
+  assert(out.state == (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING);
+  assert(out.phase_attempts == 0U);
+
+  /* PINRSTF is also set on IWDG; must still count as IWDG, not pin-clear */
+  FillPolicyIn(&in, UPGRADE_STATE_CONFIRMED,
+               BOOTLOADER_RST_IWDG | BOOTLOADER_RST_PIN, 1U);
+  in.watchdog_resets = 0U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_JUMP);
+  assert(out.watchdog_resets == 1U);
+  assert(out.persist == 1U);
+
+  /* Confirmed App IWDG storm → rollback, not another jump */
+  FillPolicyIn(&in, UPGRADE_STATE_CONFIRMED,
+               BOOTLOADER_RST_IWDG | BOOTLOADER_RST_PIN, 1U);
+  in.watchdog_resets = 7U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_ROLLBACK);
+  assert(out.state == (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING);
+  assert(out.last_error == BOOTLOADER_POLICY_ERR_WATCHDOG_STORM);
+
+  /* Trial boot: count then jump; exhausted → rollback */
+  FillPolicyIn(&in, UPGRADE_STATE_TRIAL_BOOT, BOOTLOADER_RST_IWDG, 1U);
+  in.trial_boot_count = 1U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_JUMP);
+  assert(out.trial_boot_count == 2U);
+
+  FillPolicyIn(&in, UPGRADE_STATE_TRIAL_BOOT, 0U, 1U);
+  in.trial_boot_count = 3U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_ROLLBACK);
+
+  /* POR clears storm counter */
+  FillPolicyIn(&in, UPGRADE_STATE_CONFIRMED,
+               BOOTLOADER_RST_POR | BOOTLOADER_RST_PIN, 1U);
+  in.watchdog_resets = 5U;
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.watchdog_resets == 0U);
+  assert(out.action == BOOTLOADER_ACTION_JUMP);
+}
+
 int main(void)
 {
   TestAddOverflow();
@@ -256,6 +349,7 @@ int main(void)
   TestRecordCommitAndHalfWrite();
   TestUpgradeCompactionAndInject();
   TestFirmwareManifestGate();
+  TestBootloaderPolicy();
   printf("storage_test: OK\n");
   return 0;
 }

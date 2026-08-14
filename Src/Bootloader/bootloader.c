@@ -6,6 +6,7 @@
  */
 #include "Bootloader/bootloader.h"
 #include "Bootloader/bootloader_flash.h"
+#include "Bootloader/bootloader_policy.h"
 
 #include "Common.h"
 #include "stm32f4xx_hal.h"
@@ -109,10 +110,53 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
   return BOOTLOADER_OK;
 }
 
+static void FeedCfg(const BootloaderConfig *cfg)
+{
+  if ((cfg != NULL) && (cfg->watchdog_feed != NULL)) {
+    cfg->watchdog_feed();
+  }
+}
+
 static Storage_Status AppendState(StorageUpgradeLog *log,
                                   const UpgradeStatePayload *payload)
 {
   return StorageUpgrade_Append(log, payload);
+}
+
+static void ApplyPolicy(UpgradeStatePayload *state,
+                        const BootloaderPolicyOut *out, uint32_t reset_flags)
+{
+  state->state = out->state;
+  state->trial_boot_count = out->trial_boot_count;
+  state->watchdog_resets = out->watchdog_resets;
+  state->phase_attempts = out->phase_attempts;
+  state->reset_reason = reset_flags;
+  if (out->last_error != 0U) {
+    state->last_error = out->last_error;
+  }
+}
+
+static Bootloader_Status JumpOrHold(const BootloaderConfig *cfg,
+                                    uint32_t app_base, uint32_t app_size)
+{
+  FeedCfg(cfg);
+  if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
+    Bootloader_JumpToApp(app_base);
+  }
+  return BOOTLOADER_ERR_NO_APP;
+}
+
+static uint8_t SlotIsValid(const BootloaderConfig *cfg, uint32_t part,
+                           uint32_t part_size)
+{
+  StorageFirmwareSlot slot;
+  StorageFirmwareManifest manifest;
+
+  if (StorageFirmware_InitSlot(&slot, cfg->map, part, part_size) !=
+      STORAGE_OK) {
+    return 0U;
+  }
+  return (StorageFirmware_IsValid(&slot, &manifest) == STORAGE_OK) ? 1U : 0U;
 }
 
 static Bootloader_Status InstallFromPart(const BootloaderConfig *cfg,
@@ -124,6 +168,7 @@ static Bootloader_Status InstallFromPart(const BootloaderConfig *cfg,
   Storage_Status st;
   Bootloader_Status bst;
 
+  FeedCfg(cfg);
   st = StorageFirmware_InitSlot(&slot, cfg->map, part, part_size);
   if (st != STORAGE_OK) {
     return BOOTLOADER_ERR_STORAGE;
@@ -140,6 +185,54 @@ static Bootloader_Status InstallFromPart(const BootloaderConfig *cfg,
   return bst;
 }
 
+static Bootloader_Status Persist(StorageUpgradeLog *log,
+                                 const UpgradeStatePayload *state)
+{
+  return AppendState(log, state);
+}
+
+static Bootloader_Status DoRollback(const BootloaderConfig *cfg,
+                                    StorageUpgradeLog *log,
+                                    UpgradeStatePayload *state,
+                                    uint32_t app_base, uint32_t app_size)
+{
+  StorageFirmwareManifest installed;
+  Bootloader_Status bst;
+
+  if (SlotIsValid(cfg, cfg->rollback_part, cfg->rollback_part_size) == 0U) {
+    state->state = (uint32_t)UPGRADE_STATE_FAILED;
+    if (state->last_error == 0U) {
+      state->last_error = (uint32_t)BOOTLOADER_ERR_ROLLBACK;
+    }
+    (void)Persist(log, state);
+    /* A confirmed-but-crashing App with no rollback must not be jumped
+     * again — that is the reset-storm case. */
+    if (state->last_error == (uint32_t)BOOTLOADER_ERR_WATCHDOG_STORM) {
+      return BOOTLOADER_ERR_NO_APP;
+    }
+    return JumpOrHold(cfg, app_base, app_size);
+  }
+
+  state->state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
+  (void)Persist(log, state);
+  bst = InstallFromPart(cfg, cfg->rollback_part, cfg->rollback_part_size,
+                        &installed);
+  if (bst == BOOTLOADER_OK) {
+    state->state = (uint32_t)UPGRADE_STATE_ROLLED_BACK;
+    state->active_version = installed.firmware_version;
+    state->trial_boot_count = 0U;
+    state->phase_attempts = 0U;
+    state->watchdog_resets = 0U;
+    state->last_error = 0U;
+    (void)Persist(log, state);
+    return JumpOrHold(cfg, app_base, app_size);
+  }
+  state->state = (uint32_t)UPGRADE_STATE_FAILED;
+  state->last_error = (uint32_t)BOOTLOADER_ERR_ROLLBACK;
+  (void)Persist(log, state);
+  return JumpOrHold(cfg, app_base, app_size);
+}
+
 Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
 {
   StorageUpgradeLog ulog;
@@ -147,28 +240,27 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   StorageFirmwareManifest installed;
   Storage_Status st;
   Bootloader_Status bst;
+  BootloaderPolicyIn pin;
+  BootloaderPolicyOut pout;
   uint32_t app_base;
   uint32_t app_size;
-  uint32_t max_trial;
 
   if ((cfg == NULL) || (cfg->map == NULL)) {
     return BOOTLOADER_ERR_PARAM;
   }
 
+  BootloaderFlash_SetFeed(cfg->watchdog_feed);
+  FeedCfg(cfg);
+
   app_base = (cfg->app_flash_base != 0U) ? cfg->app_flash_base
                                          : BOOTLOADER_APP_FLASH_BASE;
   app_size = (cfg->app_flash_size != 0U) ? cfg->app_flash_size
                                          : BOOTLOADER_APP_FLASH_SIZE;
-  max_trial = (cfg->max_trial_boots != 0U) ? cfg->max_trial_boots
-                                           : BOOTLOADER_MAX_TRIAL_BOOTS;
 
   st = StorageUpgrade_Init(&ulog, cfg->map, cfg->control_part,
                            cfg->control_part_size);
   if (st != STORAGE_OK) {
-    if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
-      Bootloader_JumpToApp(app_base);
-    }
-    return BOOTLOADER_ERR_STORAGE;
+    return JumpOrHold(cfg, app_base, app_size);
   }
 
   memset(&state, 0, sizeof(state));
@@ -176,15 +268,38 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   if (st == STORAGE_ERR_NOT_FOUND) {
     state.state = (uint32_t)UPGRADE_STATE_IDLE;
   } else if (st != STORAGE_OK) {
-    if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
-      Bootloader_JumpToApp(app_base);
-    }
-    return BOOTLOADER_ERR_STORAGE;
+    return JumpOrHold(cfg, app_base, app_size);
   }
 
-  /* Install candidate */
-  if ((state.state == (uint32_t)UPGRADE_STATE_INSTALLING) ||
-      (state.state == (uint32_t)UPGRADE_STATE_CANDIDATE_VALID)) {
+  memset(&pin, 0, sizeof(pin));
+  pin.state = state.state;
+  pin.trial_boot_count = state.trial_boot_count;
+  pin.watchdog_resets = state.watchdog_resets;
+  pin.phase_attempts = state.phase_attempts;
+  pin.reset_flags = cfg->reset_flags;
+  pin.app_valid = Bootloader_IsAppValid(app_base, app_size);
+  pin.max_trial_boots = (cfg->max_trial_boots != 0U)
+                            ? cfg->max_trial_boots
+                            : BOOTLOADER_MAX_TRIAL_BOOTS;
+  pin.max_phase_attempts = (cfg->max_phase_attempts != 0U)
+                               ? cfg->max_phase_attempts
+                               : BOOTLOADER_MAX_PHASE_ATTEMPTS;
+  pin.max_watchdog_storm = (cfg->max_watchdog_storm != 0U)
+                               ? cfg->max_watchdog_storm
+                               : BOOTLOADER_MAX_WATCHDOG_STORM;
+
+  memset(&pout, 0, sizeof(pout));
+  BootloaderPolicy_Decide(&pin, &pout);
+  ApplyPolicy(&state, &pout, cfg->reset_flags);
+
+  if (pout.persist != 0U) {
+    FeedCfg(cfg);
+    if (Persist(&ulog, &state) != STORAGE_OK) {
+      return JumpOrHold(cfg, app_base, app_size);
+    }
+  }
+
+  if (pout.action == BOOTLOADER_ACTION_INSTALL) {
     bst = InstallFromPart(cfg, cfg->candidate_part, cfg->candidate_part_size,
                           &installed);
     if (bst == BOOTLOADER_OK) {
@@ -194,52 +309,25 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
       state.candidate_length = installed.image_length;
       state.candidate_crc32 = installed.image_crc32;
       state.trial_boot_count = 1U;
+      state.phase_attempts = 0U;
+      state.watchdog_resets = 0U;
       state.last_error = 0U;
-      (void)AppendState(&ulog, &state);
-      Bootloader_JumpToApp(app_base);
+      (void)Persist(&ulog, &state);
+      return JumpOrHold(cfg, app_base, app_size);
     }
     state.state = (uint32_t)UPGRADE_STATE_FAILED;
     state.last_error = (uint32_t)bst;
-    (void)AppendState(&ulog, &state);
+    (void)Persist(&ulog, &state);
+    return DoRollback(cfg, &ulog, &state, app_base, app_size);
   }
 
-  /* Trial boot watchdog */
-  if (state.state == (uint32_t)UPGRADE_STATE_TRIAL_BOOT) {
-    if (state.trial_boot_count >= max_trial) {
-      state.state = (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING;
-      (void)AppendState(&ulog, &state);
-    } else {
-      state.trial_boot_count += 1U;
-      (void)AppendState(&ulog, &state);
-      if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
-        Bootloader_JumpToApp(app_base);
-      }
-      return BOOTLOADER_ERR_NO_APP;
-    }
+  if (pout.action == BOOTLOADER_ACTION_ROLLBACK) {
+    return DoRollback(cfg, &ulog, &state, app_base, app_size);
   }
 
-  /* Rollback */
-  if ((state.state == (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING) ||
-      (state.state == (uint32_t)UPGRADE_STATE_ROLLING_BACK)) {
-    state.state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
-    (void)AppendState(&ulog, &state);
-    bst = InstallFromPart(cfg, cfg->rollback_part, cfg->rollback_part_size,
-                          &installed);
-    if (bst == BOOTLOADER_OK) {
-      state.state = (uint32_t)UPGRADE_STATE_ROLLED_BACK;
-      state.active_version = installed.firmware_version;
-      state.trial_boot_count = 0U;
-      state.last_error = 0U;
-      (void)AppendState(&ulog, &state);
-      Bootloader_JumpToApp(app_base);
-    }
-    state.state = (uint32_t)UPGRADE_STATE_FAILED;
-    state.last_error = (uint32_t)BOOTLOADER_ERR_ROLLBACK;
-    (void)AppendState(&ulog, &state);
+  if (pout.action == BOOTLOADER_ACTION_HOLD) {
+    return BOOTLOADER_ERR_NO_APP;
   }
 
-  if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
-    Bootloader_JumpToApp(app_base);
-  }
-  return BOOTLOADER_ERR_NO_APP;
+  return JumpOrHold(cfg, app_base, app_size);
 }
