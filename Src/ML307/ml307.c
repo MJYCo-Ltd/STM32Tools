@@ -27,6 +27,8 @@ static ML307_Cmd TypeToCmd(ML307_Type type)
     return ML307_CMD_CESQ;
   case ML307_TYPE_CGATT:
     return ML307_CMD_CGATT;
+  case ML307_TYPE_CCLK:
+    return ML307_CMD_CCLK;
   default:
     return ML307_CMD_COUNT;
   }
@@ -100,6 +102,8 @@ const char *ML307_TypeName(ML307_Type type)
     return "CESQ";
   case ML307_TYPE_CGATT:
     return "CGATT";
+  case ML307_TYPE_CCLK:
+    return "CCLK";
   case ML307_TYPE_SLEEP:
     return "SLEEP";
   case ML307_TYPE_MQTT_DISCONNECT:

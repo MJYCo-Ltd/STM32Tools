@@ -420,6 +420,19 @@ W25Q 四线模式，依赖 `hqspi`。**F411 请用 `W25Q/w25q.h`。**
 
 ---
 
+## Time util (Time/time_util.h)
+
+平台无关的日历与北京时区（UTC+8）换算，无 RTC / HAL 依赖。
+
+| 接口 | 说明 |
+|------|------|
+| `TimeUtil_DaysFromCivil` / `CivilFromDays` / `CivilToUnix` | 公历 ↔ unix 日/秒 |
+| `TimeUtil_UtcToBeijing` / `BeijingToUtc` | UTC ↔ 北京墙钟 unix（固定 +8h） |
+
+常量：`TIME_BEIJING_OFFSET_MINUTES`（480）、`TIME_SECONDS_PER_DAY`。
+
+---
+
 ## nanopb (pb/)
 
 Protocol Buffers 编解码库，详见 `pb_encode.h`、`pb_decode.h`、`pb.h`。
