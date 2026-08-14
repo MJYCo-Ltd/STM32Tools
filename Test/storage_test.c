@@ -20,6 +20,13 @@ static int g_fail_writes_after = -1;
 static int g_write_count;
 static int g_fail_erases_after = -1;
 static int g_erase_count;
+static int g_poll_count;
+
+static void RamPoll(void *ctx)
+{
+  (void)ctx;
+  ++g_poll_count;
+}
 
 static Storage_Status RamRead(void *ctx, uint32_t address, void *buffer,
                               uint32_t length)
@@ -87,6 +94,7 @@ static void ResetRam(void)
   g_fail_erases_after = -1;
   g_write_count = 0;
   g_erase_count = 0;
+  g_poll_count = 0;
 }
 
 static StorageBackend MakeBackend(void)
@@ -97,6 +105,7 @@ static StorageBackend MakeBackend(void)
   b.write = RamWrite;
   b.erase_sector = RamEraseSector;
   b.erase_block64 = RamEraseBlock64;
+  b.poll = RamPoll;
   return b;
 }
 
@@ -213,11 +222,14 @@ static void TestFirmwareManifestGate(void)
          STORAGE_OK);
   assert(StorageFirmware_InitSlot(&slot, &map, 0U, 64U * 1024U) == STORAGE_OK);
   assert(StorageFirmware_BeginWrite(&slot, 512U) == STORAGE_OK);
+  assert(g_poll_count > 0);
+  g_poll_count = 0;
   memset(chunk, 0xA5, sizeof(chunk));
   for (i = 0U; i < 2U; ++i) {
     assert(StorageFirmware_WriteChunk(&slot, chunk, sizeof(chunk)) ==
            STORAGE_OK);
   }
+  assert(g_poll_count >= 2);
   /* Manifest not committed => invalid */
   assert(StorageFirmware_IsValid(&slot, NULL) != STORAGE_OK);
 
@@ -234,8 +246,10 @@ static void TestFirmwareManifestGate(void)
     memset(image, 0xA5, sizeof(image));
     meta.image_crc32 = Storage_Crc32(image, sizeof(image));
   }
+  g_poll_count = 0;
   assert(StorageFirmware_Finish(&slot, &meta, NULL) == STORAGE_OK);
   assert(StorageFirmware_IsValid(&slot, &meta) == STORAGE_OK);
+  assert(g_poll_count > 0);
 
   /* Oversize reject */
   assert(StorageFirmware_BeginWrite(
@@ -280,6 +294,14 @@ static void TestBootloaderPolicy(void)
 
   /* Installing: persist attempts before erase */
   FillPolicyIn(&in, UPGRADE_STATE_INSTALLING, BOOTLOADER_RST_SFT, 1U);
+  BootloaderPolicy_Decide(&in, &out);
+  assert(out.action == BOOTLOADER_ACTION_INSTALL);
+  assert(out.persist == 1U);
+  assert(out.phase_attempts == 1U);
+  assert(out.state == (uint32_t)UPGRADE_STATE_INSTALLING);
+
+  /* Power loss after the backup was committed resumes candidate install. */
+  FillPolicyIn(&in, UPGRADE_STATE_BACKUP_VALID, BOOTLOADER_RST_SFT, 1U);
   BootloaderPolicy_Decide(&in, &out);
   assert(out.action == BOOTLOADER_ACTION_INSTALL);
   assert(out.persist == 1U);

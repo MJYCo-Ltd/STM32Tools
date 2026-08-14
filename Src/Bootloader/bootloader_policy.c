@@ -78,7 +78,8 @@ void BootloaderPolicy_Decide(const BootloaderPolicyIn *in,
   ApplyResetAccounting(in, out);
 
   if ((in->state == (uint32_t)UPGRADE_STATE_INSTALLING) ||
-      (in->state == (uint32_t)UPGRADE_STATE_CANDIDATE_VALID)) {
+      (in->state == (uint32_t)UPGRADE_STATE_CANDIDATE_VALID) ||
+      (in->state == (uint32_t)UPGRADE_STATE_BACKUP_VALID)) {
     if (out->phase_attempts >= max_phase) {
       out->state = (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING;
       out->phase_attempts = 0U;

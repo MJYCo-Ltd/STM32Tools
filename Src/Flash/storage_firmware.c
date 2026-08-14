@@ -80,6 +80,7 @@ Storage_Status StorageFirmware_WriteChunk(StorageFirmwareSlot *slot,
       ((slot->write_offset + length) > slot->expected_length)) {
     return STORAGE_ERR_RANGE;
   }
+  StorageBackend_Poll(slot->map->backend);
   st = Storage_Write(slot->map, slot->partition,
                      STORAGE_FW_MANIFEST_SIZE + slot->write_offset, data,
                      length);
@@ -122,6 +123,7 @@ Storage_Status StorageFirmware_Finish(StorageFirmwareSlot *slot,
   manifest.image_length = slot->expected_length;
   manifest.image_crc32 = image_crc;
 
+  StorageBackend_Poll(slot->map->backend);
   st = Storage_CommitObject(slot->map, slot->partition, 0U, &manifest,
                             sizeof(manifest),
                             offsetof(StorageFirmwareManifest, header_crc32));
@@ -190,6 +192,7 @@ Storage_Status StorageFirmware_IsValid(StorageFirmwareSlot *slot,
   crc = 0xFFFFFFFFUL;
   while (left > 0U) {
     uint32_t n = (left > sizeof(chunk)) ? (uint32_t)sizeof(chunk) : left;
+    StorageBackend_Poll(slot->map->backend);
     st = Storage_Read(slot->map, slot->partition, pos, chunk, n);
     if (st != STORAGE_OK) {
       return st;
@@ -218,6 +221,7 @@ Storage_Status StorageFirmware_ReadImage(StorageFirmwareSlot *slot,
   if (NorFlash_CheckRange(m.image_length, offset, length) != NOR_FLASH_OK) {
     return STORAGE_ERR_RANGE;
   }
+  StorageBackend_Poll(slot->map->backend);
   return Storage_Read(slot->map, slot->partition,
                       STORAGE_FW_MANIFEST_SIZE + offset, buffer, length);
 }

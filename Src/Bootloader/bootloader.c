@@ -159,6 +159,90 @@ static uint8_t SlotIsValid(const BootloaderConfig *cfg, uint32_t part,
   return (StorageFirmware_IsValid(&slot, &manifest) == STORAGE_OK) ? 1U : 0U;
 }
 
+static Bootloader_Status BackupCurrentApplication(
+    const BootloaderConfig *cfg, const UpgradeStatePayload *state,
+    const StorageFirmwareManifest *candidate, uint32_t app_base,
+    uint32_t app_size)
+{
+  StorageFirmwareSlot rollback;
+  StorageFirmwareManifest manifest;
+  uint8_t chunk[BOOTLOADER_CHUNK_SIZE];
+  uint32_t offset = 0U;
+  uint32_t running_crc = 0xFFFFFFFFUL;
+  Storage_Status st;
+
+  if ((cfg == NULL) || (state == NULL) || (candidate == NULL) ||
+      (Bootloader_IsAppValid(app_base, app_size) == 0U)) {
+    return BOOTLOADER_ERR_BACKUP;
+  }
+  st = StorageFirmware_InitSlot(&rollback, cfg->map, cfg->rollback_part,
+                                cfg->rollback_part_size);
+  if (st != STORAGE_OK) {
+    return BOOTLOADER_ERR_STORAGE;
+  }
+  if (app_size > StorageFirmware_ImageCapacity(cfg->rollback_part_size)) {
+    return BOOTLOADER_ERR_BACKUP;
+  }
+
+  FeedCfg(cfg);
+  st = StorageFirmware_BeginWrite(&rollback, app_size);
+  if (st != STORAGE_OK) {
+    return BOOTLOADER_ERR_BACKUP;
+  }
+  while (offset < app_size) {
+    uint32_t n = app_size - offset;
+    if (n > sizeof(chunk)) {
+      n = sizeof(chunk);
+    }
+    FeedCfg(cfg);
+    memcpy(chunk, (const void *)(uintptr_t)(app_base + offset), n);
+    st = StorageFirmware_WriteChunk(&rollback, chunk, n);
+    if (st != STORAGE_OK) {
+      return BOOTLOADER_ERR_BACKUP;
+    }
+    running_crc = CalCRC32Update(running_crc, chunk, n);
+    offset += n;
+  }
+
+  memset(&manifest, 0, sizeof(manifest));
+  manifest.hardware_id = candidate->hardware_id;
+  manifest.firmware_version = state->active_version;
+  manifest.image_length = app_size;
+  manifest.target_address = app_base;
+  manifest.entry_address = *(volatile uint32_t *)(app_base + 4U);
+  manifest.image_crc32 = running_crc ^ 0xFFFFFFFFUL;
+  FeedCfg(cfg);
+  st = StorageFirmware_Finish(&rollback, &manifest, NULL);
+  if (st != STORAGE_OK) {
+    return BOOTLOADER_ERR_BACKUP;
+  }
+  FeedCfg(cfg);
+  st = StorageFirmware_IsValid(&rollback, &manifest);
+  FeedCfg(cfg);
+  return (st == STORAGE_OK) ? BOOTLOADER_OK : BOOTLOADER_ERR_BACKUP;
+}
+
+static Bootloader_Status EnsureRollbackBackup(
+    const BootloaderConfig *cfg, const UpgradeStatePayload *state,
+    const StorageFirmwareManifest *candidate, uint32_t app_base,
+    uint32_t app_size)
+{
+  const uint8_t app_valid = Bootloader_IsAppValid(app_base, app_size);
+  const uint8_t rollback_valid =
+      SlotIsValid(cfg, cfg->rollback_part, cfg->rollback_part_size);
+
+  /* The first install attempt must replace any stale rollback from an older
+   * upgrade. On a retry, preserve a valid rollback: internal App may already
+   * be partially erased by the interrupted install. */
+  if ((state->phase_attempts > 1U) && (rollback_valid != 0U)) {
+    return BOOTLOADER_OK;
+  }
+  if (app_valid == 0U) {
+    return (rollback_valid != 0U) ? BOOTLOADER_OK : BOOTLOADER_ERR_NO_APP;
+  }
+  return BackupCurrentApplication(cfg, state, candidate, app_base, app_size);
+}
+
 static Bootloader_Status InstallFromPart(const BootloaderConfig *cfg,
                                          uint32_t part, uint32_t part_size,
                                          StorageFirmwareManifest *manifest_out)
@@ -185,8 +269,8 @@ static Bootloader_Status InstallFromPart(const BootloaderConfig *cfg,
   return bst;
 }
 
-static Bootloader_Status Persist(StorageUpgradeLog *log,
-                                 const UpgradeStatePayload *state)
+static Storage_Status Persist(StorageUpgradeLog *log,
+                              const UpgradeStatePayload *state)
 {
   return AppendState(log, state);
 }
@@ -300,8 +384,48 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   }
 
   if (pout.action == BOOTLOADER_ACTION_INSTALL) {
-    bst = InstallFromPart(cfg, cfg->candidate_part, cfg->candidate_part_size,
-                          &installed);
+    StorageFirmwareSlot candidate_slot;
+    uint8_t backup_available = 0U;
+
+    st = StorageFirmware_InitSlot(&candidate_slot, cfg->map,
+                                  cfg->candidate_part,
+                                  cfg->candidate_part_size);
+    if (st != STORAGE_OK) {
+      state.state = (uint32_t)UPGRADE_STATE_FAILED;
+      state.last_error = (uint32_t)BOOTLOADER_ERR_STORAGE;
+      (void)Persist(&ulog, &state);
+      return JumpOrHold(cfg, app_base, app_size);
+    }
+    st = StorageFirmware_IsValid(&candidate_slot, &installed);
+    if (st != STORAGE_OK) {
+      state.state = (uint32_t)UPGRADE_STATE_FAILED;
+      state.last_error = (uint32_t)BOOTLOADER_ERR_MANIFEST;
+      (void)Persist(&ulog, &state);
+      return JumpOrHold(cfg, app_base, app_size);
+    }
+
+    bst = EnsureRollbackBackup(cfg, &state, &installed, app_base, app_size);
+    if (bst == BOOTLOADER_OK) {
+      backup_available = 1U;
+      state.state = (uint32_t)UPGRADE_STATE_BACKUP_VALID;
+      if (Persist(&ulog, &state) != STORAGE_OK) {
+        return JumpOrHold(cfg, app_base, app_size);
+      }
+    } else if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
+      /* Never erase a valid running image when its backup could not be
+       * committed and verified. */
+      state.state = (uint32_t)UPGRADE_STATE_FAILED;
+      state.last_error = (uint32_t)bst;
+      (void)Persist(&ulog, &state);
+      return JumpOrHold(cfg, app_base, app_size);
+    }
+
+    state.state = (uint32_t)UPGRADE_STATE_INSTALLING;
+    if (Persist(&ulog, &state) != STORAGE_OK) {
+      return JumpOrHold(cfg, app_base, app_size);
+    }
+    bst = Bootloader_InstallSlot(&candidate_slot, &installed, app_base,
+                                 app_size);
     if (bst == BOOTLOADER_OK) {
       state.state = (uint32_t)UPGRADE_STATE_TRIAL_BOOT;
       state.active_version = installed.firmware_version;
@@ -318,7 +442,10 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
     state.state = (uint32_t)UPGRADE_STATE_FAILED;
     state.last_error = (uint32_t)bst;
     (void)Persist(&ulog, &state);
-    return DoRollback(cfg, &ulog, &state, app_base, app_size);
+    if (backup_available != 0U) {
+      return DoRollback(cfg, &ulog, &state, app_base, app_size);
+    }
+    return JumpOrHold(cfg, app_base, app_size);
   }
 
   if (pout.action == BOOTLOADER_ACTION_ROLLBACK) {
