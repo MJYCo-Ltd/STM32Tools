@@ -1,5 +1,10 @@
 # ML307 (Inc)
 
+`ml307_http.h` 提供 ML307C HTTP/HTTPS 缓存模式的有界命令构造与解析，
+HTTPS 实例通过 `ML307_HttpBuildSsl` 绑定 SSL context。OTA 应按 HTTP Range
+小片读取并流式写入 Flash；`ML307_HttpParseRead` 使用显式字节
+长度解析，因此固件中的 NUL、逗号和换行不会被误认为协议分隔符。
+
 用途
 - ML307 是中移物联网的 4G 模组，仓库中实现了针对常用 AT 指令的 Pack/Unpack 门面，方便上层业务按类型构建与解析 AT 响应。
 
