@@ -39,14 +39,39 @@ void Bootloader_JumpToApp(uint32_t app_base)
   const uint32_t sp = *(volatile uint32_t *)app_base;
   const uint32_t reset = *(volatile uint32_t *)(app_base + 4U);
   const AppReset_t app_reset = (AppReset_t)reset;
+  uint32_t irq_bank;
 
+  /* Hand the application a reset-like clock tree.  In particular, never leave
+   * the Bootloader's HSI-driven PLL selected as SYSCLK: an application cannot
+   * reconfigure that live PLL to use HSE. */
+  if (HAL_RCC_DeInit() != HAL_OK) {
+    NVIC_SystemReset();
+    for (;;) {
+    }
+  }
+
+  (void)HAL_DeInit();
   __disable_irq();
-  HAL_DeInit();
   SysTick->CTRL = 0U;
   SysTick->LOAD = 0U;
   SysTick->VAL = 0U;
+  SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk | SCB_ICSR_PENDSVCLR_Msk;
+
+  for (irq_bank = 0U;
+       irq_bank < (sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0]));
+       ++irq_bank) {
+    NVIC->ICER[irq_bank] = 0xFFFFFFFFUL;
+    NVIC->ICPR[irq_bank] = 0xFFFFFFFFUL;
+  }
+
   SCB->VTOR = app_base;
+  __set_BASEPRI(0U);
+  __set_FAULTMASK(0U);
+  __set_CONTROL(0U);
   __set_MSP(sp);
+  __DSB();
+  __ISB();
+  __enable_irq();
   app_reset();
   for (;;) {
   }
