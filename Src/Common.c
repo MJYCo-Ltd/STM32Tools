@@ -1,6 +1,7 @@
 #include "Common.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 uint16_t CalCRC16(const uint8_t *buffer, uint16_t length)
 {
@@ -127,4 +128,16 @@ uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align)
   }
   count = ((last - first) / align) + 1U;
   return first + ((uint32_t)rand() % count) * align;
+}
+
+const uint8_t *FindBytes(const uint8_t *data, size_t length, const char *needle)
+{
+  size_t size, i;
+  if (data == NULL || needle == NULL) return NULL;
+  size = strlen(needle);
+  if (size == 0U || size > length) return NULL;
+  for (i = 0U; i <= length - size; ++i) {
+    if (memcmp(data + i, needle, size) == 0) return data + i;
+  }
+  return NULL;
 }

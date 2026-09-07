@@ -1,3 +1,4 @@
+#include <Common.h>
 #include "ML307/ml307_http.h"
 
 #include <limits.h>
@@ -197,17 +198,6 @@ ML307_Result ML307_HttpParseRecvUrc(const char *line,
   return ML307_RESULT_OK;
 }
 
-static const uint8_t *FindBytes(const uint8_t *data, size_t length,
-                                const char *needle)
-{
-  const size_t needle_length = strlen(needle);
-  size_t i;
-  if ((data == NULL) || (needle_length == 0U) || (length < needle_length))
-    return NULL;
-  for (i = 0U; i <= (length - needle_length); ++i)
-    if (memcmp(data + i, needle, needle_length) == 0) return data + i;
-  return NULL;
-}
 
 static ML307_Result ParseBoundedUnsigned(const uint8_t **cursor,
                                          const uint8_t *end,

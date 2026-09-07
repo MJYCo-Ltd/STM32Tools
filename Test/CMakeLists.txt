@@ -45,6 +45,7 @@ target_include_directories(storage_test PRIVATE
 add_executable(ml307_http_test
     ${CMAKE_CURRENT_SOURCE_DIR}/ml307_http_test.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../Src/ML307/ml307_http.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Common.c
 )
 
 target_include_directories(ml307_http_test PRIVATE

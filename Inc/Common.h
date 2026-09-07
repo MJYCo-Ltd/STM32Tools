@@ -17,6 +17,9 @@ uint8_t JudgeCRC16(const uint8_t *buffer, uint16_t length,
 uint32_t CalCRC32(const void *data, size_t length);
 uint32_t CalCRC32Update(uint32_t crc, const void *data, size_t length);
 
+/** Find a NUL-terminated token in a bounded byte buffer (which may contain NUL). */
+const uint8_t *FindBytes(const uint8_t *data, size_t length, const char *needle);
+
 uint16_t ReadBE16(const uint8_t *data);
 uint32_t ReadBE32(const uint8_t *data);
 uint16_t ReadLE16(const uint8_t *data);
