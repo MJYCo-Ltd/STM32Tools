@@ -187,9 +187,13 @@ int HttpRange_ParseResponse(const uint8_t *response, size_t length,
   if ((response == NULL) || (body_offset == NULL) || (metadata == NULL)) return -1;
   header_end = FindBytes(response, length, "\r\n\r\n");
   if (header_end == NULL) return 0;
-  if ((length < 12U) ||
-      ((memcmp(response, "HTTP/1.1 206", 11U) != 0) &&
-       (memcmp(response, "HTTP/1.0 206", 11U) != 0)) || (response[11] != (uint8_t)' ')) return -1;
+  /* Include the complete status code and its following space. Derive the
+   * length from the literal so the final '6' cannot be mistaken for space. */
+  static const char partial_11[] = "HTTP/1.1 206 ";
+  static const char partial_10[] = "HTTP/1.0 206 ";
+  if ((length < sizeof(partial_11) - 1U) ||
+      ((memcmp(response, partial_11, sizeof(partial_11) - 1U) != 0) &&
+       (memcmp(response, partial_10, sizeof(partial_10) - 1U) != 0))) return -1;
   if (HttpRange_ParseHeader(
           response, (size_t)(header_end - response), expected_start,
           expected_length, expected_total, &parsed, extra, ctx) == 0U) return -1;
