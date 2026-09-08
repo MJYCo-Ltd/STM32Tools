@@ -54,41 +54,43 @@ Storage_Status DualBankStore_Init(DualBankStore *store,
   if (lock_status != STORAGE_OK) {
     return lock_status;
   }
-  status_a = DualBankStore_FindBank(store, bank_a_off, &location_a, scratch_a);
-  status_b = DualBankStore_FindBank(store, bank_b_off, &location_b, scratch_b);
-  store->transaction.end(store->transaction.ctx);
-
-  if ((status_a != STORAGE_OK) && (status_a != STORAGE_ERR_NOT_FOUND)) {
-    return status_a;
-  }
-  if ((status_b != STORAGE_OK) && (status_b != STORAGE_ERR_NOT_FOUND)) {
-    return status_b;
-  }
-  if ((status_a == STORAGE_OK) && (valid(scratch_a) == 0U)) {
-    return STORAGE_ERR_STATE;
-  }
-  if ((status_b == STORAGE_OK) && (valid(scratch_b) == 0U)) {
-    return STORAGE_ERR_STATE;
-  }
-
-  if ((status_a == STORAGE_OK) && (status_b == STORAGE_OK)) {
-    if (Storage_SeqIsNewer(location_b.sequence, location_a.sequence) != 0) {
-      store->active_bank = 1U;
-      store->next_sequence = location_b.sequence + 1U;
-    } else {
-      store->next_sequence = location_a.sequence + 1U;
+  /* Select the newest committed record before interpreting its payload. An
+   * older schema in the other bank must not poison a completed migration.
+   * Never fall back from an invalid newest payload to stale execution state. */
+  status_a = StorageRecord_FindLatest(map, partition, bank_a_off, bank_size,
+      &location_a, NULL, 0U);
+  status_b = StorageRecord_FindLatest(map, partition, bank_b_off, bank_size,
+      &location_b, NULL, 0U);
+  Storage_Status result = STORAGE_ERR_NOT_FOUND;
+  const StorageRecordLoc *selected = NULL;
+  uint32_t active_bank = 0U;
+  if (status_a != STORAGE_OK && status_a != STORAGE_ERR_NOT_FOUND) {
+    result = status_a;
+  } else if (status_b != STORAGE_OK && status_b != STORAGE_ERR_NOT_FOUND) {
+    result = status_b;
+  } else {
+    if (status_a == STORAGE_OK) selected = &location_a;
+    if (status_b == STORAGE_OK && (selected == NULL ||
+        Storage_SeqIsNewer(location_b.sequence, selected->sequence))) {
+      selected = &location_b;
+      active_bank = 1U;
     }
-    store->have_snapshot = 1U;
-  } else if (status_a == STORAGE_OK) {
-    store->next_sequence = location_a.sequence + 1U;
-    store->have_snapshot = 1U;
-  } else if (status_b == STORAGE_OK) {
-    store->active_bank = 1U;
-    store->next_sequence = location_b.sequence + 1U;
-    store->have_snapshot = 1U;
+    if (selected != NULL) {
+      result = STORAGE_ERR_STATE;
+      if (selected->payload_length == payload_size) {
+        result = StorageRecord_ReadPayload(map, partition, selected->offset,
+            scratch_a, payload_size, NULL);
+        if (result == STORAGE_OK && valid(scratch_a) == 0U) result = STORAGE_ERR_STATE;
+      }
+      if (result == STORAGE_OK) {
+        store->active_bank = active_bank;
+        store->next_sequence = selected->sequence + 1U;
+        store->have_snapshot = 1U;
+      }
+    }
   }
-
-  return (store->have_snapshot != 0U) ? STORAGE_OK : STORAGE_ERR_NOT_FOUND;
+  store->transaction.end(store->transaction.ctx);
+  return result;
 }
 
 Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out)
@@ -112,7 +114,7 @@ Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out)
   }
   status = DualBankStore_FindBank(store, offset, &location, payload_out);
   store->transaction.end(store->transaction.ctx);
-  if ((status != STORAGE_OK) || (store->valid(payload_out) == 0U)) {
+  if ((status != STORAGE_OK) || (location.payload_length != store->payload_size) || (store->valid(payload_out) == 0U)) {
     return (status != STORAGE_OK) ? status : STORAGE_ERR_STATE;
   }
   return STORAGE_OK;

@@ -51,3 +51,25 @@ add_executable(ml307_http_test
 target_include_directories(ml307_http_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../Inc
 )
+
+# Reusable parsers and signature verification; no Agriculture/HAL dependency.
+add_library(module_frame_parser STATIC ../Src/AT/ModuleFrameParser.c)
+target_include_directories(module_frame_parser PUBLIC ../Inc)
+
+add_library(signed_firmware_core STATIC
+    ../Src/Flash/SignedFirmware.c
+    ../ThirdParty/monocypher/monocypher.c
+    ../ThirdParty/monocypher/monocypher-ed25519.c)
+target_include_directories(signed_firmware_core PUBLIC ../Inc
+    PRIVATE ../ThirdParty/monocypher)
+
+enable_testing()
+add_executable(mqtt_line_collector_test mqtt_line_collector_test.c)
+target_include_directories(mqtt_line_collector_test PRIVATE ../Inc)
+add_test(NAME mqtt_line_collector_test COMMAND mqtt_line_collector_test)
+
+# Generic storage transaction tests use I/O doubles, without board dependencies.
+add_executable(dual_bank_transaction_test
+    dual_bank_transaction_test.c ../Src/Flash/DualBankStore.c)
+target_include_directories(dual_bank_transaction_test PRIVATE ../Inc)
+add_test(NAME dual_bank_transaction_test COMMAND dual_bank_transaction_test)

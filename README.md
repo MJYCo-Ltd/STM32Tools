@@ -56,3 +56,20 @@ EPD_PowerOff();
 贡献
 
 欢迎提交 Issue 或 Pull Request。若在移植到你目标板时遇到问题，请在 Issue 中说明 MCU 型号、编译器/IDE 与最小复现步骤。
+
+## 协议解析与签名镜像校验
+
+- `Inc/AT/ModuleFrameParser.h` / `Src/AT/ModuleFrameParser.c`：与具体模组无关的串口行解析、整数解析和长度帧解析，协议前缀、字段和帧尾由调用方传入。
+- `Inc/Protocol/MqttLineCollector.h`：MQTT URC 分段行收集，回调和上下文由调用方提供；测试位于 `Test/mqtt_line_collector_test.c`。
+- `Inc/Flash/SignedFirmware.h` / `Src/Flash/SignedFirmware.c`：固定 V1 格式镜像的 Ed25519 与 SHA-512 校验。通过 `SignedFirmwareReader` 注入读取和可选进度回调，通过 `SignedFirmwarePolicy` 注入公钥、产品/板型/硬件、魔数、目标地址和容量。通用库不引用 Agriculture、HAL、FreeRTOS 或具体 Flash 分区。
+- `ThirdParty/monocypher/`：固定 Monocypher 4.0.2 的未修改源码、许可证和来源记录。构建验签模块时加入两个 `.c` 文件，并将该目录加入私有头文件路径。
+
+镜像 V1 格式和业务协议未因迁移改变；验签不会授权安装、执行硬件动作或提供防回滚。应用负责安全窗口、存储锁、信任策略以及实际安装。Agriculture 中保留公钥、固件候选槽、看门狗适配、农业任务和执行结果存储格式。
+
+2026-09-08 迁移后仅进行了文件摘要、依赖路径和差异静态检查，尚未重新编译；迁移前的测试结果不代表迁移后已验证。
+
+## 2026-09-08 双 Bank 修复与测试归属
+
+DualBankStore 初始化先选最新已提交记录，再校验长度和业务格式；旧 Bank 的不同格式不阻止新记录初始化，最新记录无效时也不回退为过期执行状态。通用事务测试已迁入 Test/dual_bank_transaction_test.c，测试 CMake 注册该目标，Agriculture 的测试工程直接引用同一文件。迁移时文件摘要一致，路径和差异静态检查通过；迁移后未重新编译或运行 C 测试。
+
+农业旧检查点的 608/736 字节转换、板型与公钥策略、RTOS 堆大小及线程创建顺序属于具体应用，保留在 Agriculture/Hardware。使用该固件时必须一起更新两个仓库；当前 Agriculture 32 / 26.0.6 的重启修复仍待用户构建和上板验证。
