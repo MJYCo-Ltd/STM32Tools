@@ -57,6 +57,8 @@ typedef struct {
  * @note 此函数会读取温度寄存器并转换为摄氏度，同时检查是否在医学有效区间（35-42°C）
  */
 TMP117_Status TMP117_GetTemperature(uint8_t addr7, TMP117_Temp* temp);
+/* Read a fresh conversion only. NOT_READY means the caller should retry later. */
+TMP117_Status TMP117_GetReadyTemperature(uint8_t addr7, TMP117_Temp *temp);
 void TMP117_SetBus(const I2C_Bus *bus);
 
 /**

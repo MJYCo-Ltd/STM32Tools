@@ -7,6 +7,7 @@
 #define TMP117_REG_TEMP_RES      0x00U
 #define TMP117_REG_CONFIGURATION 0x01U
 #define TMP117_CFG_MOD0_Pos      10U
+#define TMP117_CFG_DATA_READY    (1U << 13U)
 #define TMP117_I2C_TIMEOUT_MS    100U
 
 static I2C_Bus s_default_bus;
@@ -84,4 +85,17 @@ TMP117_Status TMP117_SetWorkMode(uint8_t address7, TMP117_Mode work_mode) {
   configuration |= (uint16_t)work_mode << TMP117_CFG_MOD0_Pos;
   return TMP117_WriteRegister(address7, TMP117_REG_CONFIGURATION,
                               configuration);
+}
+
+TMP117_Status TMP117_GetReadyTemperature(uint8_t address7, TMP117_Temp *temp) {
+  uint16_t configuration;
+  TMP117_Status status;
+  if (temp == NULL) return TMP117_ERR_RANGE;
+  status = TMP117_ReadRegister(address7, TMP117_REG_CONFIGURATION,
+                               &configuration);
+  if (status != TMP117_OK) return status;
+  if ((configuration & TMP117_CFG_DATA_READY) == 0U) {
+    return TMP117_ERR_NOT_READY;
+  }
+  return TMP117_GetTemperature(address7, temp);
 }
