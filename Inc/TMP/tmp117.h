@@ -41,6 +41,13 @@ typedef enum {
     TMP117_MODE_ONE_SHOT   = 0b11, /// 获取一次关闭
 } TMP117_Mode;
 
+typedef enum {
+    TMP117_AVERAGE_NONE = 0,
+    TMP117_AVERAGE_8,
+    TMP117_AVERAGE_32,
+    TMP117_AVERAGE_64,
+} TMP117_Averaging;
+
 // 温度值结构体
 typedef struct {
 	  uint16_t uValue;  // 原始数据
@@ -69,6 +76,9 @@ void TMP117_SetBus(const I2C_Bus *bus);
  * @note 此函数会读取当前配置寄存器，修改模式位后写回
  */
 TMP117_Status TMP117_SetWorkMode(uint8_t addr7, TMP117_Mode workMode);
+/* Set averaging and start one conversion in one configuration write.
+ * The sensor automatically returns to shutdown on completion; no EEPROM write. */
+TMP117_Status TMP117_StartOneShot(uint8_t addr7, TMP117_Averaging averaging);
 ////////////////// 阻塞式 end //////////////////////////
 
 /////////////////// 非阻塞式 //////////////////////////
