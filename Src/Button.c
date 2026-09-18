@@ -1,17 +1,16 @@
 /**
  ******************************************************************************
  * @file           : Button.c
- * @brief          : EXTI-marked button debounce and duration classification
+ * @brief          : Dual-edge EXTI button debounce and duration classification
  ******************************************************************************
  */
 #include "Button.h"
 
 #include <stddef.h>
 
-#define BUTTON_PHASE_IDLE 0U
-#define BUTTON_PHASE_PRESS_DEBOUNCE 1U
-#define BUTTON_PHASE_HELD 2U
-#define BUTTON_PHASE_RELEASE_DEBOUNCE 3U
+#define BUTTON_PHASE_IDLE     0U
+#define BUTTON_PHASE_DEBOUNCE 1U
+#define BUTTON_PHASE_HELD     2U
 
 static Button *volatile s_instances[BUTTON_MAX_INSTANCES];
 static volatile uint16_t s_instance_pins[BUTTON_MAX_INSTANCES];
@@ -36,9 +35,14 @@ static uint8_t Button_IsActive(const Button *button)
              : 0U;
 }
 
-static GPIO_PinState Button_InactiveState(GPIO_PinState active_state)
+static GPIO_PinState Button_StateFromActive(const Button *button,
+                                            uint8_t active)
 {
-  return (active_state == GPIO_PIN_RESET) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+  if (active != 0U) {
+    return button->active_state;
+  }
+  return (button->active_state == GPIO_PIN_RESET) ? GPIO_PIN_SET
+                                                   : GPIO_PIN_RESET;
 }
 
 static ButtonEvent Button_Emit(Button *button, ButtonEvent event)
@@ -58,6 +62,13 @@ static ButtonEvent Button_ClassifyDuration(uint32_t duration_ms)
     return BUTTON_EVENT_LONG;
   }
   return BUTTON_EVENT_SHORT;
+}
+
+static uint32_t Button_Remaining(uint32_t now_ms, uint32_t started_ms,
+                                 uint32_t duration_ms)
+{
+  const uint32_t elapsed = now_ms - started_ms;
+  return (elapsed >= duration_ms) ? 0U : (duration_ms - elapsed);
 }
 
 static uint8_t Button_Register(Button *button)
@@ -91,7 +102,8 @@ static uint8_t Button_Register(Button *button)
   return registered;
 }
 
-static uint8_t Button_TakeIrq(Button *button, uint32_t *irq_tick)
+static uint8_t Button_TakeIrq(Button *button, uint32_t *irq_tick,
+                              uint8_t *irq_active)
 {
   uint32_t primask;
   uint8_t pending;
@@ -100,6 +112,7 @@ static uint8_t Button_TakeIrq(Button *button, uint32_t *irq_tick)
   pending = button->irq_pending;
   if (pending != 0U) {
     *irq_tick = button->irq_tick;
+    *irq_active = button->irq_active;
     button->irq_pending = 0U;
   }
   Button_ExitCritical(primask);
@@ -115,9 +128,7 @@ void Button_Init(Button *button, GPIO_TypeDef *port, uint16_t pin,
     return;
   }
 
-  /* Reinitialization must not leave an older pin-dispatch entry behind.
-   * Button_Deinit() only compares the object address before clearing fields,
-   * so it is also safe for a first initialization of an unregistered object. */
+  /* Reinitialization must not leave an older pin-dispatch entry behind. */
   Button_Deinit(button);
   initial_state = HAL_GPIO_ReadPin(port, pin);
   button->port = port;
@@ -125,8 +136,10 @@ void Button_Init(Button *button, GPIO_TypeDef *port, uint16_t pin,
   button->active_state = active_state;
   button->debounce_ms = debounce_ms;
   button->irq_pending = 0U;
+  button->irq_active = 0U;
   button->irq_tick = 0U;
   button->phase = BUTTON_PHASE_IDLE;
+  button->debounce_active = 0U;
   button->extra_long_emitted = 0U;
   button->suppress_release_event = 0U;
   button->registered = 0U;
@@ -138,7 +151,7 @@ void Button_Init(Button *button, GPIO_TypeDef *port, uint16_t pin,
 
   if (initial_state == active_state) {
     /* The physical press started before initialization, so its duration is
-     * unknown. Track release to keep state correct, but suppress its event. */
+     * unknown. Track the rising edge, but suppress an event for this hold. */
     button->phase = BUTTON_PHASE_HELD;
     button->press_tick = HAL_GetTick();
     button->suppress_release_event = 1U;
@@ -191,6 +204,7 @@ void Button_NotifyExti(Button *button)
   if ((button == NULL) || (button->port == NULL)) {
     return;
   }
+  button->irq_active = Button_IsActive(button);
   button->irq_tick = HAL_GetTick();
   button->irq_pending = 1U;
 }
@@ -212,7 +226,10 @@ ButtonEvent Button_Process(Button *button)
 {
   uint32_t now;
   uint32_t irq_tick = 0U;
+  uint8_t irq_active = 0U;
   uint8_t pending;
+  uint8_t active_now;
+  uint8_t stable_active;
   uint32_t duration_ms;
   ButtonEvent event;
 
@@ -220,77 +237,93 @@ ButtonEvent Button_Process(Button *button)
     return BUTTON_EVENT_NONE;
   }
 
-  /* Take the pending flag and its timestamp as one ISR-shared snapshot. Read
-   * the current time afterwards so a new EXTI cannot produce irq_tick > now. */
-  pending = Button_TakeIrq(button, &irq_tick);
+  /* Snapshot all ISR-shared edge data before reading the current time. */
+  pending = Button_TakeIrq(button, &irq_tick, &irq_active);
   now = HAL_GetTick();
+  if (pending != 0U) {
+    button->debounce_tick = irq_tick;
+    button->debounce_active = irq_active;
+    button->phase = BUTTON_PHASE_DEBOUNCE;
+  }
 
-  for (;;) {
-    switch (button->phase) {
-    case BUTTON_PHASE_IDLE:
-      if (pending == 0U) {
-        return BUTTON_EVENT_NONE;
-      }
-      button->debounce_tick = irq_tick;
-      button->phase = BUTTON_PHASE_PRESS_DEBOUNCE;
-      break;
-    case BUTTON_PHASE_PRESS_DEBOUNCE:
-      if (pending != 0U) {
-        button->debounce_tick = irq_tick;
-        pending = 0U;
-      }
-      if (Button_IsActive(button) == 0U) {
-        button->phase = BUTTON_PHASE_IDLE;
-        return BUTTON_EVENT_NONE;
-      }
-      if ((now - button->debounce_tick) < button->debounce_ms) {
-        return BUTTON_EVENT_NONE;
-      }
+  if (button->phase == BUTTON_PHASE_DEBOUNCE) {
+    if (Button_Remaining(now, button->debounce_tick, button->debounce_ms) !=
+        0U) {
+      return BUTTON_EVENT_NONE;
+    }
+
+    /* Read once at the one-shot debounce deadline. Stable idle/held states do
+     * not poll GPIO. If an edge was missed or is still bouncing, restart the
+     * one-shot window from the observed level. */
+    active_now = Button_IsActive(button);
+    if (active_now != button->debounce_active) {
+      button->debounce_active = active_now;
+      button->debounce_tick = now;
+      return BUTTON_EVENT_NONE;
+    }
+
+    stable_active = (button->stable_state == button->active_state) ? 1U : 0U;
+    if (active_now == stable_active) {
+      button->phase = (active_now != 0U) ? BUTTON_PHASE_HELD
+                                         : BUTTON_PHASE_IDLE;
+      return BUTTON_EVENT_NONE;
+    }
+
+    button->stable_state = Button_StateFromActive(button, active_now);
+    if (active_now != 0U) {
       button->phase = BUTTON_PHASE_HELD;
       button->press_tick = button->debounce_tick;
       button->extra_long_emitted = 0U;
-      button->stable_state = button->active_state;
-      break;
-    case BUTTON_PHASE_HELD:
-      if (Button_IsActive(button) == 0U) {
-        button->phase = BUTTON_PHASE_RELEASE_DEBOUNCE;
-        button->debounce_tick = now;
-        return BUTTON_EVENT_NONE;
-      }
-      if ((button->suppress_release_event == 0U) &&
-          (button->extra_long_emitted == 0U) &&
-          ((now - button->press_tick) >= BUTTON_EXTRA_LONG_MS)) {
-        button->extra_long_emitted = 1U;
-        return Button_Emit(button, BUTTON_EVENT_EXTRA_LONG);
-      }
+      button->suppress_release_event = 0U;
       return BUTTON_EVENT_NONE;
-    case BUTTON_PHASE_RELEASE_DEBOUNCE:
-      if (Button_IsActive(button) != 0U) {
-        button->phase = BUTTON_PHASE_HELD;
-        return BUTTON_EVENT_NONE;
-      }
-      if ((now - button->debounce_tick) < button->debounce_ms) {
-        return BUTTON_EVENT_NONE;
-      }
-      button->phase = BUTTON_PHASE_IDLE;
-      button->stable_state = Button_InactiveState(button->active_state);
-      if ((button->suppress_release_event != 0U) ||
-          (button->extra_long_emitted != 0U)) {
-        button->suppress_release_event = 0U;
-        button->extra_long_emitted = 0U;
-        return BUTTON_EVENT_NONE;
-      }
-      duration_ms = button->debounce_tick - button->press_tick;
-      event = Button_ClassifyDuration(duration_ms);
-      return Button_Emit(button, event);
-    default:
-      button->phase = BUTTON_PHASE_IDLE;
-      button->stable_state = Button_InactiveState(button->active_state);
+    }
+
+    button->phase = BUTTON_PHASE_IDLE;
+    if ((button->suppress_release_event != 0U) ||
+        (button->extra_long_emitted != 0U)) {
       button->suppress_release_event = 0U;
       button->extra_long_emitted = 0U;
       return BUTTON_EVENT_NONE;
     }
+    duration_ms = button->debounce_tick - button->press_tick;
+    event = Button_ClassifyDuration(duration_ms);
+    return Button_Emit(button, event);
   }
+
+  if (button->phase == BUTTON_PHASE_HELD) {
+    if ((button->suppress_release_event == 0U) &&
+        (button->extra_long_emitted == 0U) &&
+        (Button_Remaining(now, button->press_tick, BUTTON_EXTRA_LONG_MS) ==
+         0U)) {
+      button->extra_long_emitted = 1U;
+      return Button_Emit(button, BUTTON_EVENT_EXTRA_LONG);
+    }
+    return BUTTON_EVENT_NONE;
+  }
+
+  button->phase = BUTTON_PHASE_IDLE;
+  return BUTTON_EVENT_NONE;
+}
+
+uint32_t Button_NextWakeDelay(const Button *button, uint32_t now_ms)
+{
+  if ((button == NULL) || (button->port == NULL)) {
+    return BUTTON_WAIT_FOREVER;
+  }
+  if (button->irq_pending != 0U) {
+    return 0U;
+  }
+  if (button->phase == BUTTON_PHASE_DEBOUNCE) {
+    return Button_Remaining(now_ms, button->debounce_tick,
+                            button->debounce_ms);
+  }
+  if ((button->phase == BUTTON_PHASE_HELD) &&
+      (button->suppress_release_event == 0U) &&
+      (button->extra_long_emitted == 0U)) {
+    return Button_Remaining(now_ms, button->press_tick,
+                            BUTTON_EXTRA_LONG_MS);
+  }
+  return BUTTON_WAIT_FOREVER;
 }
 
 uint8_t Button_IsPressed(const Button *button)
