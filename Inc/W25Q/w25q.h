@@ -43,6 +43,8 @@ typedef struct {
   uint16_t cs_pin;
   uint32_t jedec_id;
   uint32_t capacity_bytes;
+  /** Optional IWDG feed while BUSY; NULL in Bootloader. */
+  void (*wait_poll)(void);
 } W25Q_Device;
 
 W25Q_Status W25Q_Init(W25Q_Device *dev, SPI_HandleTypeDef *hspi,

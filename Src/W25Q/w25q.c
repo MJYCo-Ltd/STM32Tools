@@ -78,6 +78,7 @@ static NorFlash_Status ReadStatus1(W25Q_Device *dev, uint8_t *status1)
 static NorFlash_Status WaitBusy(W25Q_Device *dev, uint32_t timeout_ms)
 {
   const uint32_t start = HAL_GetTick();
+  uint32_t last_poll = start;
   uint8_t status1;
   NorFlash_Status status;
 
@@ -91,6 +92,12 @@ static NorFlash_Status WaitBusy(W25Q_Device *dev, uint32_t timeout_ms)
     }
     if ((HAL_GetTick() - start) >= timeout_ms) {
       return NOR_FLASH_ERR_TIMEOUT;
+    }
+    /* StorageBackend poll only runs before erase; BUSY wait can last seconds. */
+    if ((dev->wait_poll != NULL) &&
+        ((uint32_t)(HAL_GetTick() - last_poll) >= 200U)) {
+      dev->wait_poll();
+      last_poll = HAL_GetTick();
     }
   }
 }

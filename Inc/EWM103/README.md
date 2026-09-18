@@ -14,8 +14,8 @@ BluFi 相关类型（当前 Agriculture 配网使用）
 - `EWM103_TYPE_BLEINIT` → `AT+BLEINIT=<0|1>`（`content.mode`）
 - `EWM103_TYPE_BLUFI` → `AT+BLUFI=<0|1>`（`content.mode`）
 - 查询类：`content.query != 0` 时组 `AT+NAME?`（如 `CWJAP?`、`CWMODE?`）
-- 说明：本库**不**提供 `BLEPAIR*`；Agriculture 走 ESP BluFi，见仓库  
-  `Agriculture/Hardware/docs/WIFI_BLUFI_PROVISION.md`
+- 说明：本库**不**提供 `BLEPAIR*`；Agriculture 走 ESP BluFi，配网契约见  
+  [`Agriculture/docs/contracts/mobile-protocol.md`](../../../Agriculture/docs/contracts/mobile-protocol.md)
 
 使用建议
 - Pack/Unpack 只负责文本的构建与解析；注意粘包/半包，由上层会话缓冲拼完整响应。

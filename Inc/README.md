@@ -168,6 +168,22 @@ EPD 与 LCD 共用 SPI 传输接口。控制器驱动先包含对应的 `*_confi
 
 ---
 
+## 按键 (Button.h)
+
+GPIO EXTI 下降沿按键。ISR 只唤醒并标记边沿；任务上下文做软件消抖，并按按下时长分类短按（小于 1 s）、长按（达到 1 s 且未满 5 s）、超长按（达到 5 s）。空闲键在未收到 EXTI 标记前不读 GPIO。板级负责把引脚配成 `GPIO_MODE_IT_FALLING`，并在 EXTI 回调中调用 `Button_NotifyExtiPin`。
+
+| 接口 | 说明 |
+|------|------|
+| `Button_Init(button, port, pin, active, debounce_ms)` | 初始化软件状态（GPIO 已配置） |
+| `Button_SetCallback(button, cb, ctx)` | 可选事件回调 |
+| `Button_NotifyExti` / `Button_NotifyExtiPin` | ISR 标记 |
+| `Button_Process(button)` | 消抖与时长判断，返回事件 |
+| `Button_IsPressed(button)` | 最近一次已确认的按下状态 |
+
+常量：`BUTTON_LONG_MS` 1000、`BUTTON_EXTRA_LONG_MS` 5000。
+
+---
+
 ## 串口接收 (UartReceive.h)
 
 | 接口 | 说明 |

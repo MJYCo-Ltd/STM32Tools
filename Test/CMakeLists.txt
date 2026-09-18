@@ -73,3 +73,11 @@ add_executable(dual_bank_transaction_test
     dual_bank_transaction_test.c ../Src/Flash/DualBankStore.c)
 target_include_directories(dual_bank_transaction_test PRIVATE ../Inc)
 add_test(NAME dual_bank_transaction_test COMMAND dual_bank_transaction_test)
+
+add_executable(button_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/button_test.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Src/Button.c)
+target_include_directories(button_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/button_stubs
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Inc)
+add_test(NAME button_test COMMAND button_test)
