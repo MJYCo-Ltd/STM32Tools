@@ -1,0 +1,31 @@
+name: Branch integration source snapshot
+on:
+  push:
+    branches: [fix/branch-integration-20260919]
+    paths: [.github/workflows/integration-source-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'ytyisme/STM32Tools'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Capture repository objects without credentials
+        run: |
+          set -eu
+          test "$(git rev-parse origin/master)" = a39693e408cb069beb6cb73d0a6d8ca662426413
+          test "$(git rev-parse origin/fix/audit-consolidated)" = 06cc5e4e400aa405d55a6816dc428cf1d6b8c5c3
+          test "$(git rev-parse origin/fix/consolidated-engineering)" = 7532b6c8af3a27a44e1469974714e708f701283e
+          test "$(git rev-parse origin/fix/consolidated-runtime-boundaries)" = 300249ddc929da3ba7ac64f90c39a0862104dd7f
+          git bundle create "${RUNNER_TEMP}/STM32Tools.bundle" --all
+          git bundle verify "${RUNNER_TEMP}/STM32Tools.bundle"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: branch-integration-source
+          path: ${{ runner.temp }}/STM32Tools.bundle
+          retention-days: 1
