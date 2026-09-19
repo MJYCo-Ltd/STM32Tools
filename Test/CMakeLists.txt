@@ -64,6 +64,10 @@ target_include_directories(signed_firmware_core PUBLIC ../Inc
     PRIVATE ../ThirdParty/monocypher)
 
 enable_testing()
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/HostTests.cmake")
+add_test(NAME ${CMAKE_PROJECT_NAME} COMMAND ${CMAKE_PROJECT_NAME})
+add_test(NAME storage_test COMMAND storage_test)
+add_test(NAME ml307_http_test COMMAND ml307_http_test)
 
 add_executable(at_channel_recovery_test at_channel_recovery_test.c)
 target_include_directories(at_channel_recovery_test PRIVATE ../Inc)
@@ -115,3 +119,14 @@ target_compile_definitions(st7305_lifecycle_test PRIVATE STM32TOOLS_DISPLAY_BACK
 target_compile_options(st7305_lifecycle_test PRIVATE
     $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-pedantic;-UNDEBUG>)
 add_test(NAME st7305_lifecycle_test COMMAND st7305_lifecycle_test)
+
+add_library(api_binding_example OBJECT ../Examples/ApiUsage/api_binding_example.c)
+target_include_directories(api_binding_example PRIVATE ../Inc button_stubs)
+add_executable(api_contract_test api_contract_test.c)
+target_include_directories(api_contract_test PRIVATE ../Inc button_stubs)
+add_test(NAME api_contract_test COMMAND api_contract_test)
+
+add_test(NAME host_registration_contract
+    COMMAND "${CMAKE_COMMAND}" "-DTEST_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/registration-fixtures"
+      -P "${CMAKE_CURRENT_LIST_DIR}/host_registration_contract.cmake")
+stm32tools_finalize_host_tests()
