@@ -64,6 +64,30 @@ target_include_directories(signed_firmware_core PUBLIC ../Inc
     PRIVATE ../ThirdParty/monocypher)
 
 enable_testing()
+
+add_executable(at_channel_recovery_test at_channel_recovery_test.c)
+target_include_directories(at_channel_recovery_test PRIVATE ../Inc)
+add_test(NAME at_channel_recovery_test COMMAND at_channel_recovery_test)
+
+add_executable(sensor_driver_test
+    sensor_driver_test.c
+    ../Src/AHT20/aht20.c
+    ../Src/TMP/tmp117.c
+    ../Src/Bus/i2c_bus.c
+    ../Src/Common.c)
+target_include_directories(sensor_driver_test PRIVATE ../Inc)
+add_test(NAME sensor_driver_test COMMAND sensor_driver_test)
+
+add_executable(st7305_driver_test
+    st7305_driver_test.c
+    ../Src/Display/LCD/lcd_st7305.c
+    ../Src/Display/LCD/st7305_profile_fd042.c
+    ../Src/Display/spi_display_bus.c)
+target_include_directories(st7305_driver_test PRIVATE ../Inc)
+target_compile_definitions(st7305_driver_test PRIVATE
+    STM32TOOLS_DISPLAY_BACKEND_ST7305)
+add_test(NAME st7305_driver_test COMMAND st7305_driver_test)
+
 add_executable(mqtt_line_collector_test mqtt_line_collector_test.c)
 target_include_directories(mqtt_line_collector_test PRIVATE ../Inc)
 add_test(NAME mqtt_line_collector_test COMMAND mqtt_line_collector_test)

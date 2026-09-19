@@ -1,49 +1,38 @@
 /*
- * aht20.c
+ * AHT20 reusable driver.
  *
- * AHT20 温湿度驱动，依据说明书：
- * - 写测量命令：0xAC 0x33 0x00，等待约 80ms
- * - 读回 Status + SRH[19:0] + ST[19:0] + CRC
- * - RH = SRH / 2^20 * 100
- * - T  = ST  / 2^20 * 200 - 50
- * - CRC8：初值 0xFF，多项式 X8+X5+X4+1 (0x31)
+ * Protocol:
+ * - trigger: 0xAC 0x33 0x00
+ * - result: status + humidity[19:0] + temperature[19:0] + CRC8
+ * - CRC8: init 0xFF, polynomial 0x31
  */
-#include <stddef.h>
-#include "Base.h"
 #include "AHT20/aht20.h"
+
+#include <stddef.h>
+#include <string.h>
 
 #define AHT20_CMD_INIT    0xBEU
 #define AHT20_CMD_TRIGGER 0xACU
 
-#define AHT20_STATUS_BUSY_Pos 7
-#define AHT20_STATUS_CAL_Pos  3
-#define AHT20_STATUS_BUSY_Msk (1U << AHT20_STATUS_BUSY_Pos)
-#define AHT20_STATUS_CAL_Msk  (1U << AHT20_STATUS_CAL_Pos)
+#define AHT20_STATUS_BUSY_POS 7U
+#define AHT20_STATUS_CAL_POS  3U
+#define AHT20_STATUS_BUSY_MASK (1U << AHT20_STATUS_BUSY_POS)
+#define AHT20_STATUS_CAL_MASK  (1U << AHT20_STATUS_CAL_POS)
 
 #define AHT20_RAW_FULL_SCALE 1048576.0f /* 2^20 */
 
-static I2C_Bus s_default_bus;
-static const I2C_Bus *s_bus;
-
-#if defined(PLATFORM_STM32) || defined(USE_HAL_DRIVER)
-#include "main.h"
-extern I2C_HandleTypeDef hi2c1;
-#endif
-
-static const I2C_Bus *AHT20_GetBus(void) {
-#if defined(PLATFORM_STM32) || defined(USE_HAL_DRIVER)
-  if (s_bus == NULL) {
-    I2C_BusInitSTM32(&s_default_bus, &hi2c1, 100U);
-    s_bus = &s_default_bus;
-  }
-#endif
-  return s_bus;
+static uint8_t AHT20_DeviceValid(const AHT20_Device *device)
+{
+  return ((device != NULL) && (device->bus != NULL) &&
+          (device->bus->transmit != NULL) && (device->bus->receive != NULL) &&
+          (device->delay_ms != NULL) && (device->address7 <= 0x7FU))
+             ? 1U
+             : 0U;
 }
 
-void AHT20_SetBus(const I2C_Bus *bus) { s_bus = bus; }
-
 static AHT20_Status AHT20_TransferResult(I2C_BusResult result,
-                                         uint8_t receiving) {
+                                         uint8_t receiving)
+{
   if (result == I2C_BUS_OK) {
     return AHT20_OK;
   }
@@ -56,95 +45,121 @@ static AHT20_Status AHT20_TransferResult(I2C_BusResult result,
   return (receiving != 0U) ? AHT20_ERR_READ_I2C : AHT20_ERR_WRITE_I2C;
 }
 
-static AHT20_Status AHT20_Transmit(uint8_t addr7, const uint8_t *data,
-                                   uint16_t length) {
-  return AHT20_TransferResult(
-      I2C_BusTransmit(AHT20_GetBus(), addr7, data, length), 0U);
+static void AHT20_Delay(const AHT20_Device *device, uint32_t delay_ms)
+{
+  device->delay_ms(device->delay_context, delay_ms);
 }
 
-static AHT20_Status AHT20_Receive(uint8_t addr7, uint8_t *data,
-                                  uint16_t length) {
+static AHT20_Status AHT20_Transmit(const AHT20_Device *device,
+                                   const uint8_t *data, uint16_t length)
+{
   return AHT20_TransferResult(
-      I2C_BusReceive(AHT20_GetBus(), addr7, data, length), 1U);
+      I2C_BusTransmit(device->bus, device->address7, data, length), 0U);
 }
 
-static uint8_t AHT20_CalcCrc8(const uint8_t *message, uint8_t num)
+static AHT20_Status AHT20_Receive(const AHT20_Device *device, uint8_t *data,
+                                  uint16_t length)
+{
+  return AHT20_TransferResult(
+      I2C_BusReceive(device->bus, device->address7, data, length), 1U);
+}
+
+static uint8_t AHT20_CalcCrc8(const uint8_t *message, uint8_t count)
 {
   uint8_t crc = 0xFFU;
   uint8_t byte;
-  uint8_t i;
+  uint8_t bit;
 
-  for (byte = 0U; byte < num; ++byte) {
+  for (byte = 0U; byte < count; ++byte) {
     crc ^= message[byte];
-    for (i = 8U; i > 0U; --i) {
-      if ((crc & 0x80U) != 0U) {
-        crc = (uint8_t)((crc << 1) ^ 0x31U);
-      } else {
-        crc = (uint8_t)(crc << 1);
-      }
+    for (bit = 0U; bit < 8U; ++bit) {
+      crc = ((crc & 0x80U) != 0U) ? (uint8_t)((crc << 1U) ^ 0x31U)
+                                  : (uint8_t)(crc << 1U);
     }
   }
   return crc;
 }
 
-static AHT20_Status AHT20_ReadStatus(uint8_t addr7, uint8_t *status)
+static AHT20_Status AHT20_ReadStatus(const AHT20_Device *device,
+                                     uint8_t *status)
 {
-  AHT20_Status result;
-
   if (status == NULL) {
     return AHT20_ERR_PARAM;
   }
-
-  result = AHT20_Receive(addr7, status, 1U);
-  return result;
+  return AHT20_Receive(device, status, 1U);
 }
 
-static AHT20_Status AHT20_WaitIdle(uint8_t addr7, uint32_t timeout_ms)
+static AHT20_Status AHT20_WaitIdle(const AHT20_Device *device,
+                                   uint32_t timeout_ms)
 {
   uint32_t elapsed = 0U;
   uint8_t status = 0U;
   AHT20_Status result;
 
   while (elapsed <= timeout_ms) {
-    result = AHT20_ReadStatus(addr7, &status);
+    result = AHT20_ReadStatus(device, &status);
     if (result != AHT20_OK) {
       return result;
     }
-    if ((status & AHT20_STATUS_BUSY_Msk) == 0U) {
+    if ((status & AHT20_STATUS_BUSY_MASK) == 0U) {
       return AHT20_OK;
     }
-    YTY_DELAY_MS(5);
+    AHT20_Delay(device, 5U);
     elapsed += 5U;
   }
   return AHT20_ERR_TIMEOUT;
 }
 
-AHT20_Status AHT20_Init(uint8_t addr7)
+AHT20_Status AHT20_DeviceInit(AHT20_Device *device, const I2C_Bus *bus,
+                              uint8_t address7, AHT20_DelayMsFn delay_ms,
+                              void *delay_context)
+{
+  if (device == NULL) {
+    return AHT20_ERR_PARAM;
+  }
+
+  memset(device, 0, sizeof(*device));
+  if ((bus == NULL) || (bus->transmit == NULL) || (bus->receive == NULL) ||
+      (delay_ms == NULL) || (address7 > 0x7FU)) {
+    return AHT20_ERR_PARAM;
+  }
+
+  device->bus = bus;
+  device->address7 = address7;
+  device->delay_ms = delay_ms;
+  device->delay_context = delay_context;
+  return AHT20_OK;
+}
+
+AHT20_Status AHT20_Initialize(AHT20_Device *device)
 {
   AHT20_Status result;
   uint8_t status = 0U;
   const uint8_t init_cmd[3] = {AHT20_CMD_INIT, 0x08U, 0x00U};
 
-  /* 说明书：上电后需等待 ≥5ms 再操作 SCL/SDA */
-  YTY_DELAY_MS(40);
+  if (AHT20_DeviceValid(device) == 0U) {
+    return AHT20_ERR_PARAM;
+  }
 
-  result = AHT20_ReadStatus(addr7, &status);
+  /* Datasheet: wait at least 5 ms after power-up before accessing the bus. */
+  AHT20_Delay(device, 40U);
+
+  result = AHT20_ReadStatus(device, &status);
   if (result != AHT20_OK) {
     return result;
   }
 
-  /* Bit3=0 表示校准未使能，需发送初始化命令 */
-  if ((status & AHT20_STATUS_CAL_Msk) == 0U) {
-    result = AHT20_Transmit(addr7, init_cmd, 3U);
+  if ((status & AHT20_STATUS_CAL_MASK) == 0U) {
+    result = AHT20_Transmit(device, init_cmd, (uint16_t)sizeof(init_cmd));
     if (result != AHT20_OK) {
       return result;
     }
-    YTY_DELAY_MS(10);
-    result = AHT20_ReadStatus(addr7, &status);
+    AHT20_Delay(device, 10U);
+    result = AHT20_ReadStatus(device, &status);
     if (result != AHT20_OK) {
       return result;
     }
-    if ((status & AHT20_STATUS_CAL_Msk) == 0U) {
+    if ((status & AHT20_STATUS_CAL_MASK) == 0U) {
       return AHT20_ERR_NOT_CALIBRATED;
     }
   }
@@ -152,7 +167,7 @@ AHT20_Status AHT20_Init(uint8_t addr7)
   return AHT20_OK;
 }
 
-AHT20_Status AHT20_Read(uint8_t addr7, AHT20_Data *data)
+AHT20_Status AHT20_Read(AHT20_Device *device, AHT20_Data *data)
 {
   AHT20_Status result;
   uint8_t raw[7];
@@ -168,42 +183,45 @@ AHT20_Status AHT20_Read(uint8_t addr7, AHT20_Data *data)
   data->temperature_c = 0.0f;
   data->humidity_rh = 0.0f;
 
-  result = AHT20_Transmit(addr7, trigger_cmd, 3U);
+  if (AHT20_DeviceValid(device) == 0U) {
+    return AHT20_ERR_PARAM;
+  }
+
+  result =
+      AHT20_Transmit(device, trigger_cmd, (uint16_t)sizeof(trigger_cmd));
   if (result != AHT20_OK) {
     return result;
   }
 
-  /* 说明书：等待约 80ms 测量完成 */
-  YTY_DELAY_MS(80);
-  result = AHT20_WaitIdle(addr7, 100U);
+  AHT20_Delay(device, 80U);
+  result = AHT20_WaitIdle(device, 100U);
   if (result != AHT20_OK) {
     return (result == AHT20_ERR_TIMEOUT) ? AHT20_ERR_BUSY : result;
   }
 
-  result = AHT20_Receive(addr7, raw, 7U);
+  result = AHT20_Receive(device, raw, (uint16_t)sizeof(raw));
   if (result != AHT20_OK) {
     return result;
   }
 
-  if ((raw[0] & AHT20_STATUS_BUSY_Msk) != 0U) {
+  if ((raw[0] & AHT20_STATUS_BUSY_MASK) != 0U) {
     return AHT20_ERR_BUSY;
   }
-
   if (AHT20_CalcCrc8(raw, 6U) != raw[6]) {
     return AHT20_ERR_CRC;
   }
 
-  /* SRH[19:0] / ST[19:0] 打包在 byte1..byte5 */
-  humidity_raw = ((uint32_t)raw[1] << 12) | ((uint32_t)raw[2] << 4) |
-                 ((uint32_t)raw[3] >> 4);
-  temperature_raw = (((uint32_t)raw[3] & 0x0FU) << 16) |
-                    ((uint32_t)raw[4] << 8) | (uint32_t)raw[5];
+  humidity_raw = ((uint32_t)raw[1] << 12U) |
+                 ((uint32_t)raw[2] << 4U) |
+                 ((uint32_t)raw[3] >> 4U);
+  temperature_raw = (((uint32_t)raw[3] & 0x0FU) << 16U) |
+                    ((uint32_t)raw[4] << 8U) |
+                    (uint32_t)raw[5];
 
   data->humidity_rh =
       ((float)humidity_raw / AHT20_RAW_FULL_SCALE) * 100.0f;
   data->temperature_c =
       ((float)temperature_raw / AHT20_RAW_FULL_SCALE) * 200.0f - 50.0f;
   data->valid = true;
-
   return AHT20_OK;
 }
