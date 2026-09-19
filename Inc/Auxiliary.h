@@ -20,18 +20,42 @@ typedef enum
 } LOW_POWER_MODE;
 
 typedef struct {
-    uint8_t unRamTotal;     /// ram总空间
-    uint8_t unRamFree;      /// ram剩余空间
+    size_t unRamTotal;     /// dynamic heap capacity, bytes (not total MCU RAM)
+    size_t unRamFree;      /// free dynamic heap bytes
     uint8_t unCPURate;      /// CPU使用率
-    uint8_t unCPUFrequency; /// CPU主频 MHZ
+    uint32_t unCPUFrequency; /// CPU主频 MHZ
 } STMSTATUS;
 
-/// 接收数据
+#include "IOInfo.h" /* Backward-compatible type exposure. */
+
+typedef enum {
+    AUXILIARY_OK = 0,
+    AUXILIARY_ERR_PARAM,
+    AUXILIARY_ERR_UNCONFIGURED,
+    AUXILIARY_ERR_IO
+} AuxiliaryStatus;
+
+typedef AuxiliaryStatus (*AuxiliaryRestoreClock)(void *context);
 typedef struct {
-    uint64_t unReciveCount; /// 接收到的数据总数 (字节)
-    uint64_t unSendCount;   /// 发送的数据总数 (字节)
-    uint64_t unDealCount;   /// 处理的数据总数 (字节)
-} IOInfo;
+    /* STM32 HAL RTC/UART handles. Kept opaque so this public header does not
+     * require a product main.h or a particular STM32 family HAL header. */
+    void *rtc;
+    void *debug_uart; /* NULL disables debug output; never assumes UART 1. */
+    AuxiliaryRestoreClock restore_clock;
+    void *context;
+} AuxiliaryConfig;
+
+/* Configure once at boot before concurrent use. Configuration is copied;
+ * handles and context are borrowed. NULL resets to unconfigured/disabled. */
+void Auxiliary_Configure(const AuxiliaryConfig *config);
+AuxiliaryStatus Auxiliary_EnterStop(void);
+AuxiliaryStatus Auxiliary_EnterLowPower(LOW_POWER_MODE mode, uint32_t counter,
+                                        uint32_t clock);
+AuxiliaryStatus Auxiliary_LastError(void);
+
+/* Low-power preconditions: task context, wake source selected, no pending work.
+ * The caller coordinates RTOS tick suppression/time accounting, peripheral
+ * ownership and the watchdog budget. These are NOT whole-system sleep APIs. */
 
 /**
  * 发送调试信息
@@ -57,7 +81,9 @@ void RecycleSpace(void *pBuffer);
  * @brief 获取flash
  * @return
  */
-const uint8_t *ReadFlash();
+/* Legacy declaration only: STM32Tools has no ReadFlash implementation.
+ * Prefer the explicit Flash backend API; a legacy product may supply this. */
+const uint8_t *ReadFlash(void);
 
 /**
  * @brief 进入休眠模式

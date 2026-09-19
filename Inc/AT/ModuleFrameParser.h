@@ -67,6 +67,12 @@ void ModuleFrameParser_InitLineCollector(ModuleLineCollector *collector,
 void ModuleFrameParser_FeedLines(ModuleLineCollector *collector,
                                  const uint8_t *data, size_t length);
 
+/** Preserve CR/LF bytes for compatibility with line-oriented module adapters.
+ * Overflow/NUL discard the WHOLE record through LF; no suffix is emitted.
+ */
+void ModuleFrameParser_FeedRawLines(ModuleLineCollector *collector,
+                                    const uint8_t *data, size_t length);
+
 /**
  * Parse one hardware frame without inspecting its binary payload.
  * Numeric fields are comma-like separated; the last separator introduces the

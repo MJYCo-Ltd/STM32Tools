@@ -63,6 +63,14 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
                                     uint8_t qos, uint8_t retain,
                                     const char *message);
 
+/** One complete text PUBLISH slice; exact body length is required. Embedded
+ * NUL/CR/LF are rejected because the product consumes C strings. A valid partial
+ * payload is reported as part<total and must NOT be delivered as a full message.
+ * Does not reassemble fragments or claim support for arbitrary binary payloads.
+ */
+ML307_Result ML307_MqttParseTextPublish(const uint8_t *line, size_t length,
+                                        ML307_MqttEvent *event);
+
 int ML307_MqttResponseHasError(const char *raw);
 int ML307_MqttConnectResponseIsComplete(const char *raw, uint8_t connect_id);
 ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event);

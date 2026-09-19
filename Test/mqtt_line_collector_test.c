@@ -54,8 +54,10 @@ static void test_overflow_recovers(void)
   data[sizeof(data) - 1U] = '\n';
   MqttLineCollector_Init(&collector, capture_line, &capture);
   MqttLineCollector_Feed(&collector, data, (uint16_t)sizeof(data));
+  assert(capture.calls == 0U); /* Discard the entire overlong record, including its tail. */
+  MqttLineCollector_Feed(&collector, (const uint8_t *)"next\r\n", 6U);
   assert(capture.calls == 1U);
-  assert(strcmp(capture.last_line, "xxxx\n") == 0);
+  assert(strcmp(capture.last_line, "next\r\n") == 0);
 }
 
 int main(void)

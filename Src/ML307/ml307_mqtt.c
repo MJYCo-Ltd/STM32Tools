@@ -40,18 +40,6 @@ static int MqttStringIsValid(const char *value, size_t max_length)
          (strchr(value, '\r') == NULL) && (strchr(value, '\n') == NULL);
 }
 
-static int MqttParseInt(const char **cursor, long *value)
-{
-  char *end;
-
-  *value = strtol(*cursor, &end, 10);
-  if (end == *cursor) {
-    return 0;
-  }
-  *cursor = end;
-  return 1;
-}
-
 ML307_Result ML307_MqttBuildCleanSession(char *output, size_t output_size,
                                           uint8_t connect_id,
                                           uint8_t clean_session)
@@ -363,6 +351,8 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
       if (!AT_LineStartsWith(&line, "+MQTTURC:")) continue;
       result = ML307_MqttParseControlUrc(data, line_length, event);
       if (result != ML307_RESULT_NOT_FOUND) return result;
+      if (AT_LineStartsWith(&line, "+MQTTURC: \"publish\""))
+        return ML307_MqttParseTextPublish(data, line_length, event);
       urc = line.data;
       break;
     }
@@ -375,52 +365,9 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
   event->connect_id = (uint8_t)connect_id;
 
   if (strcmp(name, "publish") == 0) {
-    const char *cursor = strchr(urc, ',');
-    const char *topic_end;
-    long parsed;
-    size_t length;
-
-    if (cursor == NULL) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    ++cursor;
-    if (!MqttParseInt(&cursor, &parsed) || (*cursor++ != ',')) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    event->connect_id = (uint8_t)parsed;
-    if (!MqttParseInt(&cursor, &parsed) || (*cursor++ != ',') ||
-        (*cursor++ != '"')) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    event->message_id = (uint16_t)parsed;
-    topic_end = strchr(cursor, '"');
-    if (topic_end == NULL) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    length = (size_t)(topic_end - cursor);
-    if (length >= sizeof(event->topic)) {
-      return ML307_RESULT_BUFFER_TOO_SMALL;
-    }
-    memcpy(event->topic, cursor, length);
-    event->topic[length] = '\0';
-    cursor = topic_end + 1;
-    if ((*cursor++ != ',') || !MqttParseInt(&cursor, &parsed)) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    event->total_length = (uint32_t)parsed;
-    if ((*cursor++ != ',') || !MqttParseInt(&cursor, &parsed) ||
-        (*cursor++ != ',')) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    event->payload_length = (uint32_t)parsed;
-    length = strcspn(cursor, "\r\n");
-    if (length >= sizeof(event->payload)) {
-      return ML307_RESULT_BUFFER_TOO_SMALL;
-    }
-    memcpy(event->payload, cursor, length);
-    event->payload[length] = '\0';
-    event->type = ML307_MQTT_EVENT_PUBLISH;
-    return ML307_RESULT_OK;
+    /* NUL facade: only the selected line, never a following URC, is a body. */
+    return ML307_MqttParseTextPublish((const uint8_t *)urc,
+                                      strcspn(urc, "\r\n"), event);
   }
 
   if (sscanf(urc, "+MQTTURC: \"%15[^\"]\",%d,%d,%d", name, &connect_id,
@@ -446,5 +393,59 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
   } else {
     return ML307_RESULT_NOT_FOUND;
   }
+  return ML307_RESULT_OK;
+}
+
+static uint8_t MqttReadNumber(const uint8_t **cursor, const uint8_t *end,
+                              uint32_t maximum, uint32_t *value)
+{
+  if (ModuleFrameParser_ParseUnsigned(cursor, end, maximum, value) != MODULE_FRAME_COMPLETE ||
+      *cursor >= end || **cursor != ',') return 0U;
+  ++*cursor;
+  return 1U;
+}
+
+ML307_Result ML307_MqttParseTextPublish(const uint8_t *line, size_t length,
+                                        ML307_MqttEvent *event)
+{
+  static const char prefix[] = "+MQTTURC: \"publish\",";
+  const uint8_t *cursor, *end, *topic, *topic_end;
+  uint32_t cid, mid, total, part;
+  size_t topic_length;
+  if (!event) return ML307_RESULT_INVALID_ARGUMENT;
+  memset(event, 0, sizeof(*event));
+  if (!line) return ML307_RESULT_INVALID_ARGUMENT;
+  /* The collector owns framing. Strip only its line ending, NOT payload spaces. */
+  if (length && line[length - 1U] == '\n') {
+    --length;
+    if (length && line[length - 1U] == '\r') --length;
+  }
+  if (length < sizeof(prefix) - 1U || memcmp(line, prefix, sizeof(prefix) - 1U))
+    return ML307_RESULT_NOT_FOUND;
+  if (memchr(line, 0, length) || memchr(line, '\r', length) || memchr(line, '\n', length))
+    return ML307_RESULT_INVALID_VALUE;
+  cursor = line + sizeof(prefix) - 1U;
+  end = line + length;
+  if (!MqttReadNumber(&cursor, end, 5U, &cid) ||
+      !MqttReadNumber(&cursor, end, UINT16_MAX, &mid) || cursor >= end || *cursor++ != '"')
+    return ML307_RESULT_INVALID_VALUE;
+  topic = cursor;
+  topic_end = memchr(cursor, '"', (size_t)(end - cursor));
+  if (!topic_end || topic_end == topic) return ML307_RESULT_INVALID_VALUE;
+  topic_length = (size_t)(topic_end - topic);
+  if (topic_length >= sizeof(event->topic)) return ML307_RESULT_BUFFER_TOO_SMALL;
+  cursor = topic_end + 1U;
+  if (cursor >= end || *cursor++ != ',' ||
+      !MqttReadNumber(&cursor, end, UINT32_MAX, &total) ||
+      !MqttReadNumber(&cursor, end, UINT32_MAX, &part) || part > total ||
+      (size_t)(end - cursor) != part) return ML307_RESULT_INVALID_VALUE;
+  if (part >= sizeof(event->payload)) return ML307_RESULT_BUFFER_TOO_SMALL;
+  event->type = ML307_MQTT_EVENT_PUBLISH;
+  event->connect_id = (uint8_t)cid;
+  event->message_id = (uint16_t)mid;
+  event->total_length = total;
+  event->payload_length = part;
+  memcpy(event->topic, topic, topic_length);
+  memcpy(event->payload, cursor, part);
   return ML307_RESULT_OK;
 }

@@ -6,7 +6,8 @@
  */
 #include <string.h>
 #include "Base.h"
-#include "UartReceive.h"
+#include "UartReceive.h"
+#include "Auxiliary.h"
 
 /// 定义串口数据结构体
 typedef struct _Uart_Info {
@@ -231,9 +232,12 @@ void ProcessUart(void) {
       if (pUartInfo->restart_pending != 0U) {
         (void)StartReceive(pUartInfo);
       }
-      while (osMessageQueueGetCount(pUartInfo->hQueueId) > 0 &&
+      uint32_t processed = 0U;
+      while (processed < UART_RECEIVE_PROCESS_BUDGET &&
+             osMessageQueueGetCount(pUartInfo->hQueueId) > 0 &&
              osOK == osMessageQueueGet(pUartInfo->hQueueId,
                                        &pUartInfo->process_frame, 0, 0)) {
+        ++processed;
         pUartInfo->pCallback(pUartInfo->pHUart, pUartInfo->process_frame.buffer,
                              pUartInfo->process_frame.nLength);
         pUartInfo->stAllIOInfo.unDealCount += pUartInfo->process_frame.nLength;

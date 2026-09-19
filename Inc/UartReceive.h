@@ -19,11 +19,17 @@
 #ifndef __YTY_UART_RECEIVE_H_
 #define __YTY_UART_RECEIVE_H_
 #include "main.h"
-#include "Auxiliary.h"
+#include "IOInfo.h"
 
 #define UART_RECEIVE_BUFFER_LENGTH 256U
 #ifndef UART_RECEIVE_QUEUE_DEPTH
 #define UART_RECEIVE_QUEUE_DEPTH 8U
+#endif
+#ifndef UART_RECEIVE_PROCESS_BUDGET
+#define UART_RECEIVE_PROCESS_BUDGET UART_RECEIVE_QUEUE_DEPTH
+#endif
+#if UART_RECEIVE_PROCESS_BUDGET < 1
+#error "UART_RECEIVE_PROCESS_BUDGET must be positive"
 #endif
 /// 定义串口传输
 typedef struct _Uart_Queue_Info {
@@ -64,7 +70,7 @@ HAL_StatusTypeDef BeginReceiveUartInfo(uint8_t uId);
 void StopReceiveUartInfo(uint8_t uId);
 
 /**
- * 定时处理
+ * 定时处理。每路最多处理 UART_RECEIVE_PROCESS_BUDGET 帧，防止持续流量独占任务。
  */
 void ProcessUart(void);
 

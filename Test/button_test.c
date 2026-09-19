@@ -202,9 +202,11 @@ static void test_extra_long_on_late_release_processing(void)
   init_idle(&button);
   confirm_press(&button, 0U);
   release_at(&button, 5200U);
-  assert(Button_Process(&button) == BUTTON_EVENT_NONE);
-  g_tick = 5230U;
+  /* Chronological replay observes the 5 s deadline before the queued release.
+   * It emits once immediately, not after an additional release debounce. */
   assert(Button_Process(&button) == BUTTON_EVENT_EXTRA_LONG);
+  g_tick = 5230U;
+  assert(Button_Process(&button) == BUTTON_EVENT_NONE);
   assert(g_callback_calls == 1U);
   finish(&button);
 }

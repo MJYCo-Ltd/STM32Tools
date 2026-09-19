@@ -7,11 +7,15 @@
 extern "C" {
 #endif
 
-/**
- * Default internal Flash map for STM32F411 512KB (Agriculture board).
- * Bootloader occupies sectors 0..4 (128KB); Application sectors 5..7 (384KB).
- * Product headers (e.g. StorageLayout.h) should keep the same values.
- */
+/* Product configuration is authoritative when supplied. Defaults below remain
+ * a legacy F411 example, not the Agriculture product's source of truth. */
+#ifdef BOOTLOADER_CONFIG_HEADER
+#include BOOTLOADER_CONFIG_HEADER
+#if !defined(BOOTLOADER_FLASH_BASE) || !defined(BOOTLOADER_FLASH_SIZE) || \
+    !defined(BOOTLOADER_APP_FLASH_BASE) || !defined(BOOTLOADER_APP_FLASH_SIZE)
+#error "Product boot configuration must define all four internal Flash regions"
+#endif
+#endif
 #ifndef BOOTLOADER_FLASH_BASE
 #define BOOTLOADER_FLASH_BASE 0x08000000UL
 #endif
@@ -23,6 +27,13 @@ extern "C" {
 #endif
 #ifndef BOOTLOADER_APP_FLASH_SIZE
 #define BOOTLOADER_APP_FLASH_SIZE (384UL * 1024UL)
+#endif
+
+#ifndef BOOTLOADER_SRAM_BASE
+#define BOOTLOADER_SRAM_BASE 0x20000000UL
+#endif
+#ifndef BOOTLOADER_SRAM_SIZE
+#define BOOTLOADER_SRAM_SIZE (128UL * 1024UL)
 #endif
 
 #ifndef BOOTLOADER_MAX_TRIAL_BOOTS

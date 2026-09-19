@@ -1,97 +1,99 @@
-/*
- * Auxiliary.c
- *
- *  Created on: Apr 12, 2024
- *      Author: yty
- */
 #include "Auxiliary.h"
 #include "Base.h"
-#include "UartReceive.h"
 #include "main.h"
 #include <string.h>
 
-#define DEBUG_UART_MAX_ATTEMPTS 3U
+static AuxiliaryConfig s_config;
+static AuxiliaryStatus s_last_error;
+STMSTATUS G_LOCAL = {0};
 
-volatile uint8_t rtc_5min_flag = 0;
-void SystemClock_Config(void);
+void Auxiliary_Configure(const AuxiliaryConfig *config)
+{
+  if (config) s_config = *config;
+  else memset(&s_config, 0, sizeof(s_config));
+  s_last_error = AUXILIARY_OK;
+}
 
-// TickType_t g_base;
-
-STMSTATUS G_LOCAL = {0, 0, 0, 0};
-
-/// 发送信息给串口
-void SendDebugInfo(const uint8_t *pData, uint16_t uLength) {
-  UART_HandleTypeDef *pHUart;
+void SendDebugInfo(const uint8_t *data, uint16_t length)
+{
   uint32_t attempt;
-
-  if ((pData == NULL) || (uLength == 0U) || (GetUartCount() < 1U)) {
-    return;
-  }
-  pHUart = GetUart(1U);
-  if (pHUart == NULL) {
-    return;
-  }
-  for (attempt = 0U; attempt < DEBUG_UART_MAX_ATTEMPTS; ++attempt) {
-    if (HAL_UART_Transmit(pHUart, pData, uLength, 30U) == HAL_OK) {
-      UpdateUartSendInfo(pHUart, uLength);
-      return;
-    }
-    YTY_DELAY_MS(1);
+  if (!data || !length || !s_config.debug_uart) return;
+  /* A dedicated debug UART is supplied by the board, not inferred from module
+   * registration order. Do not bind a modem/fieldbus UART to this endpoint. */
+  for (attempt = 0U; attempt < 3U; ++attempt) {
+    if (HAL_UART_Transmit((UART_HandleTypeDef *)s_config.debug_uart,
+                         data, length, 30U) == HAL_OK) return;
+    YTY_DELAY_MS(1U);
   }
 }
-/// 请求空间
-void *RequestSpace(size_t unSize) {
-  void *pBuffer = YTY_MALLOC(unSize);
-  if (NULL != pBuffer) {
-    memset(pBuffer, 0, unSize);
-  }
 
-  return (pBuffer);
+void *RequestSpace(size_t size)
+{
+  void *buffer = YTY_MALLOC(size);
+  if (buffer) memset(buffer, 0, size);
+  return buffer;
 }
+void RecycleSpace(void *buffer) { YTY_FREE(buffer); }
 
-/// 回收空间
-void RecycleSpace(void *pBuffer) { YTY_FREE(pBuffer); }
-
-/// 获取状态
-STMSTATUS GetStatus(void) {
+STMSTATUS GetStatus(void)
+{
 #ifdef USE_FREERTOS
   G_LOCAL.unRamFree = xPortGetFreeHeapSize();
-  //	S_LOCAL.unCPURate = GetCPUUsage();
+#ifdef configTOTAL_HEAP_SIZE
+  G_LOCAL.unRamTotal = configTOTAL_HEAP_SIZE;
 #endif
-  return (G_LOCAL);
+#endif
+  G_LOCAL.unCPUFrequency = HAL_RCC_GetHCLKFreq() / 1000000U;
+  return G_LOCAL;
 }
 
-/// 进入休眠模式
-void Enter_Sleep() {
+void Enter_Sleep(void)
+{
   HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 }
 
-/// 进入停止模式
-void Enter_Stop(void) {
+AuxiliaryStatus Auxiliary_EnterStop(void)
+{
+  if (!s_config.restore_clock) return s_last_error = AUXILIARY_ERR_UNCONFIGURED;
   HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-  SystemClock_Config();
+  return s_last_error = s_config.restore_clock(s_config.context);
 }
 
-extern RTC_HandleTypeDef hrtc;
-
-void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
-                       uint32_t WakeUpClock) {
-  /* 清除 PWR 唤醒标志 */
+AuxiliaryStatus Auxiliary_EnterLowPower(LOW_POWER_MODE mode, uint32_t counter,
+                                        uint32_t clock)
+{
+  RTC_HandleTypeDef *rtc = (RTC_HandleTypeDef *)s_config.rtc;
+  AuxiliaryStatus status;
+  if (mode != LP_MODE_STOP && mode != LP_MODE_STANDBY)
+    return s_last_error = AUXILIARY_ERR_PARAM;
+#ifdef IS_RTC_WAKEUP_COUNTER
+  if (!IS_RTC_WAKEUP_COUNTER(counter)) return s_last_error = AUXILIARY_ERR_PARAM;
+#endif
+#ifdef IS_RTC_WAKEUP_CLOCK
+  if (!IS_RTC_WAKEUP_CLOCK(clock)) return s_last_error = AUXILIARY_ERR_PARAM;
+#endif
+  if (!rtc || (mode == LP_MODE_STOP && !s_config.restore_clock))
+    return s_last_error = AUXILIARY_ERR_UNCONFIGURED;
+  if (HAL_RTCEx_DeactivateWakeUpTimer(rtc) != HAL_OK)
+    return s_last_error = AUXILIARY_ERR_IO;
   __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-
-  /* 配置 RTC WakeUp Timer */
-  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, WakeUpCounter, WakeUpClock);
-
-  switch (mode) {
-  case LP_MODE_STOP:
-    Enter_Stop();
-    break;
-
-  case LP_MODE_STANDBY:
+  if (HAL_RTCEx_SetWakeUpTimer_IT(rtc, counter, clock) != HAL_OK)
+    return s_last_error = AUXILIARY_ERR_IO;
+  if (mode == LP_MODE_STANDBY) {
     HAL_PWR_EnterSTANDBYMode();
-    break;
-
-  default:
-    break;
+    /* A successful Standby entry resumes via reset, not this return path. */
+    (void)HAL_RTCEx_DeactivateWakeUpTimer(rtc);
+    return s_last_error = AUXILIARY_ERR_IO;
   }
+  status = Auxiliary_EnterStop();
+  if (HAL_RTCEx_DeactivateWakeUpTimer(rtc) != HAL_OK && status == AUXILIARY_OK)
+    status = AUXILIARY_ERR_IO;
+  return s_last_error = status;
 }
+
+/* Compatibility wrappers retain their old signatures; errors are not converted
+ * to success and can be inspected through Auxiliary_LastError(). */
+void Enter_Stop(void) { (void)Auxiliary_EnterStop(); }
+void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t counter, uint32_t clock)
+{ (void)Auxiliary_EnterLowPower(mode, counter, clock); }
+AuxiliaryStatus Auxiliary_LastError(void) { return s_last_error; }
