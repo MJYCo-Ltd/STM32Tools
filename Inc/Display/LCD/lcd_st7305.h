@@ -42,6 +42,9 @@ typedef struct {
   uint8_t *line_buffer;
   size_t line_buffer_size;
   ROTATION rotation;
+  /* 0 = legacy full framebuffer. Otherwise an even number of native rows;
+   * buffer size >= ceil(width/8)*page_rows. Rebuild binary consumers. */
+  uint16_t page_rows;
 } ST7305_Binding;
 
 #define ST7305_FD042MN_ZF21_H06_B_WIDTH 300U
@@ -56,6 +59,14 @@ extern const ST7305_PanelProfile ST7305_PANEL_FD042MN_ZF21_H06_B;
 
 size_t ST7305_FramebufferSize(const ST7305_PanelProfile *panel);
 size_t ST7305_LineBufferSize(const ST7305_PanelProfile *panel);
+
+typedef ST7305_Status (*ST7305_PageRender)(void *context);
+/* Render the SAME immutable scene for each clipped page. Callback must not
+ * bind/reset/change rotation/refresh or recursively render. Full-buffer APIs
+ * remain unchanged; paged mode rejects legacy Refresh/RefreshArea. */
+ST7305_Status LCD_ST7305_RenderPaged(ST7305_PageRender render, void *context);
+/* Drawing optimization only; DrawPixel still enforces the native page bounds. */
+uint8_t LCD_ST7305_Intersects(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 /** Bind the singleton LCD compatibility facade to explicit board resources. */
 ST7305_Status LCD_ST7305_Bind(const ST7305_Binding *binding);
