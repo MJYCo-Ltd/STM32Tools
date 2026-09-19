@@ -1,20 +1,23 @@
 /*
  ******************************************************************************
  * @file           : aht20.h
- * @brief          : AHT20 温湿度传感器驱动（I2C）
- *                   协议与换算依据 AHT20 说明书（奥松）
+ * @brief          : Reusable AHT20 I2C temperature/humidity driver
  ******************************************************************************
  */
-#ifndef __AHT20_H__
-#define __AHT20_H__
+#ifndef STM32TOOLS_AHT20_H
+#define STM32TOOLS_AHT20_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "Bus/i2c_bus.h"
 
-/** AHT20 固定 7 位 I2C 地址（8 位写地址 0x70 / 读地址 0x71） */
-#define AHT20_I2C_ADDR7 (0x38U)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** AHT20 fixed 7-bit I2C address (8-bit write/read addresses 0x70/0x71). */
+#define AHT20_I2C_ADDR7 0x38U
 
 typedef enum {
   AHT20_OK = 0,
@@ -24,26 +27,43 @@ typedef enum {
   AHT20_ERR_BUSY,
   AHT20_ERR_NOT_CALIBRATED,
   AHT20_ERR_CRC,
-  AHT20_ERR_TIMEOUT,
+  AHT20_ERR_TIMEOUT
 } AHT20_Status;
 
+typedef void (*AHT20_DelayMsFn)(void *context, uint32_t delay_ms);
+
 typedef struct {
-  float temperature_c; /**< 温度，单位 °C */
-  float humidity_rh;   /**< 相对湿度，单位 %RH */
-  bool valid;          /**< 本次读数是否有效 */
+  const I2C_Bus *bus;
+  AHT20_DelayMsFn delay_ms;
+  void *delay_context;
+  uint8_t address7;
+} AHT20_Device;
+
+typedef struct {
+  float temperature_c;
+  float humidity_rh;
+  bool valid;
 } AHT20_Data;
 
 /**
- * @brief 上电初始化：等待上电稳定，必要时发送校准初始化命令
- * @param addr7 7 位 I2C 地址，通常为 AHT20_I2C_ADDR7
+ * Configure one AHT20 instance. The bus and delay callback are borrowed and
+ * must remain valid for every subsequent operation on the device.
  */
-AHT20_Status AHT20_Init(uint8_t addr7);
-void AHT20_SetBus(const I2C_Bus *bus);
+AHT20_Status AHT20_DeviceInit(AHT20_Device *device, const I2C_Bus *bus,
+                              uint8_t address7, AHT20_DelayMsFn delay_ms,
+                              void *delay_context);
+
+/** Wait for power-up and enable calibration when required. */
+AHT20_Status AHT20_Initialize(AHT20_Device *device);
 
 /**
- * @brief 触发一次测量并读取温湿度（阻塞，约 ≥80ms）
- * @note 说明书建议采集周期大于 1 秒/次
+ * Trigger and read one blocking measurement (normally at least 80 ms).
+ * The datasheet recommends a measurement period greater than one second.
  */
-AHT20_Status AHT20_Read(uint8_t addr7, AHT20_Data *data);
+AHT20_Status AHT20_Read(AHT20_Device *device, AHT20_Data *data);
 
-#endif /* __AHT20_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* STM32TOOLS_AHT20_H */
