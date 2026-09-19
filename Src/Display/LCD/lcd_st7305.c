@@ -233,6 +233,9 @@ ST7305_Status LCD_ST7305_Initialize(void)
   if (s_bound == 0U) {
     return ST7305_ERR_STATE;
   }
+  if (s_initialized != 0U) {
+    return ST7305_OK;
+  }
 
   memset(s_binding.framebuffer, 0,
          ST7305_FramebufferSize(s_binding.panel));
