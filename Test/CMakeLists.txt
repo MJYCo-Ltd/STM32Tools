@@ -105,3 +105,13 @@ target_include_directories(button_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/button_stubs
     ${CMAKE_CURRENT_SOURCE_DIR}/../Inc)
 add_test(NAME button_test COMMAND button_test)
+
+add_executable(st7305_lifecycle_test
+    st7305_lifecycle_test.c
+    ../Src/Display/LCD/lcd_st7305.c
+    ../Src/Display/spi_display_bus.c)
+target_include_directories(st7305_lifecycle_test PRIVATE ../Inc)
+target_compile_definitions(st7305_lifecycle_test PRIVATE STM32TOOLS_DISPLAY_BACKEND_ST7305)
+target_compile_options(st7305_lifecycle_test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-pedantic;-UNDEBUG>)
+add_test(NAME st7305_lifecycle_test COMMAND st7305_lifecycle_test)

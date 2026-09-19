@@ -61,8 +61,22 @@ size_t ST7305_LineBufferSize(const ST7305_PanelProfile *panel);
 ST7305_Status LCD_ST7305_Bind(const ST7305_Binding *binding);
 void LCD_ST7305_Unbind(void);
 uint8_t LCD_ST7305_IsBound(void);
+/** Ready means initialization AND the first frame transfer succeeded. */
+uint8_t LCD_ST7305_IsReady(void);
 
-/** Initialize the bound panel and perform the initial framebuffer refresh. */
+/** Checked operations. Reset and refresh I/O failure invalidate ready. */
+ST7305_Status LCD_ST7305_Reset(void);
+ST7305_Status LCD_ST7305_Refresh(void);
+ST7305_Status LCD_ST7305_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
+                                     uint16_t height);
+
+/**
+ * Initialize the bound panel and perform the initial framebuffer refresh.
+ * A failed attempt remains not-ready and can be retried. Repeated calls while
+ * ready do no I/O. Call Reset first to force controller reinitialization.
+ * All operations share one facade: serialize them in the owning task/lock.
+ * Bus/profile/buffer pointers are borrowed and must outlive the binding.
+ */
 ST7305_Status LCD_ST7305_Initialize(void);
 
 #ifdef __cplusplus

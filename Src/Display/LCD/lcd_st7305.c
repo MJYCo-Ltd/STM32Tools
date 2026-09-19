@@ -22,6 +22,10 @@ static ROTATION s_rotation;
 static uint8_t s_bound;
 static uint8_t s_initialized;
 
+/* Initialization uses this path before publishing the ready state. */
+static ST7305_Status ST7305_RefreshAreaInternal(uint16_t x, uint16_t y,
+                                               uint16_t width, uint16_t height);
+
 static uint8_t ST7305_ProfileValid(const ST7305_PanelProfile *panel)
 {
   uint32_t final_column;
@@ -120,6 +124,11 @@ uint8_t LCD_ST7305_IsBound(void)
   return s_bound;
 }
 
+uint8_t LCD_ST7305_IsReady(void)
+{
+  return (s_bound != 0U && s_initialized != 0U) ? 1U : 0U;
+}
+
 static void ST7305_Delay(uint32_t delay_ms)
 {
   if ((s_bound != 0U) && (s_binding.delay_ms != NULL)) {
@@ -201,6 +210,9 @@ static uint8_t ST7305_Pack4x2(uint16_t x, uint16_t y)
 
 static ST7305_Status ST7305_ResetInternal(void)
 {
+  /* A hardware or software reset invalidates the controller configuration,
+   * including when the reset command itself fails. */
+  s_initialized = 0U;
   if (s_bound == 0U) {
     return ST7305_ERR_STATE;
   }
@@ -220,9 +232,14 @@ static ST7305_Status ST7305_ResetInternal(void)
   return ST7305_OK;
 }
 
+ST7305_Status LCD_ST7305_Reset(void)
+{
+  return ST7305_ResetInternal();
+}
+
 void LCD_Reset(void)
 {
-  (void)ST7305_ResetInternal();
+  (void)LCD_ST7305_Reset();
 }
 
 ST7305_Status LCD_ST7305_Initialize(void)
@@ -254,8 +271,18 @@ ST7305_Status LCD_ST7305_Initialize(void)
     return ST7305_ERR_IO;
   }
 
+  status = ST7305_RefreshAreaInternal(
+      0U, 0U,
+      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+          ? s_binding.panel->height : s_binding.panel->width,
+      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+          ? s_binding.panel->width : s_binding.panel->height);
+  if (status != ST7305_OK) {
+    return status;
+  }
+
+  /* The caller may observe ready only after the initial frame was sent. */
   s_initialized = 1U;
-  LCD_Refresh();
   return ST7305_OK;
 }
 
@@ -317,27 +344,49 @@ void LCD_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1,
   (void)ST7305_SetAddressWindow(x0, y0, x1, y1);
 }
 
-void LCD_Refresh(void)
+ST7305_Status LCD_ST7305_Refresh(void)
 {
   const ST7305_PanelProfile *panel;
 
-  if ((s_bound == 0U) || (s_initialized == 0U)) {
-    return;
+  if (LCD_ST7305_IsReady() == 0U) {
+    return ST7305_ERR_STATE;
   }
   panel = s_binding.panel;
-  LCD_RefreshArea(0U, 0U,
-                  ((s_rotation == ROTATION_90) ||
-                   (s_rotation == ROTATION_270))
-                      ? panel->height
-                      : panel->width,
-                  ((s_rotation == ROTATION_90) ||
-                   (s_rotation == ROTATION_270))
-                      ? panel->width
-                      : panel->height);
+  return LCD_ST7305_RefreshArea(
+      0U, 0U,
+      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+          ? panel->height : panel->width,
+      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+          ? panel->width : panel->height);
 }
 
-void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
-                     uint16_t height)
+void LCD_Refresh(void)
+{
+  (void)LCD_ST7305_Refresh();
+}
+
+ST7305_Status LCD_ST7305_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
+                                     uint16_t height)
+{
+  ST7305_Status status;
+  if (LCD_ST7305_IsReady() == 0U) {
+    return ST7305_ERR_STATE;
+  }
+  status = ST7305_RefreshAreaInternal(x, y, width, height);
+  if (status == ST7305_ERR_IO) {
+    /* A partial/failed transfer requires explicit reinitialization. */
+    s_initialized = 0U;
+  }
+  return status;
+}
+
+void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
+{
+  (void)LCD_ST7305_RefreshArea(x, y, width, height);
+}
+
+static ST7305_Status ST7305_RefreshAreaInternal(uint16_t x, uint16_t y,
+                                               uint16_t width, uint16_t height)
 {
   const ST7305_PanelProfile *panel;
   const size_t address_columns =
@@ -351,8 +400,8 @@ void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
   uint16_t row;
   size_t address_column;
 
-  if ((s_bound == 0U) || (s_initialized == 0U)) {
-    return;
+  if (s_bound == 0U) {
+    return ST7305_ERR_STATE;
   }
   panel = s_binding.panel;
   logical_width = ((s_rotation == ROTATION_90) ||
@@ -365,7 +414,7 @@ void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
                        : panel->height;
   if ((width == 0U) || (height == 0U) || (x >= logical_width) ||
       (y >= logical_height)) {
-    return;
+    return ST7305_ERR_PARAM;
   }
 
   x1 = (uint16_t)(x + width - 1U);
@@ -418,12 +467,13 @@ void LCD_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
     }
     if (ST7305_SetAddressWindow(0U, row, panel->width - 1U,
                                 (uint16_t)(row + 1U)) != ST7305_OK) {
-      return;
+      return ST7305_ERR_IO;
     }
     if (ST7305_WriteData(s_binding.line_buffer, out) != ST7305_OK) {
-      return;
+      return ST7305_ERR_IO;
     }
   }
+  return ST7305_OK;
 }
 
 void DrawPixel(const Pixel *pixel)
