@@ -1,6 +1,7 @@
 #include <ML307/ml307_mqtt.h>
 
 #include <AT/at_codec.h>
+#include <AT/ModuleFrameParser.h>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -121,6 +122,194 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
       (unsigned int)retain, (unsigned int)message_length, message);
 }
 
+
+/* One strict grammar shared by the public response APIs and legacy URC facade.
+ * This is protocol decoding only: outstanding-command correlation stays in the
+ * product adapter. ParseUnsigned supplies bounded conversion/overflow checks.
+ */
+typedef struct {
+  ML307_MqttEventType type;
+  uint32_t fields[3];
+} MqttControl;
+
+static ML307_Result MqttParseFields(AT_Line line, const char *prefix,
+                                    uint32_t *fields, size_t count)
+{
+  size_t i;
+  /* NUL/control delimiters inside a numeric record must not hide a suffix. */
+  if (memchr(line.data, '\0', line.length) != NULL) {
+    return ML307_RESULT_INVALID_VALUE;
+  }
+  AT_TrimLine(&line);
+  if (!AT_LineStartsWith(&line, prefix)) return ML307_RESULT_NOT_FOUND;
+  line.data += strlen(prefix);
+  line.length -= strlen(prefix);
+  if (memchr(line.data, '\r', line.length) != NULL ||
+      memchr(line.data, '\n', line.length) != NULL) {
+    return ML307_RESULT_INVALID_VALUE;
+  }
+  for (i = 0U; i < count; ++i) {
+    const uint8_t *cursor;
+    const uint8_t *end;
+    AT_TrimLine(&line);
+    if (i != 0U) {
+      if (!AT_LineStartsWith(&line, ",")) return ML307_RESULT_INVALID_VALUE;
+      ++line.data;
+      --line.length;
+      AT_TrimLine(&line);
+    }
+    cursor = (const uint8_t *)line.data;
+    end = cursor + line.length;
+    if (ModuleFrameParser_ParseUnsigned(&cursor, end, UINT32_MAX, &fields[i]) !=
+        MODULE_FRAME_COMPLETE) return ML307_RESULT_INVALID_VALUE;
+    line.data = (const char *)cursor;
+    line.length = (size_t)(end - cursor);
+  }
+  AT_TrimLine(&line);
+  return (line.length == 0U) ? ML307_RESULT_OK : ML307_RESULT_INVALID_VALUE;
+}
+
+static ML307_Result MqttParseControl(AT_Line line, MqttControl *control)
+{
+  static const struct {
+    const char *name_prefix;
+    const char *fields_prefix;
+    ML307_MqttEventType type;
+    size_t count;
+  } schemas[] = {
+      {"+MQTTURC: \"conn\"", "+MQTTURC: \"conn\",", ML307_MQTT_EVENT_CONNECTION, 2U},
+      {"+MQTTURC: \"suback\"", "+MQTTURC: \"suback\",", ML307_MQTT_EVENT_SUBACK, 3U},
+      {"+MQTTURC: \"puback\"", "+MQTTURC: \"puback\",", ML307_MQTT_EVENT_PUBACK, 3U},
+      {"+MQTTURC: \"timeout\"", "+MQTTURC: \"timeout\",", ML307_MQTT_EVENT_TIMEOUT, 2U}};
+  size_t i;
+  AT_TrimLine(&line);
+  for (i = 0U; i < sizeof(schemas) / sizeof(schemas[0]); ++i) {
+    uint32_t fields[3] = {0U};
+    if (!AT_LineStartsWith(&line, schemas[i].name_prefix)) continue;
+    if (MqttParseFields(line, schemas[i].fields_prefix, fields, schemas[i].count) !=
+        ML307_RESULT_OK || fields[0] > 5U) return ML307_RESULT_INVALID_VALUE;
+    if (schemas[i].type == ML307_MQTT_EVENT_CONNECTION) {
+      if (fields[1] > 6U && fields[1] != 255U) return ML307_RESULT_INVALID_VALUE;
+    } else {
+      if (fields[1] > UINT16_MAX) return ML307_RESULT_INVALID_VALUE;
+      if (schemas[i].type == ML307_MQTT_EVENT_SUBACK &&
+          fields[2] > 2U && fields[2] != 128U) return ML307_RESULT_INVALID_VALUE;
+      if (schemas[i].type == ML307_MQTT_EVENT_PUBACK && fields[2] > 1U)
+        return ML307_RESULT_INVALID_VALUE;
+    }
+    control->type = schemas[i].type;
+    memcpy(control->fields, fields, sizeof(fields));
+    return ML307_RESULT_OK;
+  }
+  return ML307_RESULT_NOT_FOUND;
+}
+
+ML307_Result ML307_MqttParseControlUrc(const uint8_t *line, size_t length,
+                                      ML307_MqttEvent *event)
+{
+  MqttControl control;
+  ML307_Result result;
+  if (event == NULL) return ML307_RESULT_INVALID_ARGUMENT;
+  memset(event, 0, sizeof(*event));
+  if (line == NULL) return ML307_RESULT_INVALID_ARGUMENT;
+  if (memchr(line, '\0', length) != NULL) return ML307_RESULT_INVALID_VALUE;
+  result = MqttParseControl((AT_Line){(const char *)line, length}, &control);
+  if (result != ML307_RESULT_OK) return result;
+  event->type = control.type;
+  event->connect_id = (uint8_t)control.fields[0];
+  if (control.type == ML307_MQTT_EVENT_CONNECTION) {
+    event->state = (int)control.fields[1];
+  } else {
+    event->message_id = (uint16_t)control.fields[1];
+    event->state = (int)control.fields[2];
+    if (control.type == ML307_MQTT_EVENT_SUBACK) {
+      event->qos = (uint8_t)control.fields[2];
+    }
+  }
+  return ML307_RESULT_OK;
+}
+
+static ML307_Result MqttParseResponseFields(const uint8_t *response, size_t length,
+                                             const char *prefix, uint32_t *fields,
+                                             size_t count)
+{
+  const uint8_t *data;
+  size_t line_length;
+  size_t offset = 0U;
+  if (response == NULL) return ML307_RESULT_INVALID_ARGUMENT;
+  while (ModuleFrameParser_NextLine(response, length, &offset, &data, &line_length)) {
+    AT_Line line = {(const char *)data, line_length};
+    AT_TrimLine(&line);
+    if (AT_LineStartsWith(&line, prefix)) {
+      return MqttParseFields((AT_Line){(const char *)data, line_length},
+                             prefix, fields, count);
+    }
+  }
+  return ML307_RESULT_NOT_FOUND;
+}
+
+static ML307_Result MqttParseCommandAck(const uint8_t *response, size_t length,
+                                        const char *prefix, size_t count,
+                                        uint8_t *connect_id, uint16_t *mid)
+{
+  uint32_t fields[3];
+  ML307_Result result;
+  if (connect_id == NULL || mid == NULL) return ML307_RESULT_INVALID_ARGUMENT;
+  result = MqttParseResponseFields(response, length, prefix, fields, count);
+  if (result != ML307_RESULT_OK) return result;
+  if (fields[0] > 5U || fields[1] > UINT16_MAX) return ML307_RESULT_INVALID_VALUE;
+  *connect_id = (uint8_t)fields[0];
+  *mid = (uint16_t)fields[1];
+  return ML307_RESULT_OK;
+}
+
+ML307_Result ML307_MqttParseSubResponse(const uint8_t *response, size_t length,
+                                       uint8_t *connect_id, uint16_t *mid)
+{
+  return MqttParseCommandAck(response, length, "+MQTTSUB:", 2U, connect_id, mid);
+}
+
+ML307_Result ML307_MqttParsePubResponse(const uint8_t *response, size_t length,
+                                       uint8_t *connect_id, uint16_t *mid)
+{
+  return MqttParseCommandAck(response, length, "+MQTTPUB:", 3U, connect_id, mid);
+}
+
+ML307_Result ML307_MqttParseStateResponse(const uint8_t *response, size_t length,
+                                         uint32_t *state)
+{
+  uint32_t value;
+  ML307_Result result;
+  if (state == NULL) return ML307_RESULT_INVALID_ARGUMENT;
+  result = MqttParseResponseFields(response, length, "+MQTTSTATE:", &value, 1U);
+  if (result == ML307_RESULT_OK) *state = value;
+  return result;
+}
+
+ML307_Result ML307_MqttParseConnectionResponse(const uint8_t *response,
+                                              size_t length, uint8_t connect_id,
+                                              uint32_t *state)
+{
+  const uint8_t *data;
+  size_t line_length;
+  size_t offset = 0U;
+  ML307_Result result = ML307_RESULT_NOT_FOUND;
+  if (response == NULL || state == NULL || connect_id > 5U)
+    return ML307_RESULT_INVALID_ARGUMENT;
+  while (ModuleFrameParser_NextLine(response, length, &offset, &data, &line_length)) {
+    MqttControl control;
+    if (memchr(data, '\0', line_length) == NULL &&
+        MqttParseControl((AT_Line){(const char *)data, line_length}, &control) ==
+            ML307_RESULT_OK &&
+        control.type == ML307_MQTT_EVENT_CONNECTION &&
+        control.fields[0] == connect_id) {
+      *state = control.fields[1];
+      result = ML307_RESULT_OK;
+    }
+  }
+  return result;
+}
+
 int ML307_MqttResponseHasError(const char *raw)
 {
   return AT_HasErrorResult(raw);
@@ -150,22 +339,40 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
     return ML307_RESULT_INVALID_ARGUMENT;
   }
   memset(event, 0, sizeof(*event));
-  urc = strstr(raw, "+MQTTURC: \"");
+  /* Select a line boundary, never a URC-looking substring in another record.
+   * Keep the legacy NUL-terminated facade; bounded command scanners above
+   * require LF so an incomplete UART response cannot complete a command.
+   */
+  urc = NULL;
+  {
+    const size_t length = strlen(raw);
+    size_t offset = 0U;
+    while (offset < length) {
+      const uint8_t *data;
+      size_t line_length;
+      AT_Line line;
+      ML307_Result result;
+      if (!ModuleFrameParser_NextLine((const uint8_t *)raw, length, &offset,
+                                      &data, &line_length)) {
+        data = (const uint8_t *)raw + offset;
+        line_length = length - offset;
+        offset = length;
+      }
+      line = (AT_Line){(const char *)data, line_length};
+      AT_TrimLine(&line);
+      if (!AT_LineStartsWith(&line, "+MQTTURC:")) continue;
+      result = ML307_MqttParseControlUrc(data, line_length, event);
+      if (result != ML307_RESULT_NOT_FOUND) return result;
+      urc = line.data;
+      break;
+    }
+  }
   if ((urc == NULL) ||
       (sscanf(urc, "+MQTTURC: \"%15[^\"]\",%d", name, &connect_id) != 2) ||
       (connect_id < 0) || (connect_id > 5)) {
     return ML307_RESULT_NOT_FOUND;
   }
   event->connect_id = (uint8_t)connect_id;
-
-  if (strcmp(name, "conn") == 0) {
-    if (sscanf(urc, "+MQTTURC: \"conn\",%d,%d", &connect_id, &value1) != 2) {
-      return ML307_RESULT_INVALID_VALUE;
-    }
-    event->type = ML307_MQTT_EVENT_CONNECTION;
-    event->state = value1;
-    return ML307_RESULT_OK;
-  }
 
   if (strcmp(name, "publish") == 0) {
     const char *cursor = strchr(urc, ',');
@@ -222,19 +429,14 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
   }
   event->message_id = (uint16_t)value1;
   event->state = value2;
-  if (strcmp(name, "suback") == 0) {
-    event->type = ML307_MQTT_EVENT_SUBACK;
-    event->qos = (uint8_t)value2;
-  } else if (strcmp(name, "unsuback") == 0) {
+  if (strcmp(name, "unsuback") == 0) {
     event->type = ML307_MQTT_EVENT_UNSUBACK;
-  } else if (strcmp(name, "puback") == 0) {
-    event->type = ML307_MQTT_EVENT_PUBACK;
+
   } else if (strcmp(name, "pubrec") == 0) {
     event->type = ML307_MQTT_EVENT_PUBREC;
   } else if (strcmp(name, "pubcomp") == 0) {
     event->type = ML307_MQTT_EVENT_PUBCOMP;
-  } else if (strcmp(name, "timeout") == 0) {
-    event->type = ML307_MQTT_EVENT_TIMEOUT;
+
   } else if (strcmp(name, "pingresp") == 0) {
     event->type = ML307_MQTT_EVENT_PINGRESP;
   } else if (strcmp(name, "pubnmi") == 0) {
