@@ -64,6 +64,11 @@ target_include_directories(signed_firmware_core PUBLIC ../Inc
     PRIVATE ../ThirdParty/monocypher)
 
 enable_testing()
+
+add_executable(at_channel_recovery_test at_channel_recovery_test.c)
+target_include_directories(at_channel_recovery_test PRIVATE ../Inc)
+add_test(NAME at_channel_recovery_test COMMAND at_channel_recovery_test)
+
 add_executable(mqtt_line_collector_test mqtt_line_collector_test.c)
 target_include_directories(mqtt_line_collector_test PRIVATE ../Inc)
 add_test(NAME mqtt_line_collector_test COMMAND mqtt_line_collector_test)
