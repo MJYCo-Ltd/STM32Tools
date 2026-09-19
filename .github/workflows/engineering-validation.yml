@@ -1,0 +1,46 @@
+name: Engineering validation
+on:
+  push:
+    branches: [master, fix/consolidated-engineering]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: engineering-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  host:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {compiler: gcc, config: Debug, sanitize: ''}
+          - {compiler: gcc, config: Release, sanitize: ''}
+          - {compiler: clang, config: Debug, sanitize: '--sanitize'}
+    env:
+      ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure, build and test all library host targets
+        run: |
+          flags=""
+          if [ -n "${{ matrix.sanitize }}" ]; then flags="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all"; fi
+          cmake -S Test -B build/host -G Ninja -DCMAKE_C_COMPILER=${{ matrix.compiler }} -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_FLAGS="$flags" -DCMAKE_EXE_LINKER_FLAGS="$flags"
+          cmake --build build/host --parallel 4
+          ctest --test-dir build/host --output-on-failure --no-tests=error --timeout 180 --output-junit "$GITHUB_WORKSPACE/build/host/results.xml"
+      - name: Retain test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: library-${{ matrix.compiler }}-${{ matrix.config }}
+          path: |
+            build/host/results.xml
+            build/host/Testing/Temporary/LastTest.log
+          retention-days: 7
+          if-no-files-found: warn
