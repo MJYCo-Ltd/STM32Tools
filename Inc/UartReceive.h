@@ -1,76 +1,47 @@
-/**
- ******************************************************************************
- * @file           : UartReceive.h
- * @brief          : Header for UartReceive.c file.
- *                   此文件为接收串口数据.
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2024 mjytech.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *  Created on: Apr 10, 2024
- *      Author: wshys
- ******************************************************************************
- */
-#ifndef __YTY_UART_RECEIVE_H_
-#define __YTY_UART_RECEIVE_H_
+#ifndef STM32TOOLS_UART_RECEIVE_H
+#define STM32TOOLS_UART_RECEIVE_H
 #include "main.h"
-#include "Auxiliary.h"
+#include "IOStatistics.h"
 
 #define UART_RECEIVE_BUFFER_LENGTH 256U
 #ifndef UART_RECEIVE_QUEUE_DEPTH
 #define UART_RECEIVE_QUEUE_DEPTH 8U
 #endif
-/// 定义串口传输
-typedef struct _Uart_Queue_Info {
-    uint8_t buffer[UART_RECEIVE_BUFFER_LENGTH];
-    uint16_t nLength;
-    uint16_t reserved;
+#if UART_RECEIVE_QUEUE_DEPTH < 1U
+#error "UART_RECEIVE_QUEUE_DEPTH must be positive"
+#endif
+#ifndef UART_RECEIVE_PROCESS_BUDGET
+#define UART_RECEIVE_PROCESS_BUDGET 8U
+#endif
+#if UART_RECEIVE_PROCESS_BUDGET < 1U || UART_RECEIVE_PROCESS_BUDGET > 65535U
+#error "UART_RECEIVE_PROCESS_BUDGET must be in 1..65535"
+#endif
+
+typedef struct {
+  uint8_t buffer[UART_RECEIVE_BUFFER_LENGTH];
+  uint16_t nLength, reserved;
 } UartQueueInfo;
+typedef void (*ReceiveUartCallback)(UART_HandleTypeDef *, uint8_t *, uint16_t);
+typedef void (*UartReceiveLossCallback)(UART_HandleTypeDef *, uint32_t dropped_chunks,
+                                        void *context);
 
-typedef void (*ReceiveUartCallback)(UART_HandleTypeDef *, uint8_t *pData,
-                                    uint16_t nLength);
-
-/**
- * 初始化串口数量
- * @attention 此数量用于开辟空间
- */
-void InitUartCount(uint8_t unMaxUartSize);
-
-/**
- * 添加串口
- */
-uint8_t AddUart(UART_HandleTypeDef *pHUart, ReceiveUartCallback pCallback);
-UART_HandleTypeDef *GetUart(uint8_t uId);
-
-/**
- * 获取串口接收数据信息
- */
-const IOInfo *GetUartIOInfo(uint8_t uId);
-
-/**
- * 更新串口发送数据
- */
-void UpdateUartSendInfo(UART_HandleTypeDef *pHUart, uint16_t unLength);
-
-/**
- * 接收指定id的串口数据
- */
-HAL_StatusTypeDef BeginReceiveUartInfo(uint8_t uId);
-void StopReceiveUartInfo(uint8_t uId);
-
-/**
- * 定时处理
- */
-void ProcessUart(void);
-
-/**
- * 获取串口数据的数量
- */
+void InitUartCount(uint8_t maximum);
+uint8_t AddUart(UART_HandleTypeDef *uart, ReceiveUartCallback callback);
+UART_HandleTypeDef *GetUart(uint8_t id);
 uint8_t GetUartCount(void);
-
+const IOInfo *GetUartIOInfo(uint8_t id);
+void UpdateUartSendInfo(UART_HandleTypeDef *uart, uint16_t length);
+HAL_StatusTypeDef BeginReceiveUartInfo(uint8_t id);
+void StopReceiveUartInfo(uint8_t id);
+/** Single task consumes RX. Round-robin bounded work; callbacks must not block
+ * indefinitely. No parsing, application callback or allocation runs in ISR.
+ * Normal-mode ReceiveToIdle DMA is required (not circular DMA).
+ */
+uint16_t ProcessUartBudget(uint16_t max_chunks);
+void ProcessUart(void); /* at most UART_RECEIVE_PROCESS_BUDGET chunks globally */
+uint8_t UartReceive_HasPending(void);
+/** Configured at startup. Called in consumer-task context BEFORE any post-gap
+ * data is delivered. All queued pre-gap chunks are discarded on a loss. */
+void UartReceive_SetLossCallback(UartReceiveLossCallback callback, void *context);
+uint32_t UartReceive_DroppedChunks(uint8_t id);
 #endif

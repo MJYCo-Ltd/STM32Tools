@@ -25,6 +25,7 @@ typedef struct {
   size_t capacity;
   size_t length;
   uint8_t discarding;
+  uint8_t preserve_terminator; /* 0: trimmed line; 1: retain CR/LF */
   ModuleFrameLineCallback callback;
   void *context;
 } ModuleLineCollector;
@@ -66,6 +67,12 @@ void ModuleFrameParser_InitLineCollector(ModuleLineCollector *collector,
 /** Feed arbitrary UART bursts and emit only complete, CR/LF-trimmed lines. */
 void ModuleFrameParser_FeedLines(ModuleLineCollector *collector,
                                  const uint8_t *data, size_t length);
+
+/** Preserve CR/LF bytes for compatibility with line-oriented module adapters.
+ * Overflow/NUL discard the WHOLE record through LF; no suffix is emitted.
+ */
+void ModuleFrameParser_FeedRawLines(ModuleLineCollector *collector,
+                                    const uint8_t *data, size_t length);
 
 /**
  * Parse one hardware frame without inspecting its binary payload.

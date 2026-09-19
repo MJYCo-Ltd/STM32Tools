@@ -34,6 +34,11 @@ typedef struct STORAGE_STRUCT_PACKED {
 } StorageFirmwareManifest;
 STORAGE_PACK_END
 
+/* Optional milestone notification: only AFTER a successful erase/read/CRC
+ * step, never from a hardware BUSY-wait poll. Must not reenter this slot. */
+typedef void (*StorageFirmwareProgressFn)(void *context, uint32_t completed,
+                                           uint32_t total);
+
 typedef struct {
   const StoragePartitionMap *map;
   uint32_t partition;
@@ -42,6 +47,8 @@ typedef struct {
   uint32_t expected_length;
   uint32_t running_crc;
   uint8_t writing;
+  StorageFirmwareProgressFn progress;
+  void *progress_context;
 } StorageFirmwareSlot;
 
 Storage_Status StorageFirmware_InitSlot(StorageFirmwareSlot *slot,

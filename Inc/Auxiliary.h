@@ -8,78 +8,77 @@
  *  Created on: Apr 12, 2024
  *      Author: yty
  */
-#ifndef __YTY_AUXILIARY_H_
-#define __YTY_AUXILIARY_H_
+#ifndef STM32TOOLS_AUXILIARY_H
+#define STM32TOOLS_AUXILIARY_H
+
 #include <stddef.h>
 #include <stdint.h>
+#include "IOStatistics.h"
 
-typedef enum
-{
-    LP_MODE_STOP=0,
-    LP_MODE_STANDBY
-} LOW_POWER_MODE;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+typedef enum { LP_MODE_STOP = 0, LP_MODE_STANDBY } LOW_POWER_MODE;
+typedef enum {
+  AUXILIARY_OK = 0,
+  AUXILIARY_ERR_PARAM,
+  AUXILIARY_ERR_UNCONFIGURED,
+  AUXILIARY_ERR_IO,
+  AUXILIARY_ERR_CLOCK
+} AuxiliaryResult;
+/* The audit branch used these names for the same checked platform contract. */
+typedef AuxiliaryResult AuxiliaryStatus;
+
+enum { STMSTATUS_HEAP_VALID = 1U, STMSTATUS_CPU_FREQUENCY_VALID = 2U };
+/** These are heap bytes, NOT all physically unused MCU RAM. CPU load is not
+ * measured here. The wider fields intentionally change the legacy struct ABI;
+ * rebuild callers and do not serialize this native structure as a wire format.
+ */
 typedef struct {
-    uint8_t unRamTotal;     /// ram总空间
-    uint8_t unRamFree;      /// ram剩余空间
-    uint8_t unCPURate;      /// CPU使用率
-    uint8_t unCPUFrequency; /// CPU主频 MHZ
+  size_t unRamTotal;
+  size_t unRamFree;
+  uint8_t unCPURate;
+  uint32_t unCPUFrequency; /* MHz; retained unit for source compatibility */
+  uint8_t valid_fields;
 } STMSTATUS;
 
-/// 接收数据
+typedef AuxiliaryResult (*AuxiliaryClockRestore)(void *context);
+typedef AuxiliaryClockRestore AuxiliaryRestoreClock;
 typedef struct {
-    uint64_t unReciveCount; /// 接收到的数据总数 (字节)
-    uint64_t unSendCount;   /// 发送的数据总数 (字节)
-    uint64_t unDealCount;   /// 处理的数据总数 (字节)
-} IOInfo;
+  void *rtc;        /* RTC_HandleTypeDef*, borrowed; NULL disables timed sleep */
+  void *debug_uart; /* UART_HandleTypeDef*, borrowed; NULL disables debug TX */
+  AuxiliaryClockRestore restore_clock;
+  void *context;
+} AuxiliaryConfig;
 
-/**
- * 发送调试信息
- *@pragma pData   要打印的字符串
- *@pragma unLength 要打印的字符串长度
+/** Configure once during startup, before concurrent users/interrupts. NULL
+ * removes the binding. No default UART, RTC symbol or board clock is selected.
+ * STM32 HAL low-power APIs are platform-specific; this implementation uses the
+ * existing F4-style HAL power/RTC API. Other STM32 families need matching ports.
  */
-void SendDebugInfo(const uint8_t *pData, uint16_t unLength);
-
-/**
- * 请求新的空间
- *@pragma unSize 要开辟空间的字节大小
- *@return 如果剩余空间大小小于申请的空间返回NULL
- *@attention 返回的空间都进行了置零操作
- */
-void *RequestSpace(size_t unSize);
-
-/**
- * 回收空间
- */
-void RecycleSpace(void *pBuffer);
-
-/**
- * @brief 获取flash
- * @return
- */
-const uint8_t *ReadFlash();
-
-/**
- * @brief 进入休眠模式
- */
-void Enter_Sleep(void);
-
-/**
- * @brief 进入停止模式
- */
-void Enter_Stop(void);
-
-/**
- * @brief 进入低功耗模式
- * @param 低功耗模式
- * @param WakeUpCounter 定时个数
- * @param WakeUpClock  定时周期
- */
-void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t WakeUpCounter,
-                       uint32_t WakeUpClock);
-
-/**
- *获取单片机状态
- */
+void Auxiliary_Configure(const AuxiliaryConfig *config);
+/* Diagnostic for legacy void low-power APIs; last caller wins. Configure and
+ * checked/legacy low-power calls share one serialized owner. */
+AuxiliaryStatus Auxiliary_LastError(void);
+AuxiliaryResult Auxiliary_SendDebug(const uint8_t *data, uint16_t length);
+void SendDebugInfo(const uint8_t *data, uint16_t length);
+void *RequestSpace(size_t bytes);
+void RecycleSpace(void *buffer);
 STMSTATUS GetStatus(void);
-#endif //__YTY_AUXILIARY_H
+
+/** Low-level mechanisms only. The caller owns RTOS tick suppression/time
+ * compensation, wake ISR setup, peripheral quiescence and IWDG sleep budget.
+ * Call only from the board's coordinated low-power path, never arbitrarily
+ * from a running RTOS task. No mode is entered if RTC setup fails.
+ */
+AuxiliaryResult Auxiliary_EnterStop(void);
+AuxiliaryResult Auxiliary_EnterLowPower(LOW_POWER_MODE mode, uint32_t counter, uint32_t clock);
+void Enter_Sleep(void);
+void Enter_Stop(void); /* legacy checked internally; use checked API for errors */
+void EnterLowPowerMode(LOW_POWER_MODE mode, uint32_t counter, uint32_t clock);
+
+#ifdef __cplusplus
+}
+#endif
+#endif

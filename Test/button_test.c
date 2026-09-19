@@ -202,9 +202,11 @@ static void test_extra_long_on_late_release_processing(void)
   init_idle(&button);
   confirm_press(&button, 0U);
   release_at(&button, 5200U);
+  /* Historical replay observes the 5 s threshold before the later release. */
+  assert(Button_Process(&button) == BUTTON_EVENT_EXTRA_LONG);
   assert(Button_Process(&button) == BUTTON_EVENT_NONE);
   g_tick = 5230U;
-  assert(Button_Process(&button) == BUTTON_EVENT_EXTRA_LONG);
+  assert(Button_Process(&button) == BUTTON_EVENT_NONE);
   assert(g_callback_calls == 1U);
   finish(&button);
 }
