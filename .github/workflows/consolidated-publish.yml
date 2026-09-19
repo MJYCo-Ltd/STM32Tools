@@ -1,0 +1,66 @@
+name: One-time checked branch publication
+on:
+  push:
+    branches: [fix/consolidated-engineering]
+    paths: [.github/workflows/consolidated-publish.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    if: github.repository == 'ytyisme/STM32Tools' && github.ref == 'refs/heads/fix/consolidated-engineering' && github.actor == 'ytyisme'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      PAYLOAD_SHA256: ce4ecf1d7602c32374d3948aeefe91807c3f22d732c5f023c976e29788f9be66
+      EXPECTED_BASE: 1b623eb003fb7bdf2e8e259ab5d05fa942d0fdbe
+      EXPECTED_TREE: 35d3da687a3ccc34afce078598d1134cf84335a5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Apply only the locally tested tree to this feature branch
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, subprocess
+          from pathlib import Path
+          BRANCH='refs/heads/fix/consolidated-engineering'
+          PAYLOAD='.ci/consolidated-publish'
+          SELF='.github/workflows/consolidated-publish.yml'
+          CI='.github/workflows/engineering-validation.yml'
+          PARTS=[PAYLOAD+'/part'+str(i)+'.b64' for i in range(4)]
+          def git(*args, input=None):
+              return subprocess.check_output(['git',*args],input=input).decode().strip()
+          def require(value,message):
+              if not value: raise SystemExit(message)
+          require(os.environ['GITHUB_REF']==BRANCH, 'Unexpected branch')
+          require(os.environ['GITHUB_ACTOR']=='ytyisme', 'Unexpected publisher')
+          require(git('rev-parse','HEAD')==os.environ['GITHUB_SHA'],'Checkout changed')
+          require(not git('status','--porcelain'),'Dirty checkout')
+          encoded=''.join(Path(part).read_text(encoding='ascii').strip() for part in PARTS)
+          compressed=base64.b64decode(encoded,validate=True)
+          require(hashlib.sha256(compressed).hexdigest()==os.environ['PAYLOAD_SHA256'],'Payload hash mismatch')
+          decoder=lzma.LZMADecompressor(memlimit=256*1024*1024)
+          raw=decoder.decompress(compressed,max_length=2_000_000)
+          require(decoder.eof and not decoder.unused_data,'Invalid or oversized envelope')
+          payload=json.loads(raw)
+          require(payload['schema']==1 and payload['repository']==os.environ['GITHUB_REPOSITORY'],'Wrong repository')
+          require(payload['repository']=='ytyisme/STM32Tools','Owner mismatch')
+          require(payload['base']==os.environ['EXPECTED_BASE'] and payload['tree']==os.environ['EXPECTED_TREE'],'Wrong baseline/tree')
+          git('merge-base','--is-ancestor',payload['base'],'HEAD')
+          changed=set(git('diff','--name-only',payload['base'],'HEAD').splitlines())
+          require(changed <= set(PARTS+[SELF,CI]),'Other changes appeared on the feature branch')
+          patch=payload['patch'].encode('utf8')
+          git('apply','--index','--check','--whitespace=nowarn','-',input=patch)
+          git('apply','--index','--whitespace=nowarn','-',input=patch)
+          git('rm','--quiet','-r',PAYLOAD)
+          git('rm','--quiet','--cached',SELF)
+          require(git('write-tree')==payload['tree'],'Final source tree differs from locally tested files')
+          git('add','--',SELF)
+          git('diff','--cached','--check')
+          git('config','user.name','github-actions[bot]')
+          git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com')
+          git('commit','-m','fix: consolidate reviewed engineering and runtime contracts')
+          git('push','origin','HEAD:'+BRANCH)
+          print('Published validated source tree:',payload['tree'])
+          print('Feature commit:',git('rev-parse','HEAD'))
+          PY
