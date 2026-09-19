@@ -1,0 +1,46 @@
+name: Native validation
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact public source revision
+        env:
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init source
+          git -C source remote add origin "https://github.com/${SOURCE_REPOSITORY}.git"
+          git -C source fetch --depth=1 origin "$SOURCE_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          mkdir -p evidence
+          git -C source rev-parse HEAD > evidence/revision.txt
+          git -C source ls-tree -r HEAD > evidence/tree.txt
+          git -C source archive --format=zip -o "$PWD/evidence/STM32Tools-source.zip" HEAD
+      - name: Build and execute the complete native test entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          { gcc --version; cmake --version; } > evidence/tool-versions.txt
+          cmake -S source/Test -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc 2>&1 | tee evidence/configure.log
+          cmake --build build --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build --output-on-failure --output-junit "$PWD/evidence/junit.xml" 2>&1 | tee evidence/tests.log
+      - name: Retain validation logs and the tracked-source snapshot
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-validation
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: error
