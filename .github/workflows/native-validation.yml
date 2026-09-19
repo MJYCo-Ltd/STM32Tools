@@ -1,5 +1,7 @@
-name: Native validation
+name: Integrated native validation
 on:
+  push:
+    branches: [master, fix/branch-integration-20260919]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -11,36 +13,35 @@ jobs:
   host:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: gcc-debug, compiler: gcc, config: Debug, flags: ''}
+          - {name: gcc-release, compiler: gcc, config: Release, flags: ''}
+          - {name: clang-sanitizers, compiler: clang, config: Debug, flags: '-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all'}
     steps:
-      - name: Check out the exact public source revision
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Configure, build and run every registered host test
         env:
-          SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          TEST_CC: ${{ matrix.compiler }}
+          TEST_CONFIG: ${{ matrix.config }}
+          TEST_FLAGS: ${{ matrix.flags }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          git init source
-          git -C source remote add origin "https://github.com/${SOURCE_REPOSITORY}.git"
-          git -C source fetch --depth=1 origin "$SOURCE_SHA"
-          git -C source checkout --detach FETCH_HEAD
-          mkdir -p evidence
-          git -C source rev-parse HEAD > evidence/revision.txt
-          git -C source ls-tree -r HEAD > evidence/tree.txt
-          git -C source archive --format=zip -o "$PWD/evidence/STM32Tools-source.zip" HEAD
-      - name: Build and execute the complete native test entry
-        shell: bash
-        run: |
-          set -euo pipefail
-          { gcc --version; cmake --version; } > evidence/tool-versions.txt
-          cmake -S source/Test -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=gcc 2>&1 | tee evidence/configure.log
+          mkdir evidence
+          git rev-parse HEAD > evidence/revision.txt
+          git ls-tree -r HEAD > evidence/tree.txt
+          "$TEST_CC" --version > evidence/compiler.txt
+          cmake -S Test -B build -G Ninja -DCMAKE_C_COMPILER="$TEST_CC" -DCMAKE_BUILD_TYPE="$TEST_CONFIG" -DCMAKE_C_FLAGS="$TEST_FLAGS" 2>&1 | tee evidence/configure.log
           cmake --build build --parallel 2 2>&1 | tee evidence/build.log
           ctest --test-dir build --output-on-failure --output-junit "$PWD/evidence/junit.xml" 2>&1 | tee evidence/tests.log
-      - name: Retain validation logs and the tracked-source snapshot
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: native-validation
+          name: native-${{ matrix.name }}
           path: evidence/
           retention-days: 7
-          if-no-files-found: error

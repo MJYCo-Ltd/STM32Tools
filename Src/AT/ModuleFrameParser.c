@@ -101,42 +101,60 @@ void ModuleFrameParser_InitLineCollector(ModuleLineCollector *collector,
   collector->capacity = capacity;
   collector->length = 0U;
   collector->discarding = 0U;
+  collector->preserve_terminator = 0U;
   collector->callback = callback;
   collector->context = context;
   if ((buffer != NULL) && (capacity > 0U)) buffer[0] = '\0';
 }
 
+static void FeedLines(ModuleLineCollector *collector, const uint8_t *data,
+                      size_t length, uint8_t keep_ending)
+{
+  size_t i;
+  if (collector == NULL || collector->buffer == NULL ||
+      collector->capacity < 2U || data == NULL) return;
+  for (i = 0U; i < length; ++i) {
+    const uint8_t byte = data[i];
+    if (collector->discarding) {
+      if (byte == '\n') collector->discarding = 0U;
+      continue;
+    }
+    /* Text records may not hide a suffix behind an embedded C terminator. */
+    if (byte == 0U || (collector->length >= collector->capacity - 1U &&
+                       (byte != '\n' || keep_ending))) {
+      collector->length = 0U;
+      collector->buffer[0] = '\0';
+      collector->discarding = byte != '\n';
+      continue;
+    }
+    if (byte != '\n' || keep_ending) {
+      collector->buffer[collector->length++] = (char)byte;
+    }
+    if (byte == '\n') {
+      size_t completed = collector->length;
+      if (!keep_ending) {
+        while (completed && collector->buffer[completed - 1U] == '\r') --completed;
+      }
+      collector->buffer[completed] = '\0';
+      /* Clear assembly state before dispatch. Buffer is borrowed until callback
+       * returns; recursive Feed on the same collector is not supported. */
+      collector->length = 0U;
+      if (collector->callback) collector->callback(collector->buffer, completed,
+                                                    collector->context);
+    }
+  }
+}
+
 void ModuleFrameParser_FeedLines(ModuleLineCollector *collector,
                                  const uint8_t *data, size_t length)
 {
-  size_t i;
-  if ((collector == NULL) || (collector->buffer == NULL) ||
-      (collector->capacity < 2U) || (data == NULL)) return;
-  for (i = 0U; i < length; ++i) {
-    if (collector->discarding != 0U) {
-      if (data[i] == (uint8_t)'\n') collector->discarding = 0U;
-      continue;
-    }
-    if (data[i] == (uint8_t)'\n') {
-      while ((collector->length > 0U) &&
-             (collector->buffer[collector->length - 1U] == '\r')) {
-        --collector->length;
-      }
-      collector->buffer[collector->length] = '\0';
-      if (collector->callback != NULL) {
-        collector->callback(collector->buffer, collector->length,
-                            collector->context);
-      }
-      collector->length = 0U;
-      continue;
-    }
-    if (collector->length + 1U >= collector->capacity) {
-      collector->length = 0U;
-      collector->discarding = 1U;
-      continue;
-    }
-    collector->buffer[collector->length++] = (char)data[i];
-  }
+  FeedLines(collector, data, length, collector ? collector->preserve_terminator : 0U);
+}
+
+void ModuleFrameParser_FeedRawLines(ModuleLineCollector *collector,
+                                    const uint8_t *data, size_t length)
+{
+  FeedLines(collector, data, length, 1U);
 }
 
 ModuleFrameResult ModuleFrameParser_ParseLengthFrame(

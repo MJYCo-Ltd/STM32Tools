@@ -53,12 +53,16 @@ Storage_Status StorageFirmware_BeginWrite(StorageFirmwareSlot *slot,
   if ((image_length == 0U) || (image_length > cap)) {
     return STORAGE_ERR_RANGE;
   }
-  /* Erase whole slot including old manifest. */
+  slot->writing = 0U;
+  /* Erase whole slot including old manifest. Each completed sector is real
+   * progress even when the whole erase takes longer than a task checkpoint. */
   for (offset = 0U; offset < slot->slot_size; offset += NOR_FLASH_SECTOR_SIZE) {
     st = Storage_EraseSector(slot->map, slot->partition, offset);
     if (st != STORAGE_OK) {
       return st;
     }
+    if (slot->progress != NULL)
+      slot->progress(slot->progress_context, offset + NOR_FLASH_SECTOR_SIZE, slot->slot_size);
   }
   slot->write_offset = 0U;
   slot->expected_length = image_length;
@@ -200,6 +204,8 @@ Storage_Status StorageFirmware_IsValid(StorageFirmwareSlot *slot,
     crc = Storage_Crc32Update(crc, chunk, n);
     pos += n;
     left -= n;
+    if (slot->progress != NULL)
+      slot->progress(slot->progress_context, m->image_length - left, m->image_length);
   }
   if ((crc ^ 0xFFFFFFFFUL) != m->image_crc32) {
     return STORAGE_ERR_CRC;

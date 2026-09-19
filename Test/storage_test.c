@@ -207,6 +207,15 @@ static void TestUpgradeCompactionAndInject(void)
   assert(got.candidate_version == 39U);
 }
 
+static unsigned g_milestones;
+static uint32_t g_completed;
+static void ProgressMilestone(void *context, uint32_t completed, uint32_t total)
+{
+  assert(context == &g_milestones && completed > 0U && completed <= total);
+  assert(completed > g_completed);
+  g_completed = completed;
+  ++g_milestones;
+}
 static void TestFirmwareManifestGate(void)
 {
   StorageBackend backend = MakeBackend();
@@ -221,7 +230,11 @@ static void TestFirmwareManifestGate(void)
   assert(StoragePartition_Init(&map, &backend, parts, 1U, RAM_FLASH_SIZE) ==
          STORAGE_OK);
   assert(StorageFirmware_InitSlot(&slot, &map, 0U, 64U * 1024U) == STORAGE_OK);
+  slot.progress = ProgressMilestone;
+  slot.progress_context = &g_milestones;
+  g_milestones = 0U; g_completed = 0U;
   assert(StorageFirmware_BeginWrite(&slot, 512U) == STORAGE_OK);
+  assert(g_milestones == 16U && g_completed == 64U * 1024U);
   assert(g_poll_count > 0);
   g_poll_count = 0;
   memset(chunk, 0xA5, sizeof(chunk));
@@ -248,8 +261,18 @@ static void TestFirmwareManifestGate(void)
   }
   g_poll_count = 0;
   assert(StorageFirmware_Finish(&slot, &meta, NULL) == STORAGE_OK);
+  g_milestones = 0U; g_completed = 0U;
   assert(StorageFirmware_IsValid(&slot, &meta) == STORAGE_OK);
+  assert(g_milestones == 4U && g_completed == 512U);
   assert(g_poll_count > 0);
+
+  /* A failed erase is not a progress checkpoint and may not leave an old
+   * writing session enabled. The callback never reports a polling attempt. */
+  g_fail_erases_after = g_erase_count;
+  g_milestones = 0U; g_completed = 0U; slot.writing = 1U;
+  assert(StorageFirmware_BeginWrite(&slot, 512U) != STORAGE_OK);
+  assert(g_milestones == 0U && slot.writing == 0U);
+  g_fail_erases_after = -1;
 
   /* Oversize reject */
   assert(StorageFirmware_BeginWrite(
