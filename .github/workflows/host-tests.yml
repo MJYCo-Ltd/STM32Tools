@@ -1,0 +1,25 @@
+name: Native tests
+on:
+  push:
+    branches: [master, fix/audit-consolidated]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure
+        run: cmake -S Test -B build/native -G Ninja -DCMAKE_C_COMPILER=${{ matrix.compiler }} -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build/native --parallel 2
+      - name: Test
+        run: ctest --test-dir build/native --output-on-failure --timeout 60
