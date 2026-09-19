@@ -1,53 +1,112 @@
-# Display（SPIDisplay / Graphics / LCD / EPD）
+# Display（SPI Bus / Graphics / LCD / EPD）
 
-目标
-- 提供可在 LCD 与 EPD 之间复用的 SPI/绘图接口，将硬件差异抽象到配置头文件（`epd_config.h`、`lcd_st7789_config.h`）。
+## Boundary
 
-主要文件
-- `Inc/Display/SPIDisplay.h` — 统一 SPI 传输接口（内联实现，依赖用户宏）。
-- `Inc/Display/Graphics.h`  — 基于 `DrawPixel` 的通用绘图接口（直线/圆/填充/字符）。
-- `Inc/Display/EPD/` 和 `Inc/Display/LCD/` — 各屏驱动与板级配置头文件。
+STM32Tools owns reusable display protocol and rendering code:
 
-用户必须实现或配置的宏
-- `SPI_SELECT()` / `SPI_UNSELECT()` — 片选操作（GPIO）
-- `SPI_SEND_CMD()` / `SPI_SEND_DATA()` — DC 引脚控制（指令/数据）
-- `DISPLAY_SPI_PORT` — HAL SPI 句柄（例如 `hspi1`）
-- 可选：`USE_BUFFER` — 如果定义则 `SPIDisplay` 使用缓冲区 + DMA 传输大数据块
+- `SPI_DisplayBus` transport abstraction;
+- generic drawing primitives;
+- LCD/EPD controller protocols;
+- reusable panel profiles that contain controller timing and geometry only.
 
-绘图 API 概览（由 Graphics 提供）
-- `DrawPixel(x, y, color)`
-- `DrawLine(x0,y0,x1,y1,color)` — Bresenham 算法
-- `DrawRect` / `DrawFilledRect`
-- `DrawCircle` / `DrawFilledCircle` — 中点圆算法
-- `DrawTriangle` / `DrawFilledTriangle`
-- `DrawChar(x,y,c,color)` / `DrawString(x,y,str,color)` — 基于 5x7 字体
+The product/board repository owns:
 
-EPD 使用要点
-- 初始化：`EPD_Init(model, fastFresh)`；例如 `EPD_Init(EPD_THREE_COLOR, 1)`。
-- 局部刷新：`EPD_DisplayPartial(x,y,w,h)` 用于降低刷新耗时与功耗。
-- 绘图流程示例：
+- the concrete SPI peripheral;
+- CS/DC/RESET/backlight/TE GPIO bindings;
+- RTOS or HAL delay policy;
+- framebuffer and line-buffer memory allocation;
+- which physical panel is fitted and how it is mounted/rotated.
+
+Reusable drivers must not include a product `main.h` or select `hspi1` and GPIO
+macros internally.
+
+## SPI display bus
+
+`Inc/Display/spi_display_bus.h` defines the platform-neutral bus contract.
+`Src/Display/stm32_spi_display_bus.c` is the STM32 HAL port; the caller supplies
+the SPI handle and board GPIOs.
 
 ```c
-EPD_Init(EPD_THREE_COLOR, 1);
-EPD_PowerOn();
-EPD_InitDrawBuffer(EPD_WHITE);
-EPD_DrawRect(10, 10, 100, 60, EPD_BLACK);
-EPD_ShowBuffer();
-EPD_Update();
-EPD_PowerOff();
+SPI_DisplayBus bus;
+SPI_DisplayBusInitSTM32(&bus, &hspi1,
+                        LCD_CS_GPIO_Port, LCD_CS_Pin,
+                        LCD_DC_GPIO_Port, LCD_DC_Pin,
+                        0U);
 ```
 
-LCD 使用要点（ST7789 示例）
-- 在 `lcd_st7789_config.h` 中定义分辨率宏（`USING_135X240` / `USING_240X240` / `USING_170X320`）和 `DISPLAY_SPI_PORT`、DC、BL 引脚。
-- 控制器驱动会包含对应配置头文件，并通过 `SPIDisplay.h` 调用统一的 `SPI_Send*` 接口。
+## ST7305 explicit binding
 
-性能与移植建议
-- 如果目标平台 RAM 充足，开启 `USE_BUFFER` 并使用 DMA 分块传输大图块；否则在小分辨率或频繁更新场景下使用直接 SPI 传输。
-- `DrawHLine` / `DrawVLine` 的第三个参数为终点坐标（不是长度）——移植或使用时注意。
-- 若使用 EPD 的三色模式，请确认 `epd_uc8253.c` 中的颜色常量和 `epd_graphics.h` 保持一致。
+`lcd_st7305.c` contains the reusable ST7305 controller, framebuffer packing,
+rotation and refresh logic. It no longer owns board pins, an RTOS delay, or
+framebuffer storage.
 
-调试提示
-- 局部刷新坐标、缓冲区大小和 DMA 分块大小是常见的移植问题来源；遇到显示错位或卡顿先检查这些参数。
-- 在 FreeRTOS 下，将显示刷新放到低优先级任务并使用消息队列触发刷新以避免阻塞高优先级任务。
+The supplied profile
+`ST7305_PANEL_FD042MN_ZF21_H06_B` describes the 300x400 FOCUS DISPLAY panel.
+The product binds it to board resources:
 
-更多示例和配置请参考仓库中的 `Inc/Display` 与 `Src/Display` 子目录。
+```c
+static SPI_DisplayBus bus;
+static uint8_t framebuffer[
+    ST7305_FD042MN_ZF21_H06_B_FRAMEBUFFER_SIZE];
+static uint8_t line_buffer[
+    ST7305_FD042MN_ZF21_H06_B_LINE_BUFFER_SIZE];
+
+static void Reset(void *context, uint8_t asserted)
+{
+    (void)context;
+    HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin,
+        asserted ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
+static void Delay(void *context, uint32_t ms)
+{
+    (void)context;
+    osDelay(ms);
+}
+
+SPI_DisplayBusInitSTM32(&bus, &hspi1,
+                        LCD_CS_GPIO_Port, LCD_CS_Pin,
+                        LCD_DC_GPIO_Port, LCD_DC_Pin, 0U);
+
+const ST7305_Binding binding = {
+    .bus = &bus,
+    .panel = &ST7305_PANEL_FD042MN_ZF21_H06_B,
+    .reset = Reset,
+    .delay_ms = Delay,
+    .framebuffer = framebuffer,
+    .framebuffer_size = sizeof(framebuffer),
+    .line_buffer = line_buffer,
+    .line_buffer_size = sizeof(line_buffer),
+    .rotation = ROTATION_270,
+};
+
+LCD_ST7305_Bind(&binding);
+LCD_ST7305_Initialize();
+```
+
+The existing `LCD_*` and `DrawPixel()` facade remains available after binding,
+so `Graphics.c` and existing UI code do not need to know the board wiring.
+
+## Graphics API
+
+`Graphics.c` builds lines, rectangles, circles, triangles and the basic 5x7 font
+on top of the selected backend's `DrawPixel()` implementation.
+
+Important: the third argument of `DrawHLine()`/`DrawVLine()` is the end
+coordinate, not a length.
+
+## Other backends
+
+ST7789 and existing EPD drivers still use their legacy configuration headers and
+macros. They remain functional, but should eventually adopt the same explicit
+transport/profile/buffer binding pattern used by ST7305.
+
+## Tests
+
+`Test/st7305_driver_test.c` uses a fake SPI bus and verifies:
+
+- binding and buffer-size validation;
+- hardware-reset and software-reset paths;
+- panel initialization commands and delays;
+- pixel packing and partial refresh;
+- absence of STM32 HAL, `main.h`, and RTOS dependencies in the controller.
