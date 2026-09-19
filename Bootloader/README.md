@@ -3,14 +3,21 @@
 可复用的 Bootloader 逻辑库，供 Agriculture 等产品工程链接。  
 **不**包含完整 CubeMX 工程：产品侧建裸机工程，链入本目录源码即可。
 
-## 默认内部 Flash 布局（STM32F411 512KB）
+## 示例内部 Flash 布局（STM32F411 512KB）
 
 | 区 | 地址 | 大小 | 扇区 |
 |---|---|---|---|
 | Bootloader | `0x08000000` | 128 KB | 0–4 |
 | Application | `0x08020000` | 384 KB | 5–7 |
 
-宏见 `Inc/Bootloader/bootloader_memmap.h`（与 Agriculture `StorageLayout.h` 保持一致）。
+工具库不再提供农业板的默认地址。产品必须通过 `STM32TOOLS_BOOT_CONFIG_HEADER`
+指定自己的配置头，或显式定义 `BOOTLOADER_FLASH_BASE/FLASH_SIZE`、
+`BOOTLOADER_APP_FLASH_BASE/APP_FLASH_SIZE`、`BOOTLOADER_SRAM_BASE/SRAM_SIZE`。
+缺少配置将编译失败，不会悄悄选择另一块板的地址。以上表格仅为示例。
+
+Agriculture 由 `board/memory_layout.json` 生成并校验自己的 C 头、链接脚本，签名脚本也读取
+同一份清单。链接 `STM32Tools::BootloaderSTM32F4` 和相应存储端口；此 Flash 端口的
+扇区几何仍针对 F411 512 KiB，不代表已支持所有 STM32F4 型号。
 
 ## 源文件
 
@@ -24,7 +31,7 @@
 | `Src/Bootloader/bootloader_flash_stm32f4.c` | F4 HAL 擦写实现 |
 | `Src/Bootloader/bootloader_iwdg.c` | STM32 IWDG（prescaler 128 / reload 4095 ≈ 16 s） |
 | `Src/Bootloader/bootloader_policy.c` | 复位原因与阶段尝试次数决策 |
-| `Bootloader/STM32F411xx_BOOT.ld` | Bootloader 链接脚本 |
+| `Examples/BootloaderSTM32F411/STM32F411xx_BOOT.ld` | Bootloader 链接脚本 |
 | `Bootloader/example_main.c` | 产品侧 `main` 骨架（`#if 0`） |
 
 依赖：`Flash/storage_*`、`W25Q`、`Common`、STM32 HAL Flash。

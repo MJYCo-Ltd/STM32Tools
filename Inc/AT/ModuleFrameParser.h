@@ -25,6 +25,7 @@ typedef struct {
   size_t capacity;
   size_t length;
   uint8_t discarding;
+  uint8_t preserve_terminator; /* 0: trimmed line; 1: retain CR/LF */
   ModuleFrameLineCallback callback;
   void *context;
 } ModuleLineCollector;

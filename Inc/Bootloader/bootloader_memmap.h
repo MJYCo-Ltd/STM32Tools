@@ -7,22 +7,14 @@
 extern "C" {
 #endif
 
-/**
- * Default internal Flash map for STM32F411 512KB (Agriculture board).
- * Bootloader occupies sectors 0..4 (128KB); Application sectors 5..7 (384KB).
- * Product headers (e.g. StorageLayout.h) should keep the same values.
- */
-#ifndef BOOTLOADER_FLASH_BASE
-#define BOOTLOADER_FLASH_BASE 0x08000000UL
+/* Reusable STM32 port: the product supplies the memory map explicitly. */
+#ifdef STM32TOOLS_BOOT_CONFIG_HEADER
+#include STM32TOOLS_BOOT_CONFIG_HEADER
 #endif
-#ifndef BOOTLOADER_FLASH_SIZE
-#define BOOTLOADER_FLASH_SIZE (128UL * 1024UL)
-#endif
-#ifndef BOOTLOADER_APP_FLASH_BASE
-#define BOOTLOADER_APP_FLASH_BASE 0x08020000UL
-#endif
-#ifndef BOOTLOADER_APP_FLASH_SIZE
-#define BOOTLOADER_APP_FLASH_SIZE (384UL * 1024UL)
+#if !defined(BOOTLOADER_FLASH_BASE) || !defined(BOOTLOADER_FLASH_SIZE) || \
+    !defined(BOOTLOADER_APP_FLASH_BASE) || !defined(BOOTLOADER_APP_FLASH_SIZE) || \
+    !defined(BOOTLOADER_SRAM_BASE) || !defined(BOOTLOADER_SRAM_SIZE)
+#error "Supply STM32TOOLS_BOOT_CONFIG_HEADER or explicit Bootloader memory macros"
 #endif
 
 #ifndef BOOTLOADER_MAX_TRIAL_BOOTS

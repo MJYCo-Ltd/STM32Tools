@@ -101,6 +101,7 @@ void ModuleFrameParser_InitLineCollector(ModuleLineCollector *collector,
   collector->capacity = capacity;
   collector->length = 0U;
   collector->discarding = 0U;
+  collector->preserve_terminator = 0U;
   collector->callback = callback;
   collector->context = context;
   if ((buffer != NULL) && (capacity > 0U)) buffer[0] = '\0';
@@ -117,8 +118,19 @@ void ModuleFrameParser_FeedLines(ModuleLineCollector *collector,
       if (data[i] == (uint8_t)'\n') collector->discarding = 0U;
       continue;
     }
+    if (data[i] == 0U) {
+      collector->length = 0U;
+      collector->discarding = 1U;
+      continue;
+    }
     if (data[i] == (uint8_t)'\n') {
-      while ((collector->length > 0U) &&
+      if (collector->preserve_terminator != 0U) {
+        if (collector->length + 1U >= collector->capacity) {
+          collector->length = 0U; /* discard the whole oversized record */
+          continue;
+        }
+        collector->buffer[collector->length++] = '\n';
+      } else while ((collector->length > 0U) &&
              (collector->buffer[collector->length - 1U] == '\r')) {
         --collector->length;
       }

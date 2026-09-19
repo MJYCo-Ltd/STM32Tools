@@ -65,6 +65,14 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
 
 int ML307_MqttResponseHasError(const char *raw);
 int ML307_MqttConnectResponseIsComplete(const char *raw, uint8_t connect_id);
+/** Parse one complete text PUBLISH line (optional terminal CRLF).
+ * Payload length is checked against the bytes actually present. Embedded NUL,
+ * CR/LF, binary payloads and fragment reassembly are not supported by this API.
+ * Output is cleared on failure; total >= fragment, CID 0..5, MID <= 65535.
+ */
+ML307_Result ML307_MqttParsePublishUrc(const uint8_t *line, size_t length,
+                                      ML307_MqttEvent *event);
+
 ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event);
 
 /**

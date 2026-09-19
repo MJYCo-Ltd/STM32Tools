@@ -5,6 +5,7 @@
  ******************************************************************************
  */
 #include "Bootloader/bootloader.h"
+#include "Bootloader/bootloader_memmap.h"
 #include "Bootloader/bootloader_flash.h"
 #include "Bootloader/bootloader_policy.h"
 
@@ -19,8 +20,8 @@ uint8_t Bootloader_IsAppValid(uint32_t app_base, uint32_t app_size)
 {
   const uint32_t sp = *(volatile uint32_t *)app_base;
   const uint32_t reset = *(volatile uint32_t *)(app_base + 4U);
-  const uint32_t sram_base = 0x20000000UL;
-  const uint32_t sram_end = 0x20000000UL + (128UL * 1024UL);
+  const uint32_t sram_base = BOOTLOADER_SRAM_BASE;
+  const uint32_t sram_end = BOOTLOADER_SRAM_BASE + BOOTLOADER_SRAM_SIZE;
 
   (void)app_size;
   if ((sp < sram_base) || (sp > sram_end)) {

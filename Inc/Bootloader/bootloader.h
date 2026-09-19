@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#include "Bootloader/bootloader_memmap.h"
 #include "Flash/storage_firmware.h"
 #include "Flash/storage_partition.h"
 #include "Flash/storage_upgrade.h"
@@ -27,7 +26,7 @@ typedef enum {
 
 /**
  * Product wires an already-initialized partition map and part indices.
- * Layout defaults match Agriculture F411 + W25Q16.
+ * The product provides its Flash/SRAM map via the STM32 port configuration.
  */
 typedef struct {
   const StoragePartitionMap *map;

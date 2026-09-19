@@ -92,7 +92,8 @@ target_compile_definitions(st7305_driver_test PRIVATE
     STM32TOOLS_DISPLAY_BACKEND_ST7305)
 add_test(NAME st7305_driver_test COMMAND st7305_driver_test)
 
-add_executable(mqtt_line_collector_test mqtt_line_collector_test.c)
+add_executable(mqtt_line_collector_test mqtt_line_collector_test.c
+    ../Src/AT/ModuleFrameParser.c)
 target_include_directories(mqtt_line_collector_test PRIVATE ../Inc)
 add_test(NAME mqtt_line_collector_test COMMAND mqtt_line_collector_test)
 
@@ -137,4 +138,5 @@ add_executable(ml307_mqtt_control_test
 target_include_directories(ml307_mqtt_control_test PRIVATE ../Inc)
 add_test(NAME ml307_mqtt_control_test COMMAND ml307_mqtt_control_test)
 
+include("${CMAKE_CURRENT_LIST_DIR}/ConsolidatedTests.cmake")
 stm32tools_finalize_host_tests()

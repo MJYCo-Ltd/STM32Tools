@@ -71,3 +71,10 @@ ctest --test-dir build/test --output-on-failure
 ## 许可证
 
 见 `LICENSE`。
+
+## Consolidated correctness and component contracts
+
+See [ENGINEERING_CONTRACTS](Inc/ENGINEERING_CONTRACTS.md) for checked Auxiliary,
+UART loss/fairness, bounded button history, text MQTT boundaries, HealthMonitor
+and named CMake targets. These changes are source/ABI migrations, not an
+automatic hardware or low-power port for every STM32 family.

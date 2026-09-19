@@ -1,0 +1,27 @@
+add_executable(ml307_publish_test ml307_publish_test.c
+    ../Src/ML307/ml307_mqtt.c ../Src/AT/at_codec.c ../Src/AT/ModuleFrameParser.c)
+target_include_directories(ml307_publish_test PRIVATE ../Inc)
+add_executable(button_history_test button_history_test.c ../Src/Button.c)
+target_include_directories(button_history_test PRIVATE button_stubs ../Inc)
+add_executable(auxiliary_test auxiliary_test.c ../Src/Auxiliary.c)
+target_include_directories(auxiliary_test PRIVATE auxiliary_stubs ../Inc)
+target_compile_definitions(auxiliary_test PRIVATE USE_FREERTOS)
+add_executable(health_monitor_test health_monitor_test.c ../Src/System/HealthMonitor.c)
+target_include_directories(health_monitor_test PRIVATE ../Inc)
+add_executable(uart_budget_test uart_budget_test.c ../Src/UartReceive.c)
+target_include_directories(uart_budget_test PRIVATE uart_stubs ../Inc)
+target_compile_definitions(uart_budget_test PRIVATE USE_FREERTOS)
+foreach(_t IN ITEMS ml307_publish_test button_history_test auxiliary_test health_monitor_test uart_budget_test)
+    target_compile_options(${_t} PRIVATE $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-pedantic;-UNDEBUG>)
+    add_test(NAME ${_t} COMMAND ${_t})
+endforeach()
+
+add_executable(uart_baremetal_test uart_baremetal_test.c ../Src/UartReceive.c)
+target_include_directories(uart_baremetal_test PRIVATE uart_stubs ../Inc)
+add_test(NAME uart_baremetal_test COMMAND uart_baremetal_test)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Components.cmake")
+add_executable(component_contract_test component_contract_test.c)
+target_link_libraries(component_contract_test PRIVATE STM32Tools::AT STM32Tools::Core
+    STM32Tools::Storage STM32Tools::SignedFirmware STM32Tools::AHT20 STM32Tools::TMP117
+    STM32Tools::ML307 STM32Tools::EWM103 STM32Tools::HttpRange STM32Tools::HealthMonitor)
+add_test(NAME component_contract_test COMMAND component_contract_test)
