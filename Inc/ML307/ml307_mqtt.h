@@ -1,9 +1,10 @@
 /*
  ******************************************************************************
  * @file           : ml307_mqtt.h
- * @brief          : Internal ML307 MQTT AT helpers
+ * @brief          : ML307 MQTT command helpers and typed control responses
  *
- * Not for application use — prefer ML307_Pack / ML307_Unpack in ml307.h.
+ * Use ML307_Pack / ML307_Unpack for requests. Adapters may consume the bounded
+ * control/command response parsers here instead of re-parsing MQTT text.
  ******************************************************************************
  */
 #ifndef STM32TOOLS_ML307_MQTT_H
@@ -65,6 +66,35 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
 int ML307_MqttResponseHasError(const char *raw);
 int ML307_MqttConnectResponseIsComplete(const char *raw, uint8_t connect_id);
 ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event);
+
+/**
+ * Parse ONE complete control line: conn, suback, puback or timeout. The caller
+ * establishes the line boundary (e.g. a collector callback); a terminal LF is
+ * optional here. Length excludes any C-string terminator. No NUL is required.
+ * Exact field counts, unsigned ranges and status codes are checked. Unsupported
+ * URC kinds return NOT_FOUND. A non-NULL event is cleared on every failure.
+ * This API is not a length-delimited/binary MQTT PUBLISH parser.
+ */
+ML307_Result ML307_MqttParseControlUrc(const uint8_t *line, size_t length,
+                                      ML307_MqttEvent *event);
+
+/**
+ * Scan a bounded command response; only LF-terminated lines are eligible.
+ * The first matching command line must have the exact field count. Outputs
+ * change only on success. These parse metadata, NOT command/broker success:
+ * the adapter must still check the AT final result and match id/mid to its
+ * outstanding command. Plain OK never substitutes for a broker ACK.
+ */
+ML307_Result ML307_MqttParseSubResponse(const uint8_t *response, size_t length,
+                                       uint8_t *connect_id, uint16_t *mid);
+ML307_Result ML307_MqttParsePubResponse(const uint8_t *response, size_t length,
+                                       uint8_t *connect_id, uint16_t *mid);
+ML307_Result ML307_MqttParseStateResponse(const uint8_t *response, size_t length,
+                                         uint32_t *state);
+/** Last valid, LF-terminated conn line for the requested connection id. */
+ML307_Result ML307_MqttParseConnectionResponse(const uint8_t *response,
+                                              size_t length, uint8_t connect_id,
+                                              uint32_t *state);
 
 #ifdef __cplusplus
 }

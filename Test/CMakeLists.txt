@@ -129,4 +129,12 @@ add_test(NAME api_contract_test COMMAND api_contract_test)
 add_test(NAME host_registration_contract
     COMMAND "${CMAKE_COMMAND}" "-DTEST_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/registration-fixtures"
       -P "${CMAKE_CURRENT_LIST_DIR}/host_registration_contract.cmake")
+add_executable(ml307_mqtt_control_test
+    ml307_mqtt_control_test.c
+    ../Src/ML307/ml307_mqtt.c
+    ../Src/AT/at_codec.c
+    ../Src/AT/ModuleFrameParser.c)
+target_include_directories(ml307_mqtt_control_test PRIVATE ../Inc)
+add_test(NAME ml307_mqtt_control_test COMMAND ml307_mqtt_control_test)
+
 stm32tools_finalize_host_tests()
