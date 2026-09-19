@@ -1,0 +1,47 @@
+name: Integrated native validation
+on:
+  push:
+    branches: [master, fix/branch-integration-20260919]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: gcc-debug, compiler: gcc, config: Debug, flags: ''}
+          - {name: gcc-release, compiler: gcc, config: Release, flags: ''}
+          - {name: clang-sanitizers, compiler: clang, config: Debug, flags: '-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all'}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Configure, build and run every registered host test
+        env:
+          TEST_CC: ${{ matrix.compiler }}
+          TEST_CONFIG: ${{ matrix.config }}
+          TEST_FLAGS: ${{ matrix.flags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          git rev-parse HEAD > evidence/revision.txt
+          git ls-tree -r HEAD > evidence/tree.txt
+          "$TEST_CC" --version > evidence/compiler.txt
+          cmake -S Test -B build -G Ninja -DCMAKE_C_COMPILER="$TEST_CC" -DCMAKE_BUILD_TYPE="$TEST_CONFIG" -DCMAKE_C_FLAGS="$TEST_FLAGS" 2>&1 | tee evidence/configure.log
+          cmake --build build --parallel 2 2>&1 | tee evidence/build.log
+          ctest --test-dir build --output-on-failure --output-junit "$PWD/evidence/junit.xml" 2>&1 | tee evidence/tests.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: native-${{ matrix.name }}
+          path: evidence/
+          retention-days: 7

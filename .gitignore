@@ -27,3 +27,7 @@ Testing/
 *.user
 *.suo
 *~
+
+# Host validation caches
+__pycache__/
+*.py[cod]
