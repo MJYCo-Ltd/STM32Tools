@@ -140,4 +140,14 @@ add_test(NAME ml307_mqtt_control_test COMMAND ml307_mqtt_control_test)
 
 include("${CMAKE_CURRENT_LIST_DIR}/ConsolidatedTests.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/AuditTests.cmake")
+add_executable(storage_log_stream_test storage_log_stream_test.c
+  ../Src/Flash/storage_log.c ../Src/Flash/storage_record.c
+  ../Src/Flash/storage_commit.c ../Src/Flash/nor_flash.c ../Src/Common.c)
+target_include_directories(storage_log_stream_test PRIVATE ../Inc)
+add_test(NAME storage_log_stream_test COMMAND storage_log_stream_test)
+add_executable(st7305_paged_test st7305_paged_test.c
+  ../Src/Display/LCD/lcd_st7305.c ../Src/Display/LCD/st7305_profile_fd042.c ../Src/Display/spi_display_bus.c)
+target_include_directories(st7305_paged_test PRIVATE ../Inc)
+target_compile_definitions(st7305_paged_test PRIVATE STM32TOOLS_DISPLAY_BACKEND_ST7305)
+add_test(NAME st7305_paged_test COMMAND st7305_paged_test)
 stm32tools_finalize_host_tests()

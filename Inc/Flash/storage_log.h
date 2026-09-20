@@ -33,6 +33,31 @@ typedef struct {
   uint32_t write_offset_in_sector;
 } StorageLog;
 
+/* Bounded streaming reader. Zero-initialize a cursor to start/restart a pass.
+ * A receipt identifies a record AND its sector generation, not just an offset.
+ * StorageLog APIs require caller serialization (e.g. the product Flash mutex). */
+typedef struct {
+  uint32_t sector, offset, remaining;
+  uint8_t started;
+} StorageLogCursor;
+typedef struct {
+  StorageRecordLoc record;
+  uint32_t sector_sequence, payload_crc32;
+} StorageLogReceipt;
+
+/* BUSY means the bounded scan made progress; call again later. NOT_FOUND ends
+ * a pass. A failed payload read does not advance past the pending record. */
+Storage_Status StorageLog_NextPending(StorageLog *log, StorageLogCursor *cursor,
+    StorageLogReceipt *receipt, void *payload, uint32_t capacity,
+    uint32_t *length);
+/* After successful delivery only: clear the commit word to a durable tombstone.
+ * No sector erase or record relocation; payload/header layout stays V1.
+ * All shared readers/writers (including a Bootloader) must understand ACK
+ * tombstones before enabling this API. Legacy pending records remain readable.
+ * Idempotent for the same receipt; refuses stale locations after ring reuse. */
+Storage_Status StorageLog_Acknowledge(StorageLog *log,
+    const StorageLogReceipt *receipt);
+
 Storage_Status StorageLog_Init(StorageLog *log, const StoragePartitionMap *map,
                                uint32_t partition, uint32_t region_offset,
                                uint32_t region_size);

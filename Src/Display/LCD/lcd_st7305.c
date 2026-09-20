@@ -21,6 +21,9 @@ static ST7305_Binding s_binding;
 static ROTATION s_rotation;
 static uint8_t s_bound;
 static uint8_t s_initialized;
+static uint8_t s_rendering;
+static uint16_t s_page_y, s_page_rows;
+static ST7305_Status ST7305_TransferRows(uint16_t y0, uint16_t y1);
 
 /* Initialization uses this path before publishing the ready state. */
 static ST7305_Status ST7305_RefreshAreaInternal(uint16_t x, uint16_t y,
@@ -89,6 +92,11 @@ static uint8_t ST7305_BindingValid(const ST7305_Binding *binding)
   }
 
   framebuffer_size = ST7305_FramebufferSize(binding->panel);
+  if (binding->page_rows != 0U) {
+    if ((binding->page_rows & 1U) || binding->page_rows > binding->panel->height)
+      return 0U;
+    framebuffer_size = (((size_t)binding->panel->width + 7U) / 8U) * binding->page_rows;
+  }
   line_buffer_size = ST7305_LineBufferSize(binding->panel);
   if ((framebuffer_size == 0U) || (line_buffer_size == 0U) ||
       (binding->framebuffer_size < framebuffer_size) ||
@@ -100,11 +108,14 @@ static uint8_t ST7305_BindingValid(const ST7305_Binding *binding)
 
 ST7305_Status LCD_ST7305_Bind(const ST7305_Binding *binding)
 {
+  if (s_rendering) return ST7305_ERR_STATE;
   if (ST7305_BindingValid(binding) == 0U) {
     return ST7305_ERR_PARAM;
   }
 
   s_binding = *binding;
+  s_page_y = 0U;
+  s_page_rows = binding->page_rows ? binding->page_rows : binding->panel->height;
   s_rotation = binding->rotation;
   s_initialized = 0U;
   s_bound = 1U;
@@ -113,6 +124,7 @@ ST7305_Status LCD_ST7305_Bind(const ST7305_Binding *binding)
 
 void LCD_ST7305_Unbind(void)
 {
+  if (s_rendering) return;
   memset(&s_binding, 0, sizeof(s_binding));
   s_rotation = NO_ROTATION;
   s_initialized = 0U;
@@ -184,10 +196,11 @@ static uint8_t ST7305_GetPixel(uint16_t x, uint16_t y)
 {
   const size_t row_bytes = ST7305_RowBytes();
 
-  if ((x >= s_binding.panel->width) || (y >= s_binding.panel->height)) {
+  if ((x >= s_binding.panel->width) || (y >= s_binding.panel->height) ||
+      y < s_page_y || y >= (uint32_t)s_page_y + s_page_rows) {
     return 0U;
   }
-  return (uint8_t)((s_binding.framebuffer[(size_t)y * row_bytes + (x >> 3U)] >>
+  return (uint8_t)((s_binding.framebuffer[(size_t)(y - s_page_y) * row_bytes + (x >> 3U)] >>
                     (7U - (x & 7U))) &
                    1U);
 }
@@ -234,6 +247,7 @@ static ST7305_Status ST7305_ResetInternal(void)
 
 ST7305_Status LCD_ST7305_Reset(void)
 {
+  if (s_rendering) return ST7305_ERR_STATE;
   return ST7305_ResetInternal();
 }
 
@@ -254,8 +268,10 @@ ST7305_Status LCD_ST7305_Initialize(void)
     return ST7305_OK;
   }
 
-  memset(s_binding.framebuffer, 0,
-         ST7305_FramebufferSize(s_binding.panel));
+  if (s_rendering) return ST7305_ERR_STATE;
+  s_page_y = 0U;
+  s_page_rows = s_binding.page_rows ? s_binding.page_rows : s_binding.panel->height;
+  memset(s_binding.framebuffer, 0, ST7305_RowBytes() * s_page_rows);
   memset(s_binding.line_buffer, 0,
          ST7305_LineBufferSize(s_binding.panel));
 
@@ -271,14 +287,19 @@ ST7305_Status LCD_ST7305_Initialize(void)
     return ST7305_ERR_IO;
   }
 
-  status = ST7305_RefreshAreaInternal(
-      0U, 0U,
-      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
-          ? s_binding.panel->height : s_binding.panel->width,
-      (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
-          ? s_binding.panel->width : s_binding.panel->height);
-  if (status != ST7305_OK) {
-    return status;
+  if (s_binding.page_rows) {
+    for (uint16_t y = 0U; y < s_binding.panel->height; y += s_binding.page_rows) {
+      s_page_y = y;
+      s_page_rows = (s_binding.panel->height - y < s_binding.page_rows)
+          ? s_binding.panel->height - y : s_binding.page_rows;
+      status = ST7305_TransferRows(y, y + s_page_rows - 1U);
+      if (status != ST7305_OK) return status;
+    }
+    s_page_y = 0U;
+    s_page_rows = s_binding.page_rows;
+  } else {
+    status = ST7305_TransferRows(0U, s_binding.panel->height - 1U);
+    if (status != ST7305_OK) return status;
   }
 
   /* The caller may observe ready only after the initial frame was sent. */
@@ -293,7 +314,7 @@ void LCD_Init(void)
 
 void LCD_SetRotation(ROTATION rotation)
 {
-  if ((unsigned int)rotation <= (unsigned int)ROTATION_270) {
+  if (!s_rendering && (unsigned int)rotation <= (unsigned int)ROTATION_270) {
     s_rotation = rotation;
   }
 }
@@ -369,6 +390,7 @@ ST7305_Status LCD_ST7305_RefreshArea(uint16_t x, uint16_t y, uint16_t width,
                                      uint16_t height)
 {
   ST7305_Status status;
+  if (s_rendering || s_binding.page_rows) return ST7305_ERR_STATE;
   if (LCD_ST7305_IsReady() == 0U) {
     return ST7305_ERR_STATE;
   }
@@ -389,17 +411,12 @@ static ST7305_Status ST7305_RefreshAreaInternal(uint16_t x, uint16_t y,
                                                uint16_t width, uint16_t height)
 {
   const ST7305_PanelProfile *panel;
-  const size_t address_columns =
-      (s_bound != 0U) ? ST7305_AddressColumns() : 0U;
   uint16_t logical_width;
   uint16_t logical_height;
   uint16_t x1;
   uint16_t y1;
   uint16_t native_y0;
   uint16_t native_y1;
-  uint16_t row;
-  size_t address_column;
-
   if (s_bound == 0U) {
     return ST7305_ERR_STATE;
   }
@@ -452,11 +469,18 @@ static ST7305_Status ST7305_RefreshAreaInternal(uint16_t x, uint16_t y,
     native_y1 = panel->height - 1U;
   }
 
-  for (row = native_y0; row <= native_y1; row += 2U) {
+  return ST7305_TransferRows(native_y0, native_y1);
+}
+
+static ST7305_Status ST7305_TransferRows(uint16_t y0, uint16_t y1)
+{
+  const ST7305_PanelProfile *panel = s_binding.panel;
+  const size_t address_columns = ST7305_AddressColumns();
+  for (uint16_t row = y0; row <= y1; row += 2U) {
     size_t out = 0U;
 
     /* This panel is reliable only with a full column window; crop rows only. */
-    for (address_column = 0U; address_column < address_columns;
+    for (size_t address_column = 0U; address_column < address_columns;
          ++address_column) {
       const uint16_t column_x = (uint16_t)(address_column * 12U);
       s_binding.line_buffer[out++] = ST7305_Pack4x2(column_x, row);
@@ -487,7 +511,7 @@ void DrawPixel(const Pixel *pixel)
   uint8_t mask;
   uint8_t is_dark;
 
-  if ((s_bound == 0U) || (pixel == NULL)) {
+  if ((s_bound == 0U) || (pixel == NULL) || (s_binding.page_rows && !s_rendering)) {
     return;
   }
   panel = s_binding.panel;
@@ -521,6 +545,8 @@ void DrawPixel(const Pixel *pixel)
     break;
   }
 
+  if (native_y < s_page_y || native_y >= (uint32_t)s_page_y + s_page_rows) return;
+  native_y -= s_page_y;
   is_dark = (uint8_t)((77U * pixel->color.uRed +
                        150U * pixel->color.uGreen +
                        29U * pixel->color.uBlue) < 32768U);
@@ -553,4 +579,73 @@ void LCD_TearEffect(uint8_t tear)
   } else {
     (void)ST7305_WriteCommand(ST7305_TE_OFF);
   }
+}
+
+ST7305_Status LCD_ST7305_RenderPaged(ST7305_PageRender render, void *context)
+{
+  if (!LCD_ST7305_IsReady() || !s_binding.page_rows || !render || s_rendering)
+    return ST7305_ERR_STATE;
+  s_rendering = 1U;
+  ST7305_Status status = ST7305_OK;
+  for (uint16_t y = 0U; y < s_binding.panel->height; y += s_binding.page_rows) {
+    s_page_y = y;
+    s_page_rows = s_binding.panel->height - y < s_binding.page_rows
+        ? s_binding.panel->height - y : s_binding.page_rows;
+    memset(s_binding.framebuffer, 0, ST7305_RowBytes() * s_page_rows);
+    status = render(context);
+    if (status == ST7305_OK) status = ST7305_TransferRows(y, y + s_page_rows - 1U);
+    if (status != ST7305_OK) break;
+  }
+  s_rendering = 0U;
+  s_page_y = 0U;
+  s_page_rows = s_binding.page_rows;
+  if (status != ST7305_OK) s_initialized = 0U;
+  return status;
+}
+/* Clip large fills before iterating pixels: paging must not multiply the
+ * full-screen fill cost by the page count. Coordinates remain logical. */
+static uint8_t Clip(uint32_t *x, uint32_t *y, uint32_t *end_x, uint32_t *end_y)
+{
+  uint32_t left = 0U, top = 0U, right, bottom;
+  if (!s_bound || (s_binding.page_rows && !s_rendering)) return 0U;
+  const ST7305_PanelProfile *p = s_binding.panel;
+  right = p->width; bottom = p->height;
+  switch (s_rotation) {
+  case ROTATION_90:
+    left = s_page_y; right = s_page_y + s_page_rows; bottom = p->width; break;
+  case ROTATION_270:
+    left = p->height - s_page_y - s_page_rows; right = p->height - s_page_y; bottom = p->width; break;
+  case ROTATION_180:
+    top = p->height - s_page_y - s_page_rows; bottom = p->height - s_page_y; break;
+  default:
+    top = s_page_y; bottom = s_page_y + s_page_rows; break;
+  }
+  if (*x < left) *x = left;
+  if (*y < top) *y = top;
+  if (*end_x > right) *end_x = right;
+  if (*end_y > bottom) *end_y = bottom;
+  return *x < *end_x && *y < *end_y;
+}
+uint8_t LCD_ST7305_Intersects(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+  uint32_t x0=x, y0=y, x1=(uint32_t)x+w, y1=(uint32_t)y+h;
+  return Clip(&x0, &y0, &x1, &y1);
+}
+void DrawFilledRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, COLOR color)
+{
+  uint32_t x0=x, y0=y, x1=(uint32_t)x+w, y1=(uint32_t)y+h;
+  if (x1 > 65536U || y1 > 65536U || !Clip(&x0, &y0, &x1, &y1)) return;
+  Pixel pixel = {0U, 0U, color};
+  for (uint32_t py=y0; py<y1; ++py) {
+    pixel.y = (uint16_t)py;
+    for (uint32_t px=x0; px<x1; ++px) { pixel.x=(uint16_t)px; DrawPixel(&pixel); }
+  }
+}
+void DrawHLine(uint16_t x0, uint16_t y, uint16_t x1, COLOR color)
+{
+  if (x0<=x1 && (uint32_t)x1-x0+1U<=UINT16_MAX) DrawFilledRect(x0,y,x1-x0+1U,1U,color);
+}
+void DrawVLine(uint16_t x, uint16_t y0, uint16_t y1, COLOR color)
+{
+  if (y0<=y1 && (uint32_t)y1-y0+1U<=UINT16_MAX) DrawFilledRect(x,y0,1U,y1-y0+1U,color);
 }

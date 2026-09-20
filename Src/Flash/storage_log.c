@@ -62,6 +62,60 @@ static Storage_Status CommitSectorHeader(StorageLog *log, uint32_t index,
                               offsetof(StorageLogSectorHeader, header_crc32));
 }
 
+/* The V1 header CRC excludes commit_marker. A zero marker is an acknowledged
+ * log record. A proper subset of COMMIT is an interrupted ACK: retry delivery.
+ * An interrupted original commit is a superset, and is NEVER made pending. */
+static Storage_Status ReadLogRecord(const StorageLog *log, uint32_t offset,
+    uint32_t end, StorageRecordHeader *h, StorageRecordLoc *loc)
+{
+  uint8_t chunk[64];
+  uint32_t crc, pos, left;
+  if (offset > end || end - offset < sizeof(*h)) return STORAGE_ERR_RANGE;
+  Storage_Status st = Storage_Read(log->map, log->partition, offset, h, sizeof(*h));
+  if (st != STORAGE_OK) return st;
+  if (h->magic != STORAGE_RECORD_MAGIC || h->format_version != STORAGE_RECORD_FORMAT_V1 ||
+      h->header_size != sizeof(*h) || (h->commit_marker & ~STORAGE_COMMIT_MARKER) != 0U)
+    return STORAGE_ERR_STATE;
+  if (h->payload_length > end - offset - sizeof(*h)) return STORAGE_ERR_RANGE;
+  if (StorageRecord_HeaderCrc(h, &crc) != STORAGE_OK || crc != h->header_crc32)
+    return STORAGE_ERR_CRC;
+  crc = UINT32_MAX;
+  pos = offset + sizeof(*h);
+  left = h->payload_length;
+  while (left) {
+    const uint32_t n = left > sizeof(chunk) ? sizeof(chunk) : left;
+    st = Storage_Read(log->map, log->partition, pos, chunk, n);
+    if (st != STORAGE_OK) return st;
+    crc = Storage_Crc32Update(crc, chunk, n);
+    pos += n; left -= n;
+  }
+  if ((crc ^ UINT32_MAX) != h->payload_crc32) return STORAGE_ERR_CRC;
+  *loc = (StorageRecordLoc){h->sequence, offset, h->payload_length, 1U};
+  return STORAGE_OK;
+}
+/* Account for acknowledged records as occupied: a reboot must not reset the
+ * write cursor/sequence to the last still-pending record. */
+static Storage_Status FindLatestLog(const StorageLog *log, uint32_t offset,
+    uint32_t size, StorageRecordLoc *latest)
+{
+  const uint32_t end = offset + size;
+  uint8_t found = 0U;
+  while (offset <= end && end - offset >= sizeof(StorageRecordHeader)) {
+    StorageRecordHeader h;
+    StorageRecordLoc loc;
+    Storage_Status st = ReadLogRecord(log, offset, end, &h, &loc);
+    if (st == STORAGE_OK) {
+      if (!found || Storage_SeqIsNewer(loc.sequence, latest->sequence)) *latest = loc;
+      found = 1U;
+      offset = NorFlash_AlignUp(offset + sizeof(h) + h.payload_length, 4U);
+    } else if (st == STORAGE_ERR_STATE || st == STORAGE_ERR_CRC || st == STORAGE_ERR_RANGE) {
+      if (h.magic == STORAGE_ERASED_U32) break;
+      offset += 4U;
+    } else return st;
+  }
+  return found ? STORAGE_OK : STORAGE_ERR_NOT_FOUND;
+}
+
 Storage_Status StorageLog_Init(StorageLog *log, const StoragePartitionMap *map,
                                uint32_t partition, uint32_t region_offset,
                                uint32_t region_size)
@@ -100,11 +154,10 @@ Storage_Status StorageLog_Init(StorageLog *log, const StoragePartitionMap *map,
       best_seq = header.sector_sequence;
       have = 1U;
     }
-    st = StorageRecord_FindLatest(
-        map, partition,
+    st = FindLatestLog(log,
         SectorBase(log, i) + (uint32_t)sizeof(StorageLogSectorHeader),
-        NOR_FLASH_SECTOR_SIZE - (uint32_t)sizeof(StorageLogSectorHeader), &loc,
-        NULL, 0U);
+        NOR_FLASH_SECTOR_SIZE - (uint32_t)sizeof(StorageLogSectorHeader), &loc);
+    if (st != STORAGE_OK && st != STORAGE_ERR_NOT_FOUND) return st;
     if (st == STORAGE_OK) {
       if (Storage_SeqIsNewer(loc.sequence + 1U, next_seq) != 0) {
         next_seq = loc.sequence + 1U;
@@ -135,8 +188,8 @@ Storage_Status StorageLog_Init(StorageLog *log, const StoragePartitionMap *map,
         SectorBase(log, best_index) + (uint32_t)sizeof(StorageLogSectorHeader);
     uint32_t data_size =
         NOR_FLASH_SECTOR_SIZE - (uint32_t)sizeof(StorageLogSectorHeader);
-    Storage_Status st = StorageRecord_FindLatest(
-        map, partition, data_off, data_size, &loc, NULL, 0U);
+    Storage_Status st = FindLatestLog(log, data_off, data_size, &loc);
+    if (st != STORAGE_OK && st != STORAGE_ERR_NOT_FOUND) return st;
     if (st == STORAGE_OK) {
       log->write_offset_in_sector =
           (loc.offset - SectorBase(log, best_index)) +
@@ -345,10 +398,18 @@ Storage_Status StorageLog_Clear(StorageLog *log)
   uint32_t i;
   uint32_t count;
   Storage_Status st;
+  StorageLogSectorHeader previous;
+  uint32_t generation;
 
   if (log == NULL) {
     return STORAGE_ERR_PARAM;
   }
+  /* Keep the generation monotonic so a receipt held across an explicit clear
+   * cannot acknowledge a new record at an identical offset. */
+  st = ReadSectorHeader(log, log->active_sector_index, &previous);
+  if (st != STORAGE_OK) return st;
+  if (!SectorHeaderValid(&previous)) return STORAGE_ERR_STATE;
+  generation = previous.sector_sequence + 1U;
   count = SectorCount(log);
   for (i = 0U; i < count; ++i) {
     st = Storage_EraseSector(log->map, log->partition, SectorBase(log, i));
@@ -356,7 +417,7 @@ Storage_Status StorageLog_Clear(StorageLog *log)
       return st;
     }
   }
-  st = CommitSectorHeader(log, 0U, 1U, 1U);
+  st = CommitSectorHeader(log, 0U, generation, 1U);
   if (st != STORAGE_OK) {
     return st;
   }
@@ -364,4 +425,95 @@ Storage_Status StorageLog_Clear(StorageLog *log)
   log->write_offset_in_sector = (uint32_t)sizeof(StorageLogSectorHeader);
   log->next_sequence = 1U;
   return STORAGE_OK;
+}
+
+static Storage_Status NextSector(StorageLog *log, StorageLogCursor *cursor)
+{
+  cursor->sector = (cursor->sector + 1U) % SectorCount(log);
+  cursor->offset = sizeof(StorageLogSectorHeader);
+  if (--cursor->remaining == 0U) {
+    cursor->started = 0U;
+    return STORAGE_ERR_NOT_FOUND;
+  }
+  return STORAGE_ERR_BUSY;
+}
+Storage_Status StorageLog_NextPending(StorageLog *log, StorageLogCursor *cursor,
+    StorageLogReceipt *receipt, void *payload, uint32_t capacity, uint32_t *length)
+{
+  StorageLogSectorHeader sector;
+  Storage_Status st;
+  if (!log || !log->map || !cursor || !receipt || !payload || !length || !SectorCount(log))
+    return STORAGE_ERR_PARAM;
+  *length = 0U;
+  memset(receipt, 0, sizeof(*receipt));
+  if (!cursor->started) {
+    cursor->sector = (log->active_sector_index + 1U) % SectorCount(log);
+    cursor->offset = sizeof(StorageLogSectorHeader);
+    cursor->remaining = SectorCount(log);
+    cursor->started = 1U;
+  }
+  if (cursor->sector >= SectorCount(log) || !cursor->remaining ||
+      cursor->remaining > SectorCount(log) || cursor->offset < sizeof(sector) ||
+      cursor->offset > NOR_FLASH_SECTOR_SIZE) return STORAGE_ERR_PARAM;
+  st = ReadSectorHeader(log, cursor->sector, &sector);
+  if (st != STORAGE_OK) return st;
+  if (!SectorHeaderValid(&sector)) return NextSector(log, cursor);
+  const uint32_t base = SectorBase(log, cursor->sector);
+  const uint32_t end = base + NOR_FLASH_SECTOR_SIZE;
+  /* Eight candidates at most, even for corrupt bytes or already-ACKed logs.
+   * Max additional payload validation per candidate is one sector. */
+  for (uint32_t budget = 0U; budget < 8U; ++budget) {
+    StorageRecordHeader h;
+    StorageRecordLoc loc;
+    if (NOR_FLASH_SECTOR_SIZE - cursor->offset < sizeof(h)) return NextSector(log, cursor);
+    st = ReadLogRecord(log, base + cursor->offset, end, &h, &loc);
+    if (st == STORAGE_OK) {
+      const uint32_t next = NorFlash_AlignUp(cursor->offset + sizeof(h) + h.payload_length, 4U);
+      if (h.commit_marker == 0U) { cursor->offset = next; continue; }
+      if (h.payload_length > capacity) return STORAGE_ERR_RANGE;
+      st = Storage_Read(log->map, log->partition, loc.offset + sizeof(h), payload, h.payload_length);
+      if (st != STORAGE_OK) return st;
+      if (Storage_Crc32(payload, h.payload_length) != h.payload_crc32) return STORAGE_ERR_CRC;
+      receipt->record = loc;
+      receipt->sector_sequence = sector.sector_sequence;
+      receipt->payload_crc32 = h.payload_crc32;
+      *length = h.payload_length;
+      cursor->offset = next;
+      return STORAGE_OK;
+    }
+    if (st != STORAGE_ERR_STATE && st != STORAGE_ERR_RANGE && st != STORAGE_ERR_CRC) return st;
+    if (h.magic == STORAGE_ERASED_U32) return NextSector(log, cursor);
+    cursor->offset += 4U;
+    if (st == STORAGE_ERR_CRC) return st; /* Observable, retry resumes scanning. */
+  }
+  return STORAGE_ERR_BUSY;
+}
+Storage_Status StorageLog_Acknowledge(StorageLog *log, const StorageLogReceipt *receipt)
+{
+  StorageLogSectorHeader sector;
+  StorageRecordHeader h;
+  StorageRecordLoc loc;
+  uint32_t ack = 0U, verify;
+  Storage_Status st;
+  if (!log || !log->map || !receipt || !receipt->record.valid) return STORAGE_ERR_PARAM;
+  const uint32_t offset = receipt->record.offset;
+  if (offset < log->region_offset || offset - log->region_offset >= log->region_size)
+    return STORAGE_ERR_RANGE;
+  const uint32_t index = (offset - log->region_offset) / NOR_FLASH_SECTOR_SIZE;
+  if (offset - SectorBase(log, index) < sizeof(sector)) return STORAGE_ERR_RANGE;
+  st = ReadSectorHeader(log, index, &sector);
+  if (st != STORAGE_OK) return st;
+  if (!SectorHeaderValid(&sector) || sector.sector_sequence != receipt->sector_sequence)
+    return STORAGE_ERR_NOT_FOUND;
+  st = ReadLogRecord(log, offset, SectorBase(log, index) + NOR_FLASH_SECTOR_SIZE, &h, &loc);
+  if (st != STORAGE_OK) return st;
+  if (loc.sequence != receipt->record.sequence || loc.payload_length != receipt->record.payload_length ||
+      h.payload_crc32 != receipt->payload_crc32) return STORAGE_ERR_NOT_FOUND;
+  if (h.commit_marker == 0U) return STORAGE_OK;
+  const uint32_t marker = offset + offsetof(StorageRecordHeader, commit_marker);
+  st = Storage_Write(log->map, log->partition, marker, &ack, sizeof(ack));
+  if (st != STORAGE_OK) return st;
+  st = Storage_Read(log->map, log->partition, marker, &verify, sizeof(verify));
+  if (st != STORAGE_OK) return st;
+  return verify == 0U ? STORAGE_OK : STORAGE_ERR_STATE;
 }
