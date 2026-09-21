@@ -65,6 +65,11 @@ typedef ST7305_Status (*ST7305_PageRender)(void *context);
  * bind/reset/change rotation/refresh or recursively render. Full-buffer APIs
  * remain unchanged; paged mode rejects legacy Refresh/RefreshArea. */
 ST7305_Status LCD_ST7305_RenderPaged(ST7305_PageRender render, void *context);
+/* Paged-mode partial update: replays the same immutable scene only for
+ * pages intersecting the logical rectangle, then transfers those pages. */
+ST7305_Status LCD_ST7305_RenderPagedArea(ST7305_PageRender render, void *context,
+                                         uint16_t x, uint16_t y,
+                                         uint16_t width, uint16_t height);
 /* Drawing optimization only; DrawPixel still enforces the native page bounds. */
 uint8_t LCD_ST7305_Intersects(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
