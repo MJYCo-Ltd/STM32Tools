@@ -602,6 +602,66 @@ ST7305_Status LCD_ST7305_RenderPaged(ST7305_PageRender render, void *context)
   if (status != ST7305_OK) s_initialized = 0U;
   return status;
 }
+ST7305_Status LCD_ST7305_RenderPagedArea(ST7305_PageRender render, void *context,
+                                         uint16_t x, uint16_t y,
+                                         uint16_t width, uint16_t height)
+{
+  const ST7305_PanelProfile *panel;
+  uint16_t logical_width, logical_height, x1, y1, native_y0, native_y1;
+  ST7305_Status status = ST7305_OK;
+
+  if (!LCD_ST7305_IsReady() || !s_binding.page_rows || !render || s_rendering)
+    return ST7305_ERR_STATE;
+  panel = s_binding.panel;
+  logical_width = (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+                      ? panel->height : panel->width;
+  logical_height = (s_rotation == ROTATION_90 || s_rotation == ROTATION_270)
+                       ? panel->width : panel->height;
+  if (!width || !height || x >= logical_width || y >= logical_height)
+    return ST7305_ERR_PARAM;
+  x1 = (uint16_t)(x + width - 1U);
+  y1 = (uint16_t)(y + height - 1U);
+  if (x1 < x || x1 >= logical_width) x1 = (uint16_t)(logical_width - 1U);
+  if (y1 < y || y1 >= logical_height) y1 = (uint16_t)(logical_height - 1U);
+
+  switch (s_rotation) {
+  case ROTATION_90: native_y0 = x; native_y1 = x1; break;
+  case ROTATION_180:
+    native_y0 = (uint16_t)(panel->height - 1U - y1);
+    native_y1 = (uint16_t)(panel->height - 1U - y); break;
+  case ROTATION_270:
+    native_y0 = (uint16_t)(panel->height - 1U - x1);
+    native_y1 = (uint16_t)(panel->height - 1U - x); break;
+  default: native_y0 = y; native_y1 = y1; break;
+  }
+  native_y0 &= (uint16_t)~1U;
+  native_y1 |= 1U;
+  if (native_y1 >= panel->height) native_y1 = (uint16_t)(panel->height - 1U);
+
+  s_rendering = 1U;
+  for (uint16_t page_y = (uint16_t)((native_y0 / s_binding.page_rows) * s_binding.page_rows);
+       page_y <= native_y1; page_y = (uint16_t)(page_y + s_binding.page_rows)) {
+    s_page_y = page_y;
+    s_page_rows = panel->height - page_y < s_binding.page_rows
+                      ? (uint16_t)(panel->height - page_y) : s_binding.page_rows;
+    memset(s_binding.framebuffer, 0, ST7305_RowBytes() * s_page_rows);
+    status = render(context);
+    if (status == ST7305_OK) {
+      uint16_t transfer_y0 = (page_y < native_y0) ? native_y0 : page_y;
+      uint16_t page_y1 = (uint16_t)(page_y + s_page_rows - 1U);
+      uint16_t transfer_y1 = (page_y1 > native_y1) ? native_y1 : page_y1;
+      status = ST7305_TransferRows(transfer_y0, transfer_y1);
+    }
+    if (status != ST7305_OK) break;
+    if ((uint32_t)page_y + s_binding.page_rows >= panel->height) break;
+  }
+  s_rendering = 0U;
+  s_page_y = 0U;
+  s_page_rows = s_binding.page_rows;
+  if (status != ST7305_OK) s_initialized = 0U;
+  return status;
+}
+
 /* Clip large fills before iterating pixels: paging must not multiply the
  * full-screen fill cost by the page count. Coordinates remain logical. */
 static uint8_t Clip(uint32_t *x, uint32_t *y, uint32_t *end_x, uint32_t *end_y)
