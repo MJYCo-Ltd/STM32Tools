@@ -40,7 +40,8 @@ RTOS 延时时，才要求在对应调度环境中初始化，通用驱动本身
 `Auxiliary`、`UartReceive`、部分 Bootloader 平台代码，以及 ST7789/EPD 旧后端仍有
 HAL、全局句柄或宏配置依赖。保留这些模块不表示已经满足显式依赖注入约定。
 移植前阅读各自头文件／源码，不要套用 ST7305 的绑定方式或自动搬入板级参数。
-Bootloader 的现有平台假设见 [Bootloader 说明](../Bootloader/README.md)。
+Bootloader 的参考说明已合并到仓库根目录 [README](../README.md)；STM32F411 示例位于
+[Examples/BootloaderSTM32F411](../Examples/BootloaderSTM32F411/)。
 
 ## 验证入口
 
