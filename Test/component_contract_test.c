@@ -6,6 +6,7 @@
 #include <AHT20/aht20.h>
 #include <TMP/tmp117.h>
 #include <System/HealthMonitor.h>
+#include <Net/CommAdapter.h>
 #include <assert.h>
 #include <string.h>
 int main(void) {
@@ -19,6 +20,11 @@ int main(void) {
   TMP117_Device tmp;
   assert(AHT20_DeviceInit(&aht, NULL, AHT20_I2C_ADDR7, NULL, NULL) == AHT20_ERR_PARAM);
   assert(TMP117_DeviceInit(&tmp, NULL, TMP117_ADDR_GND) == TMP117_ERR_PARAM);
+  {
+    static const CommAdapterOps adapter = {.id = 1U, .name = "test"};
+    const CommAdapterRegistry registry = {&adapter, 1U};
+    assert(CommAdapterRegistry_Find(&registry, 1U) == &adapter);
+  }
   HealthMonitor monitor;
   HealthMonitor_Init(&monitor);
   assert(HealthMonitor_Register(&monitor, 0U, 100U, 0U));
