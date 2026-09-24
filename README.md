@@ -31,6 +31,7 @@ STM32Tools/
 
 - `AT/`：AT 文本编解码、分行/长度帧解析、通用 AT 通道恢复状态机；
 - `ML307/`、`EWM103/`：通信模组命令组包和响应解析，不直接决定产品业务；
+- `Net/`：统一通信适配器能力契约与有界下载 transport 接口；产品仓库负责注册具体承载和切换策略；
 - `Flash/`：NOR Backend、分区、掉电安全记录、DualBank、固件槽、签名验证；
 - `Protocol/`：Modbus、HTTP Range、MQTT 行收集等协议组件；
 - `Bus/`：I2C、RS485、Modbus 队列等总线抽象和 STM32 Port；

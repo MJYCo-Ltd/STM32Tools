@@ -23,5 +23,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Components.cmake")
 add_executable(component_contract_test component_contract_test.c)
 target_link_libraries(component_contract_test PRIVATE STM32Tools::AT STM32Tools::Core
     STM32Tools::Storage STM32Tools::SignedFirmware STM32Tools::AHT20 STM32Tools::TMP117
-    STM32Tools::ML307 STM32Tools::EWM103 STM32Tools::HttpRange STM32Tools::HealthMonitor)
+    STM32Tools::ML307 STM32Tools::EWM103 STM32Tools::HttpRange STM32Tools::Comm
+    STM32Tools::HealthMonitor)
 add_test(NAME component_contract_test COMMAND component_contract_test)
