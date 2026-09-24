@@ -35,16 +35,16 @@ int main(void)
   const CommAdapterOps *a;
   const CommAdapterOps *b;
 
-  assert(CommAdapterRegistry_Count(&registry) == 2U);
-  a = CommAdapterRegistry_Find(&registry, 1U);
-  b = CommAdapterRegistry_At(&registry, 1U);
+  assert(CommAdapterRegistry_GetCount(&registry) == 2U);
+  a = CommAdapterRegistry_FindById(&registry, 1U);
+  b = CommAdapterRegistry_GetAt(&registry, 1U);
   assert(a != NULL && b != NULL);
   assert(strcmp(a->name, "a") == 0);
   assert(strcmp(b->name, "b") == 0);
   assert(b->download_priority < a->download_priority);
-  assert(CommAdapterRegistry_Find(&registry, 0U) == NULL);
-  assert(CommAdapterRegistry_At(&registry, 2U) == NULL);
-  assert(CommAdapterRegistry_Count(NULL) == 0U);
+  assert(CommAdapterRegistry_FindById(&registry, 0U) == NULL);
+  assert(CommAdapterRegistry_GetAt(&registry, 2U) == NULL);
+  assert(CommAdapterRegistry_GetCount(NULL) == 0U);
   puts("comm adapter portable registry contract: PASS");
   return 0;
 }
