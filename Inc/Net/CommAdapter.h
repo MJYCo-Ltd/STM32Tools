@@ -57,12 +57,12 @@ typedef struct {
   size_t count;
 } CommAdapterRegistry;
 
-static inline size_t CommAdapterRegistry_Count(const CommAdapterRegistry *registry)
+static inline size_t CommAdapterRegistry_GetCount(const CommAdapterRegistry *registry)
 {
   return (registry != NULL) ? registry->count : 0U;
 }
 
-static inline const CommAdapterOps *CommAdapterRegistry_At(
+static inline const CommAdapterOps *CommAdapterRegistry_GetAt(
     const CommAdapterRegistry *registry, size_t index)
 {
   return ((registry != NULL) && (registry->items != NULL) &&
@@ -71,7 +71,7 @@ static inline const CommAdapterOps *CommAdapterRegistry_At(
              : NULL;
 }
 
-static inline const CommAdapterOps *CommAdapterRegistry_Find(
+static inline const CommAdapterOps *CommAdapterRegistry_FindById(
     const CommAdapterRegistry *registry, CommAdapterId id)
 {
   size_t i;
