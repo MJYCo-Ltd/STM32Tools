@@ -12,6 +12,20 @@ extern "C" {
 
 typedef uint8_t CommAdapterId;
 
+typedef enum {
+  COMM_ADAPTER_STATE_UNKNOWN = 0,
+  COMM_ADAPTER_STATE_INITIALIZING,
+  COMM_ADAPTER_STATE_OFFLINE,
+  COMM_ADAPTER_STATE_PROVISIONING,
+  COMM_ADAPTER_STATE_CONNECTING,
+  COMM_ADAPTER_STATE_REGISTERING,
+  COMM_ADAPTER_STATE_LINK_ONLINE,
+  COMM_ADAPTER_STATE_MQTT_CONNECTING,
+  COMM_ADAPTER_STATE_ONLINE,
+  COMM_ADAPTER_STATE_RECOVERING,
+  COMM_ADAPTER_STATE_ERROR
+} CommAdapterState;
+
 #define COMM_ADAPTER_ID_NONE 0U
 #define COMM_ADAPTER_REGISTRY_MAX_BITMASK 8U
 
@@ -32,6 +46,7 @@ typedef struct {
   uint8_t (*is_selectable)(void);
   uint8_t (*is_online)(void);
   uint8_t (*is_busy)(void);
+  CommAdapterState (*get_state)(void);
   uint8_t (*is_mqtt_connected)(void);
   void (*set_selected)(uint8_t selected);
   int (*get_signal_dbm)(void);
