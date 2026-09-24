@@ -23,7 +23,7 @@ int main(void) {
   {
     static const CommAdapterOps adapter = {.id = 1U, .name = "test"};
     const CommAdapterRegistry registry = {&adapter, 1U};
-    assert(CommAdapterRegistry_Find(&registry, 1U) == &adapter);
+    assert(CommAdapterRegistry_FindById(&registry, 1U) == &adapter);
   }
   HealthMonitor monitor;
   HealthMonitor_Init(&monitor);
