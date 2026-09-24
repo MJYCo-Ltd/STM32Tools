@@ -73,6 +73,10 @@ add_executable(at_channel_recovery_test at_channel_recovery_test.c)
 target_include_directories(at_channel_recovery_test PRIVATE ../Inc)
 add_test(NAME at_channel_recovery_test COMMAND at_channel_recovery_test)
 
+add_executable(comm_adapter_contract_test comm_adapter_contract_test.c)
+target_include_directories(comm_adapter_contract_test PRIVATE ../Inc)
+add_test(NAME comm_adapter_contract_test COMMAND comm_adapter_contract_test)
+
 add_executable(sensor_driver_test
     sensor_driver_test.c
     ../Src/AHT20/aht20.c

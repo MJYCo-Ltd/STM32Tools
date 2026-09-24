@@ -10,6 +10,7 @@
 | AHT20 / TMP117 | [传感器接入](SENSOR_DRIVERS.md) | 每设备 I2C_Bus；AHT20 还需毫秒延时回调 |
 | ST7305 显示 | [lcd_st7305.h](Display/LCD/lcd_st7305.h)、[显示说明](Display/README.md) | 总线、面板 Profile、Reset、延时、缓冲区、旋转方向 |
 | AT 恢复 | [AtChannelRecovery.h](AT/AtChannelRecovery.h) | 模组命令、Ready 判定、硬件动作与业务策略 |
+| 通信适配 | [CommAdapter.h](Net/CommAdapter.h)、[ConnectTransport.h](Net/ConnectTransport.h) | 产品 adapter ID、具体驱动绑定、承载选择/故障策略 |
 | AT 组帧／编解码 | [AT](AT/) | 接收字节、长度、会话对象与超时策略 |
 | 存储／验签 | [Flash](Flash/) | 后端、事务、分区、产品信任策略 |
 | 总线／协议 | [Bus](Bus/)、[Protocol](Protocol/) | 具体外设和执行策略 |
