@@ -110,6 +110,8 @@ const char *ML307_TypeName(ML307_Type type)
     return "MQTT_DISC";
   case ML307_TYPE_MQTT_CLEAN:
     return "MQTT_CLEAN";
+  case ML307_TYPE_MQTT_SSL_CONFIG:
+    return "MQTT_SSL";
   case ML307_TYPE_MQTT_CONNECT:
     return "MQTT_CONN";
   case ML307_TYPE_MQTT_SUBSCRIBE:
@@ -150,6 +152,10 @@ ML307_Result ML307_Pack(const ML307_Content *content, char *packet,
   case ML307_TYPE_MQTT_CLEAN:
     result = ML307_MqttBuildCleanSession(packet, packet_size, content->id,
                                          content->flag);
+    break;
+  case ML307_TYPE_MQTT_SSL_CONFIG:
+    result = ML307_MqttBuildSslConfig(packet, packet_size, content->id,
+                                      content->ssl_enable, content->ssl_id);
     break;
   case ML307_TYPE_MQTT_CONNECT:
     result = ML307_MqttBuildConnect(
@@ -205,6 +211,7 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
       (expect == ML307_TYPE_MQTT_SUBSCRIBE) ||
       (expect == ML307_TYPE_MQTT_PUBLISH) ||
       (expect == ML307_TYPE_MQTT_CLEAN) ||
+      (expect == ML307_TYPE_MQTT_SSL_CONFIG) ||
       (expect == ML307_TYPE_MQTT_DISCONNECT)) {
     if (ML307_MqttResponseHasError(packet) != 0) {
       out->error = 1U;
