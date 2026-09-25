@@ -26,6 +26,22 @@ typedef enum {
   COMM_ADAPTER_STATE_ERROR
 } CommAdapterState;
 
+typedef enum {
+  COMM_ADAPTER_REASON_NONE = 0,
+  COMM_ADAPTER_REASON_INIT_FAILED,
+  COMM_ADAPTER_REASON_NOT_AVAILABLE,
+  COMM_ADAPTER_REASON_BUSY,
+  COMM_ADAPTER_REASON_TX_FAILED,
+  COMM_ADAPTER_REASON_TIMEOUT,
+  COMM_ADAPTER_REASON_MODULE_RESPONSE,
+  COMM_ADAPTER_REASON_NETWORK,
+  COMM_ADAPTER_REASON_MQTT,
+  COMM_ADAPTER_REASON_DNS,
+  COMM_ADAPTER_REASON_PROVISIONING,
+  COMM_ADAPTER_REASON_CONFIG,
+  COMM_ADAPTER_REASON_COMMAND_CHANNEL
+} CommAdapterReason;
+
 #define COMM_ADAPTER_ID_NONE 0U
 #define COMM_ADAPTER_REGISTRY_MAX_BITMASK 8U
 
@@ -47,6 +63,7 @@ typedef struct {
   uint8_t (*is_online)(void);
   uint8_t (*is_busy)(void);
   CommAdapterState (*get_state)(void);
+  CommAdapterReason (*get_reason)(void);
   uint8_t (*is_mqtt_connected)(void);
   void (*set_selected)(uint8_t selected);
   int (*get_signal_dbm)(void);
