@@ -75,6 +75,9 @@ typedef struct {
   uint8_t (*mqtt_subscribe)(const char *topic, uint8_t qos);
 
   void (*tick)(void);
+  /* Retry ordinary link establishment using already provisioned credentials.
+   * NULL means the adapter does not expose background link retry. */
+  uint8_t (*retry_link)(void);
   uint8_t (*recovery_required)(void);
   uint8_t (*recover)(void);
 
