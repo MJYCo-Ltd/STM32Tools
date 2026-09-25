@@ -193,6 +193,14 @@ static void test_legacy_non_control_and_builders(void)
   CHECK(!strcmp(out, "AT+MQTTSUB=0,\"test\",1\r\n"));
   CHECK(ML307_MqttBuildPublish(out, sizeof(out), 0, "test", 1, 0, "abc") == ML307_RESULT_OK);
   CHECK(!strcmp(out, "AT+MQTTPUB=0,\"test\",1,0,0,3,\"abc\"\r\n"));
+  CHECK(ML307_MqttBuildSslConfig(out, sizeof(out), 0, 1, 0) == ML307_RESULT_OK);
+  CHECK(!strcmp(out, "AT+MQTTCFG=\"ssl\",0,1,0\r\n"));
+  CHECK(ML307_MqttBuildSslConfig(out, sizeof(out), 6, 1, 0) ==
+        ML307_RESULT_INVALID_VALUE);
+  CHECK(ML307_MqttBuildSslConfig(out, sizeof(out), 0, 2, 0) ==
+        ML307_RESULT_INVALID_VALUE);
+  CHECK(ML307_MqttBuildSslConfig(out, sizeof(out), 0, 1, 6) ==
+        ML307_RESULT_INVALID_VALUE);
 }
 
 int main(void)

@@ -49,6 +49,9 @@ typedef struct {
 ML307_Result ML307_MqttBuildCleanSession(char *output, size_t output_size,
                                          uint8_t connect_id,
                                          uint8_t clean_session);
+ML307_Result ML307_MqttBuildSslConfig(char *output, size_t output_size,
+                                      uint8_t connect_id, uint8_t ssl_enable,
+                                      uint8_t ssl_id);
 ML307_Result ML307_MqttBuildConnect(char *output, size_t output_size,
                                     uint8_t connect_id, const char *host,
                                     uint16_t port, const char *client_id,
