@@ -6,6 +6,7 @@
 
 static uint8_t Online(void) { return 1U; }
 static uint8_t Ready(void) { return 1U; }
+static uint8_t RetryLink(void) { return 1U; }
 static CommAdapterState OnlineState(void) { return COMM_ADAPTER_STATE_ONLINE; }
 static CommAdapterReason NoReason(void) { return COMM_ADAPTER_REASON_NONE; }
 static uint8_t Publish(const char *t, const char *p, uint8_t q, uint8_t r)
@@ -23,6 +24,7 @@ int main(void)
           .is_selectable = Ready,
           .get_state = OnlineState,
           .get_reason = NoReason,
+          .retry_link = RetryLink,
           .mqtt_publish = Publish,
       },
       {
@@ -48,6 +50,7 @@ int main(void)
   assert(b->download_priority < a->download_priority);
   assert(a->get_state() == COMM_ADAPTER_STATE_ONLINE);
   assert(a->get_reason() == COMM_ADAPTER_REASON_NONE);
+  assert(a->retry_link != NULL && a->retry_link() == 1U);
   assert(CommAdapterRegistry_FindById(&registry, 0U) == NULL);
   assert(CommAdapterRegistry_GetAt(&registry, 2U) == NULL);
   assert(CommAdapterRegistry_GetCount(NULL) == 0U);
