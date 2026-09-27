@@ -64,6 +64,96 @@ ML307_Result ML307_MqttBuildSslConfig(char *output, size_t output_size,
                     (unsigned int)ssl_id);
 }
 
+ML307_Result ML307_MqttBuildSslQuery(char *output, size_t output_size,
+                                     uint8_t connect_id)
+{
+  if (connect_id > 5U) return ML307_RESULT_INVALID_VALUE;
+  return MqttFormat(output, output_size, "AT+MQTTCFG=\"ssl\",%u\r\n",
+                    (unsigned int)connect_id);
+}
+
+static int MqttLineEqualsBytes(const uint8_t *line, size_t length,
+                               const char *expected)
+{
+  const size_t expected_length = strlen(expected);
+  return length == expected_length &&
+         memcmp(line, expected, expected_length) == 0;
+}
+
+ML307_Result ML307_MqttParseSslQuery(const uint8_t *response, size_t length,
+                                     uint8_t connect_id,
+                                     uint8_t *ssl_enable, uint8_t *ssl_id)
+{
+  static const char prefix[] = "+MQTTCFG: \"ssl\",";
+  char expected_echo[40];
+  size_t offset = 0U;
+  const uint8_t *line;
+  size_t line_length;
+  uint8_t parsed_enable = 0U;
+  uint8_t parsed_id = 0U;
+  unsigned int value_count = 0U;
+  unsigned int ok_count = 0U;
+  unsigned int echo_count = 0U;
+  unsigned int final_seen = 0U;
+
+  if (response == NULL || ssl_enable == NULL || ssl_id == NULL ||
+      connect_id > 5U)
+    return ML307_RESULT_INVALID_ARGUMENT;
+  if (snprintf(expected_echo, sizeof(expected_echo),
+               "AT+MQTTCFG=\"ssl\",%u", (unsigned int)connect_id) < 0)
+    return ML307_RESULT_INVALID_VALUE;
+  while (ModuleFrameParser_NextLine(response, length, &offset, &line,
+                                    &line_length) != 0U) {
+    AT_Line bounded = {(const char *)line, line_length};
+    const uint8_t *cursor;
+    const uint8_t *end;
+    uint32_t enable;
+    uint32_t id;
+    AT_TrimLine(&bounded);
+    if (bounded.length == 0U) continue;
+    if (final_seen != 0U) return ML307_RESULT_INVALID_VALUE;
+    if (AT_LineEquals(&bounded, "OK")) {
+      ++ok_count;
+      final_seen = 1U;
+      continue;
+    }
+    if (AT_LineEquals(&bounded, "ERROR") ||
+        AT_LineStartsWith(&bounded, "+CME ERROR:") ||
+        AT_LineStartsWith(&bounded, "+CMS ERROR:"))
+      return ML307_RESULT_ERROR_RESPONSE;
+    if (AT_LineStartsWith(&bounded, "AT+MQTTCFG=")) {
+      if (!MqttLineEqualsBytes((const uint8_t *)bounded.data,
+                               bounded.length, expected_echo) ||
+          ++echo_count > 1U)
+        return ML307_RESULT_INVALID_VALUE;
+      continue;
+    }
+    if (AT_LineStartsWith(&bounded, "+MQTTCFG:")) {
+      if (bounded.length < sizeof(prefix) - 1U ||
+          memcmp(bounded.data, prefix, sizeof(prefix) - 1U) != 0)
+        return ML307_RESULT_INVALID_VALUE;
+      cursor = (const uint8_t *)bounded.data + sizeof(prefix) - 1U;
+      end = (const uint8_t *)bounded.data + bounded.length;
+      if (ModuleFrameParser_ParseUnsigned(&cursor, end, 1U, &enable) !=
+              MODULE_FRAME_COMPLETE ||
+          cursor == end || *cursor++ != ',' ||
+          ModuleFrameParser_ParseUnsigned(&cursor, end, 5U, &id) !=
+              MODULE_FRAME_COMPLETE ||
+          cursor != end || ++value_count > 1U)
+        return ML307_RESULT_INVALID_VALUE;
+      parsed_enable = (uint8_t)enable;
+      parsed_id = (uint8_t)id;
+      continue;
+    }
+    return ML307_RESULT_INVALID_VALUE;
+  }
+  if (offset != length) return ML307_RESULT_NOT_FOUND;
+  if (ok_count != 1U || value_count != 1U) return ML307_RESULT_NOT_FOUND;
+  *ssl_enable = parsed_enable;
+  *ssl_id = parsed_id;
+  return ML307_RESULT_OK;
+}
+
 ML307_Result ML307_MqttBuildConnect(char *output, size_t output_size,
                                     uint8_t connect_id, const char *host,
                                     uint16_t port, const char *client_id,

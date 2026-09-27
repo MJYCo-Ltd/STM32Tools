@@ -142,6 +142,17 @@ add_executable(ml307_mqtt_control_test
 target_include_directories(ml307_mqtt_control_test PRIVATE ../Inc)
 add_test(NAME ml307_mqtt_control_test COMMAND ml307_mqtt_control_test)
 
+add_executable(ml307_ssl_test
+    ml307_ssl_test.c
+    ../Src/ML307/ml307_ssl.c
+    ../Src/ML307/ml307_mqtt.c
+    ../Src/AT/at_codec.c
+    ../Src/AT/ModuleFrameParser.c)
+target_include_directories(ml307_ssl_test PRIVATE ../Inc)
+target_compile_options(ml307_ssl_test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-pedantic>)
+add_test(NAME ml307_ssl_test COMMAND ml307_ssl_test)
+
 include("${CMAKE_CURRENT_LIST_DIR}/ConsolidatedTests.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/AuditTests.cmake")
 add_executable(storage_log_stream_test storage_log_stream_test.c

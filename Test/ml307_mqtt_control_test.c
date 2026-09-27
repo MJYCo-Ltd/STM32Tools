@@ -201,6 +201,30 @@ static void test_legacy_non_control_and_builders(void)
         ML307_RESULT_INVALID_VALUE);
   CHECK(ML307_MqttBuildSslConfig(out, sizeof(out), 0, 1, 6) ==
         ML307_RESULT_INVALID_VALUE);
+  CHECK(ML307_MqttBuildSslQuery(out, sizeof(out), 3U) == ML307_RESULT_OK);
+  CHECK(!strcmp(out, "AT+MQTTCFG=\"ssl\",3\r\n"));
+  {
+    uint8_t enabled = 9U, ssl_id = 9U;
+    CHECK(ML307_MqttParseSslQuery(
+              BYTES("AT+MQTTCFG=\"ssl\",3\r\n"
+                    "+MQTTCFG: \"ssl\",1,2\r\nOK\r\n"),
+              3U, &enabled, &ssl_id) == ML307_RESULT_OK);
+    CHECK(enabled == 1U && ssl_id == 2U);
+    CHECK(ML307_MqttParseSslQuery(
+              BYTES("AT+MQTTCFG=\"ssl\",2\r\n"
+                    "+MQTTCFG: \"ssl\",1,2\r\nOK\r\n"),
+              3U, &enabled, &ssl_id) == ML307_RESULT_INVALID_VALUE);
+    CHECK(ML307_MqttParseSslQuery(
+              BYTES("+MQTTCFG: \"clean\",1\r\nOK\r\n"),
+              3U, &enabled, &ssl_id) == ML307_RESULT_INVALID_VALUE);
+    CHECK(ML307_MqttParseSslQuery(
+              BYTES("+MQTTCFG: \"ssl\",1,2\r\nOK"),
+              3U, &enabled, &ssl_id) == ML307_RESULT_NOT_FOUND);
+    CHECK(ML307_MqttParseSslQuery(
+              BYTES("+MQTTCFG: \"ssl\",1,2\r\n"
+                    "+MQTTCFG: \"ssl\",1,2\r\nOK\r\n"),
+              3U, &enabled, &ssl_id) == ML307_RESULT_INVALID_VALUE);
+  }
 }
 
 int main(void)

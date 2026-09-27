@@ -52,6 +52,16 @@ ML307_Result ML307_MqttBuildCleanSession(char *output, size_t output_size,
 ML307_Result ML307_MqttBuildSslConfig(char *output, size_t output_size,
                                       uint8_t connect_id, uint8_t ssl_enable,
                                       uint8_t ssl_id);
+/** Query the SSL binding for one MQTT client. The ML307 response omits the
+ * connect id; serial command ownership correlates it with this request. */
+ML307_Result ML307_MqttBuildSslQuery(char *output, size_t output_size,
+                                     uint8_t connect_id);
+/** Strictly parse one SSL query result. If command echo is present it must
+ * name the requested connect id. Exactly one ssl value line and one final OK
+ * are required; unrelated/wrong MQTTCFG records are rejected. */
+ML307_Result ML307_MqttParseSslQuery(const uint8_t *response, size_t length,
+                                     uint8_t connect_id,
+                                     uint8_t *ssl_enable, uint8_t *ssl_id);
 ML307_Result ML307_MqttBuildConnect(char *output, size_t output_size,
                                     uint8_t connect_id, const char *host,
                                     uint16_t port, const char *client_id,

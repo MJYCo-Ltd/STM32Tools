@@ -114,6 +114,7 @@ _stm32tools_component(ML307
     Src/ML307/ml307_parser.c
     Src/ML307/ml307_mqtt.c
     Src/ML307/ml307_http.c
+    Src/ML307/ml307_ssl.c
 )
 
 _stm32tools_component(EWM103
