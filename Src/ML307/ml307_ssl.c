@@ -340,7 +340,8 @@ ML307_SslParseResult ML307_SslParseCertificateWritePrompt(
       size_t prefix_line_length;
       size_t tail;
       for (tail = i + 1U; tail < length; ++tail) {
-        if (response[tail] != ' ' && response[tail] != '\t')
+        if (response[tail] != ' ' && response[tail] != '\t' &&
+            response[tail] != '\r' && response[tail] != '\n')
           return ML307_SSL_PARSE_INVALID;
       }
       while (ModuleFrameParser_NextLine(response, i, &prefix_offset,

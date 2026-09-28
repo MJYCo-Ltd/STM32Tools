@@ -208,6 +208,14 @@ static void TestCertificateWrite(void)
   ML307_SslCertificateChunk chunk = {
       "root.pem", certificate, sizeof(certificate), 0U, 1024U};
   static const uint8_t prompt[] = "AT+MSSLCERTWR=\"root.pem\",0,3\r\n\r\n> ";
+  static const uint8_t real_prompt[] = "\r\n>\r\n";
+  static const uint8_t prompt_with_crlf_whitespace[] = "\r\n> \r\n\t";
+  static const uint8_t bare_prompt[] = ">";
+  static const uint8_t bare_prompt_with_space[] = "> ";
+  static const uint8_t partial_cr[] = "\r";
+  static const uint8_t partial_crlf[] = "\r\n";
+  static const uint8_t prompt_with_ok[] = "\r\n>\r\nOK\r\n";
+  static const uint8_t prompt_with_text[] = "\r\n>text";
   static const uint8_t echo_with_gt[] =
       "AT+MSSLCERTWR=\"a>b.pem\",0,3\r\n";
   static const uint8_t error[] = "+CME ERROR: 50\r\n";
@@ -256,6 +264,30 @@ static void TestCertificateWrite(void)
         ML307_SSL_PARSE_COMPLETE);
   CHECK(ML307_SslParseCertificateWritePrompt(prompt, sizeof(prompt) - 3U) ==
         ML307_SSL_PARSE_INCOMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(real_prompt,
+                                              sizeof(real_prompt) - 1U) ==
+        ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(prompt_with_crlf_whitespace,
+                                              sizeof(prompt_with_crlf_whitespace) - 1U) ==
+        ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(bare_prompt,
+                                              sizeof(bare_prompt) - 1U) ==
+        ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(bare_prompt_with_space,
+                                              sizeof(bare_prompt_with_space) - 1U) ==
+        ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(partial_cr,
+                                              sizeof(partial_cr) - 1U) ==
+        ML307_SSL_PARSE_INCOMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(partial_crlf,
+                                              sizeof(partial_crlf) - 1U) ==
+        ML307_SSL_PARSE_INCOMPLETE);
+  CHECK(ML307_SslParseCertificateWritePrompt(prompt_with_ok,
+                                              sizeof(prompt_with_ok) - 1U) ==
+        ML307_SSL_PARSE_INVALID);
+  CHECK(ML307_SslParseCertificateWritePrompt(prompt_with_text,
+                                              sizeof(prompt_with_text) - 1U) ==
+        ML307_SSL_PARSE_INVALID);
   CHECK(ML307_SslParseCertificateWritePrompt(echo_with_gt,
                                               sizeof(echo_with_gt) - 1U) ==
         ML307_SSL_PARSE_INCOMPLETE);
@@ -540,7 +572,7 @@ static void TestTransactions(void)
   ML307_SslTransaction transaction;
   ML307_ModuleClock clock;
   size_t frame_length;
-  static const uint8_t prompt[] = "\r\n> ";
+  static const uint8_t prompt[] = "\r\n>\r\n";
   static const uint8_t ok[] = "OK\r\n";
 
   ML307_SslTransactionInit(&transaction);
