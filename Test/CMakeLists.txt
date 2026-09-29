@@ -165,4 +165,5 @@ add_executable(st7305_paged_test st7305_paged_test.c
 target_include_directories(st7305_paged_test PRIVATE ../Inc)
 target_compile_definitions(st7305_paged_test PRIVATE STM32TOOLS_DISPLAY_BACKEND_ST7305)
 add_test(NAME st7305_paged_test COMMAND st7305_paged_test)
+include("${CMAKE_CURRENT_LIST_DIR}/CoreMigrationTests.cmake")
 stm32tools_finalize_host_tests()
