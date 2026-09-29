@@ -40,6 +40,7 @@ _stm32tools_component(Storage
     Src/Flash/storage_commit.c
     Src/Flash/storage_bank.c
     Src/Flash/DualBankStore.c
+    Src/Flash/DurableRecordQueue.c
 )
 
 _stm32tools_component(SignedFirmware
