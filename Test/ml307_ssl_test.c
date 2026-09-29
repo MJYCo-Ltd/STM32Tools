@@ -183,6 +183,16 @@ static void TestCertificateNames(void)
                                         &names) == ML307_SSL_PARSE_COMPLETE);
   CHECK(strcmp(names.server_ca, "root.pem") == 0);
   CHECK(names.client_certificate[0] == '\0' && names.private_key[0] == '\0');
+  {
+    static const uint8_t ml307_null_slots[] =
+        "\r\n+MSSLCFG: \"cert\",0,\"mjy-ca-00000001.pem\",\"NULL\",\"NULL\"\r\n"
+        "\r\nOK\r\n";
+    CHECK(ML307_SslParseCertificateQuery(ml307_null_slots,
+                                          sizeof(ml307_null_slots) - 1U, 0U,
+                                          &names) == ML307_SSL_PARSE_COMPLETE);
+    CHECK(strcmp(names.server_ca, "mjy-ca-00000001.pem") == 0);
+    CHECK(names.client_certificate[0] == '\0' && names.private_key[0] == '\0');
+  }
   CHECK(ML307_SslParseCertificateQuery(populated, sizeof(populated) - 1U, 2U,
                                         &names) == ML307_SSL_PARSE_COMPLETE);
   CHECK(strcmp(names.client_certificate, "client.pem") == 0);
@@ -388,6 +398,35 @@ static void TestCertificateRead(void)
         ML307_SSL_PARSE_COMPLETE);
   CHECK(decoded_length == sizeof(fake_control_payload));
   CHECK(memcmp(decoded, fake_control_payload, decoded_length) == 0);
+
+  /* Board-observed ML307C tail inserts one blank CRLF before the final OK. */
+  {
+    uint8_t blank_ok_frame[512];
+    size_t blank_ok_length;
+    int header_length = snprintf(
+        (char *)blank_ok_frame, sizeof(blank_ok_frame),
+        "\r\n+MSSLCERTRD: %lu,",
+        (unsigned long)sizeof(fake_control_payload));
+    static const uint8_t blank_ok_tail[] = "\r\n\r\nOK\r\n";
+    CHECK(header_length > 0);
+    blank_ok_length = (size_t)header_length;
+    CHECK(blank_ok_length + sizeof(fake_control_payload) +
+              sizeof(blank_ok_tail) - 1U <=
+          sizeof(blank_ok_frame));
+    memcpy(blank_ok_frame + blank_ok_length, fake_control_payload,
+           sizeof(fake_control_payload));
+    blank_ok_length += sizeof(fake_control_payload);
+    memcpy(blank_ok_frame + blank_ok_length, blank_ok_tail,
+           sizeof(blank_ok_tail) - 1U);
+    blank_ok_length += sizeof(blank_ok_tail) - 1U;
+    decoded_length = 0U;
+    CHECK(ML307_SslParseCertificateRead(
+              blank_ok_frame, blank_ok_length, decoded, sizeof(decoded),
+              &decoded_length) == ML307_SSL_PARSE_COMPLETE);
+    CHECK(decoded_length == sizeof(fake_control_payload));
+    CHECK(memcmp(decoded, fake_control_payload, decoded_length) == 0);
+  }
+
   memset(decoded, 0x5A, sizeof(decoded));
   memcpy(before, decoded, sizeof(decoded));
   decoded_length = 456U;

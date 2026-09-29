@@ -233,6 +233,8 @@ static int SslParseQuotedName(const uint8_t **cursor, const uint8_t *end,
   if (length > 0U) memcpy(output, begin, length);
   output[length] = '\0';
   ++(*cursor);
+  /* ML307C reports unset certificate slots as the literal token NULL. */
+  if (strcmp(output, "NULL") == 0) output[0] = '\0';
   return 1;
 }
 
@@ -399,6 +401,30 @@ static ModuleFrameResult SslCertificatePayloadBoundary(
   return MODULE_FRAME_COMPLETE;
 }
 
+/* ML307C returns either "\r\nOK\r\n" or an extra blank CRLF before OK after
+ * +MSSLCERTRD payloads. Accept a bounded number of CRLF separators, then OK. */
+static ModuleFrameResult SslCertificateReadTail(const uint8_t *tail,
+                                                size_t available,
+                                                size_t *consumed)
+{
+  size_t offset = 0U;
+  if (consumed == NULL || tail == NULL) return MODULE_FRAME_INVALID;
+  *consumed = 0U;
+  if (available < 6U) return MODULE_FRAME_INCOMPLETE;
+  while (offset + 6U <= available &&
+         tail[offset] == (uint8_t)'\r' &&
+         tail[offset + 1U] == (uint8_t)'\n') {
+    if (memcmp(tail + offset, "\r\nOK\r\n", 6U) == 0) {
+      *consumed = offset + 6U;
+      return MODULE_FRAME_COMPLETE;
+    }
+    offset += 2U;
+    if (offset > 8U) return MODULE_FRAME_INVALID;
+  }
+  if (offset < available) return MODULE_FRAME_INVALID;
+  return MODULE_FRAME_INCOMPLETE;
+}
+
 static uint8_t SslControlHasModuleReady(const uint8_t *data, size_t length)
 {
   return ModuleFrameParser_HasLine(data, length, "+MATREADY", 0U);
@@ -421,7 +447,7 @@ ML307_SslParseResult ML307_SslParseCertificateRead(
 {
   static const ModuleLengthFrameProtocol protocol = {
       "+MSSLCERTRD:", 1U, 0U, ',', 0U, ML307_SSL_CERTIFICATE_MAX,
-      "\r\nOK\r\n", 6U, NULL};
+      NULL, 0U, SslCertificateReadTail};
   static const ModuleLengthFrameProtocol boundary_protocol = {
       "+MSSLCERTRD:", 1U, 0U, ',', 0U, ML307_SSL_CERTIFICATE_MAX,
       NULL, 0U, SslCertificatePayloadBoundary};
