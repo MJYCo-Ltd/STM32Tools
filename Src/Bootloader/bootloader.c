@@ -15,11 +15,12 @@
 #include <string.h>
 
 #define BOOTLOADER_CHUNK_SIZE 256U
+#define BOOTLOADER_VECTOR_SIZE (2U * sizeof(uint32_t))
 
 uint8_t Bootloader_IsAppValid(uint32_t app_base, uint32_t app_size)
 {
-  const uint32_t sp = *(volatile uint32_t *)app_base;
-  const uint32_t reset = *(volatile uint32_t *)(app_base + 4U);
+  const uint32_t sp = *(volatile uint32_t *)(uintptr_t)app_base;
+  const uint32_t reset = *(volatile uint32_t *)(uintptr_t)(app_base + 4U);
   const uint32_t sram_base = BOOTLOADER_SRAM_BASE;
   const uint32_t sram_end = BOOTLOADER_SRAM_BASE + BOOTLOADER_SRAM_SIZE;
 
@@ -37,9 +38,9 @@ uint8_t Bootloader_IsAppValid(uint32_t app_base, uint32_t app_size)
 void Bootloader_JumpToApp(uint32_t app_base)
 {
   typedef void (*AppReset_t)(void);
-  const uint32_t sp = *(volatile uint32_t *)app_base;
-  const uint32_t reset = *(volatile uint32_t *)(app_base + 4U);
-  const AppReset_t app_reset = (AppReset_t)reset;
+  const uint32_t sp = *(volatile uint32_t *)(uintptr_t)app_base;
+  const uint32_t reset = *(volatile uint32_t *)(uintptr_t)(app_base + 4U);
+  const AppReset_t app_reset = (AppReset_t)(uintptr_t)reset;
   uint32_t irq_bank;
 
   /* Hand the application a reset-like clock tree.  In particular, never leave
@@ -84,6 +85,7 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
                                          uint32_t app_flash_size)
 {
   uint8_t chunk[BOOTLOADER_CHUNK_SIZE];
+  uint8_t vectors[BOOTLOADER_VECTOR_SIZE];
   uint32_t offset = 0U;
   uint32_t running = 0xFFFFFFFFUL;
   BootloaderFlash_Status fst;
@@ -95,7 +97,7 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
     return BOOTLOADER_ERR_MANIFEST;
   }
   if ((manifest->target_address != app_flash_base) ||
-      (manifest->image_length == 0U) ||
+      (manifest->image_length < BOOTLOADER_VECTOR_SIZE) ||
       (manifest->image_length > app_flash_size) ||
       (manifest->entry_address < app_flash_base) ||
       (manifest->entry_address >= (app_flash_base + app_flash_size)) ||
@@ -119,9 +121,25 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
     if (st != STORAGE_OK) {
       return BOOTLOADER_ERR_STORAGE;
     }
-    fst = BootloaderFlash_Program(app_flash_base + offset, chunk, n);
-    if (fst != BOOTLOADER_FLASH_OK) {
-      return BOOTLOADER_ERR_FLASH;
+    /* Keep both boot vectors erased until the entire image is copied and
+     * verified. A failed read/program or a reset between chunks must not leave
+     * a plausible vector table pointing into an incomplete application. */
+    {
+      const uint32_t skip = (offset == 0U) ? BOOTLOADER_VECTOR_SIZE : 0U;
+      if (skip != 0U) {
+        memcpy(vectors, chunk, sizeof(vectors));
+      }
+      if (n > skip) {
+        fst = BootloaderFlash_Program(app_flash_base + offset + skip,
+                                       chunk + skip, n - skip);
+        if (fst != BOOTLOADER_FLASH_OK) {
+          return BOOTLOADER_ERR_FLASH;
+        }
+        if (memcmp((const void *)(uintptr_t)(app_flash_base + offset + skip),
+                   chunk + skip, n - skip) != 0) {
+          return BOOTLOADER_ERR_FLASH;
+        }
+      }
     }
     running = CalCRC32Update(running, chunk, n);
     offset += n;
@@ -129,6 +147,13 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
 
   if ((running ^ 0xFFFFFFFFUL) != manifest->image_crc32) {
     return BOOTLOADER_ERR_MANIFEST;
+  }
+  /* Commit last: only a complete, verified body may acquire boot vectors. */
+  fst = BootloaderFlash_Program(app_flash_base, vectors, sizeof(vectors));
+  if ((fst != BOOTLOADER_FLASH_OK) ||
+      (memcmp((const void *)(uintptr_t)app_flash_base, vectors,
+              sizeof(vectors)) != 0)) {
+    return BOOTLOADER_ERR_FLASH;
   }
   if (Bootloader_IsAppValid(app_flash_base, app_flash_size) == 0U) {
     return BOOTLOADER_ERR_NO_APP;
@@ -235,7 +260,7 @@ static Bootloader_Status BackupCurrentApplication(
   manifest.firmware_version = state->active_version;
   manifest.image_length = app_size;
   manifest.target_address = app_base;
-  manifest.entry_address = *(volatile uint32_t *)(app_base + 4U);
+  manifest.entry_address = *(volatile uint32_t *)(uintptr_t)(app_base + 4U);
   manifest.image_crc32 = running_crc ^ 0xFFFFFFFFUL;
   FeedCfg(cfg);
   st = StorageFirmware_Finish(&rollback, &manifest, NULL);
@@ -251,9 +276,11 @@ static Bootloader_Status BackupCurrentApplication(
 static Bootloader_Status EnsureRollbackBackup(
     const BootloaderConfig *cfg, const UpgradeStatePayload *state,
     const StorageFirmwareManifest *candidate, uint32_t app_base,
-    uint32_t app_size)
+    uint32_t app_size, uint8_t app_may_be_partial)
 {
-  const uint8_t app_valid = Bootloader_IsAppValid(app_base, app_size);
+  const uint8_t app_valid = (app_may_be_partial == 0U)
+                               ? Bootloader_IsAppValid(app_base, app_size)
+                               : 0U;
   const uint8_t rollback_valid =
       SlotIsValid(cfg, cfg->rollback_part, cfg->rollback_part_size);
 
@@ -310,21 +337,20 @@ static Bootloader_Status DoRollback(const BootloaderConfig *cfg,
   Bootloader_Status bst;
 
   if (SlotIsValid(cfg, cfg->rollback_part, cfg->rollback_part_size) == 0U) {
-    state->state = (uint32_t)UPGRADE_STATE_FAILED;
+    /* A previous attempt may already have destroyed the internal image.
+     * Preserve recovery intent even if the external slot is unreadable now. */
+    state->state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
     if (state->last_error == 0U) {
       state->last_error = (uint32_t)BOOTLOADER_ERR_ROLLBACK;
     }
     (void)Persist(log, state);
-    /* A confirmed-but-crashing App with no rollback must not be jumped
-     * again — that is the reset-storm case. */
-    if (state->last_error == (uint32_t)BOOTLOADER_ERR_WATCHDOG_STORM) {
-      return BOOTLOADER_ERR_NO_APP;
-    }
-    return JumpOrHold(cfg, app_base, app_size);
+    return BOOTLOADER_ERR_ROLLBACK;
   }
 
   state->state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
-  (void)Persist(log, state);
+  if (Persist(log, state) != STORAGE_OK) {
+    return BOOTLOADER_ERR_STORAGE;
+  }
   bst = InstallFromPart(cfg, cfg->rollback_part, cfg->rollback_part_size,
                         &installed);
   if (bst == BOOTLOADER_OK) {
@@ -337,10 +363,11 @@ static Bootloader_Status DoRollback(const BootloaderConfig *cfg,
     (void)Persist(log, state);
     return JumpOrHold(cfg, app_base, app_size);
   }
-  state->state = (uint32_t)UPGRADE_STATE_FAILED;
+  /* Retain ROLLING_BACK for the next boot's bounded retry. Never jump after
+   * a destructive failure, including when recording that failure also fails. */
   state->last_error = (uint32_t)BOOTLOADER_ERR_ROLLBACK;
   (void)Persist(log, state);
-  return JumpOrHold(cfg, app_base, app_size);
+  return bst;
 }
 
 Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
@@ -354,6 +381,7 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   BootloaderPolicyOut pout;
   uint32_t app_base;
   uint32_t app_size;
+  uint8_t app_may_be_partial;
 
   if ((cfg == NULL) || (cfg->map == NULL)) {
     return BOOTLOADER_ERR_PARAM;
@@ -370,7 +398,9 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   st = StorageUpgrade_Init(&ulog, cfg->map, cfg->control_part,
                            cfg->control_part_size);
   if (st != STORAGE_OK) {
-    return JumpOrHold(cfg, app_base, app_size);
+    /* Without readable recovery metadata, plausible vectors do not prove that
+     * an earlier erase/copy completed. Fail closed until storage recovers. */
+    return BOOTLOADER_ERR_STORAGE;
   }
 
   memset(&state, 0, sizeof(state));
@@ -378,8 +408,13 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   if (st == STORAGE_ERR_NOT_FOUND) {
     state.state = (uint32_t)UPGRADE_STATE_IDLE;
   } else if (st != STORAGE_OK) {
-    return JumpOrHold(cfg, app_base, app_size);
+    return BOOTLOADER_ERR_STORAGE;
   }
+  app_may_be_partial =
+      ((state.state == (uint32_t)UPGRADE_STATE_INSTALLING) ||
+       (state.state == (uint32_t)UPGRADE_STATE_BACKUP_VALID) ||
+       (state.state == (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING) ||
+       (state.state == (uint32_t)UPGRADE_STATE_ROLLING_BACK)) ? 1U : 0U;
 
   memset(&pin, 0, sizeof(pin));
   pin.state = state.state;
@@ -387,7 +422,8 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   pin.watchdog_resets = state.watchdog_resets;
   pin.phase_attempts = state.phase_attempts;
   pin.reset_flags = cfg->reset_flags;
-  pin.app_valid = Bootloader_IsAppValid(app_base, app_size);
+  pin.app_valid = (app_may_be_partial == 0U)
+                      ? Bootloader_IsAppValid(app_base, app_size) : 0U;
   pin.max_trial_boots = (cfg->max_trial_boots != 0U)
                             ? cfg->max_trial_boots
                             : BOOTLOADER_MAX_TRIAL_BOOTS;
@@ -405,6 +441,11 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
   if (pout.persist != 0U) {
     FeedCfg(cfg);
     if (Persist(&ulog, &state) != STORAGE_OK) {
+      if ((pout.action == BOOTLOADER_ACTION_INSTALL) ||
+          (pout.action == BOOTLOADER_ACTION_ROLLBACK) ||
+          (pout.action == BOOTLOADER_ACTION_HOLD)) {
+        return BOOTLOADER_ERR_STORAGE;
+      }
       return JumpOrHold(cfg, app_base, app_size);
     }
   }
@@ -417,27 +458,36 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
                                   cfg->candidate_part,
                                   cfg->candidate_part_size);
     if (st != STORAGE_OK) {
-      state.state = (uint32_t)UPGRADE_STATE_FAILED;
+      state.state = (app_may_be_partial != 0U)
+                        ? (uint32_t)UPGRADE_STATE_INSTALLING
+                        : (uint32_t)UPGRADE_STATE_FAILED;
       state.last_error = (uint32_t)BOOTLOADER_ERR_STORAGE;
       (void)Persist(&ulog, &state);
-      return JumpOrHold(cfg, app_base, app_size);
+      return (app_may_be_partial != 0U) ? BOOTLOADER_ERR_STORAGE
+                                       : JumpOrHold(cfg, app_base, app_size);
     }
     st = StorageFirmware_IsValid(&candidate_slot, &installed);
     if (st != STORAGE_OK) {
-      state.state = (uint32_t)UPGRADE_STATE_FAILED;
+      state.state = (app_may_be_partial != 0U)
+                        ? (uint32_t)UPGRADE_STATE_INSTALLING
+                        : (uint32_t)UPGRADE_STATE_FAILED;
       state.last_error = (uint32_t)BOOTLOADER_ERR_MANIFEST;
       (void)Persist(&ulog, &state);
-      return JumpOrHold(cfg, app_base, app_size);
+      return (app_may_be_partial != 0U) ? BOOTLOADER_ERR_MANIFEST
+                                       : JumpOrHold(cfg, app_base, app_size);
     }
 
-    bst = EnsureRollbackBackup(cfg, &state, &installed, app_base, app_size);
+    bst = EnsureRollbackBackup(cfg, &state, &installed, app_base, app_size,
+                                app_may_be_partial);
     if (bst == BOOTLOADER_OK) {
       backup_available = 1U;
       state.state = (uint32_t)UPGRADE_STATE_BACKUP_VALID;
       if (Persist(&ulog, &state) != STORAGE_OK) {
-        return JumpOrHold(cfg, app_base, app_size);
+        return (app_may_be_partial != 0U) ? BOOTLOADER_ERR_STORAGE
+                                         : JumpOrHold(cfg, app_base, app_size);
       }
-    } else if (Bootloader_IsAppValid(app_base, app_size) != 0U) {
+    } else if ((app_may_be_partial == 0U) &&
+               (Bootloader_IsAppValid(app_base, app_size) != 0U)) {
       /* Never erase a valid running image when its backup could not be
        * committed and verified. */
       state.state = (uint32_t)UPGRADE_STATE_FAILED;
@@ -448,7 +498,8 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
 
     state.state = (uint32_t)UPGRADE_STATE_INSTALLING;
     if (Persist(&ulog, &state) != STORAGE_OK) {
-      return JumpOrHold(cfg, app_base, app_size);
+      return (app_may_be_partial != 0U) ? BOOTLOADER_ERR_STORAGE
+                                       : JumpOrHold(cfg, app_base, app_size);
     }
     bst = Bootloader_InstallSlot(&candidate_slot, &installed, app_base,
                                  app_size);
@@ -465,13 +516,15 @@ Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg)
       (void)Persist(&ulog, &state);
       return JumpOrHold(cfg, app_base, app_size);
     }
-    state.state = (uint32_t)UPGRADE_STATE_FAILED;
+    /* Erase/program may have failed partway through. Keep recovery intent
+     * durable even if power fails before rollback can start. */
+    state.state = (uint32_t)UPGRADE_STATE_INSTALLING;
     state.last_error = (uint32_t)bst;
     (void)Persist(&ulog, &state);
     if (backup_available != 0U) {
       return DoRollback(cfg, &ulog, &state, app_base, app_size);
     }
-    return JumpOrHold(cfg, app_base, app_size);
+    return bst;
   }
 
   if (pout.action == BOOTLOADER_ACTION_ROLLBACK) {
