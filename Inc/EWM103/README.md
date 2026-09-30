@@ -19,7 +19,8 @@ BluFi 相关类型（当前 Agriculture 配网使用）
 
 使用建议
 - Pack/Unpack 只负责文本的构建与解析；注意粘包/半包，由上层会话缓冲拼完整响应。
-- 最终结果判定依赖 `AT/at_codec`：`AT_HasFinalResult` 优先整行匹配 `OK`/`ERROR`，并对独立 `OK` token 做兜底（避免子串误命中）。
+- 通用最终结果判定依赖 `AT/at_codec`；`CWJAP` 单独要求完整的 LF / CRLF 终止行，`+CWJAP:` 前缀或响应体不能提前完成。
+- `CWJAP` 加入命令仍可在完整 `WIFI GOT IP` 行时提前完成，不必等待延迟的 `OK`。`EWM103_IsComplete` 只有类型参数，无法区分加入和查询；调用方必须保留 `content.query`，对 `CWJAP?` 等待查询响应体和最终行，不能把加入 URC 当作查询结果。Agriculture 的 WiFi 会话层对所有查询（含周期 RSSI、启动和 BLE 验证）执行此规则，并隔离超时后迟到的终止行。
 
 参考
 - EWM103-W15 AT 指令手册 V1.1

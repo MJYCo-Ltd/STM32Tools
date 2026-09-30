@@ -54,7 +54,9 @@ void Bootloader_JumpToApp(uint32_t app_base);
 /**
  * Program one external firmware slot into internal Application Flash.
  * Erases one internal sector at a time (feeding IWDG between sectors),
- * then copies image bytes.
+ * then copies and verifies the image body before committing its boot vectors.
+ * Interrupted/failed body copies leave the vectors erased. The caller must
+ * persist recovery intent before erase, since an erase itself can be torn.
  */
 Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
                                          const StorageFirmwareManifest *manifest,
@@ -63,7 +65,8 @@ Bootloader_Status Bootloader_InstallSlot(StorageFirmwareSlot *slot,
 
 /**
  * Read upgrade log from external Flash, install/rollback if needed, then jump.
- * On fatal error with no valid app, returns a status (caller should SafeHold).
+ * On fatal error or unreadable recovery metadata, returns a status (caller
+ * should SafeHold). Recovery is bounded; failed copies are never jumped.
  */
 Bootloader_Status Bootloader_Run(const BootloaderConfig *cfg);
 

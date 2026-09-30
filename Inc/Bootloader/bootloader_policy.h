@@ -18,8 +18,8 @@ extern "C" {
 
 /* Numeric values match Bootloader_Status in bootloader.h. */
 #define BOOTLOADER_POLICY_ERR_NO_APP 2U
-#define BOOTLOADER_POLICY_ERR_PHASE_LIMIT 7U
-#define BOOTLOADER_POLICY_ERR_WATCHDOG_STORM 8U
+#define BOOTLOADER_POLICY_ERR_PHASE_LIMIT 8U
+#define BOOTLOADER_POLICY_ERR_WATCHDOG_STORM 9U
 
 typedef enum {
   BOOTLOADER_ACTION_JUMP = 0,
