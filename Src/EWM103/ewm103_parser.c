@@ -81,11 +81,25 @@ int EWM103_ResponseIsComplete(const char *raw, EWM103_Type expect)
     }
     return 0;
   }
-  /* Manual §4.2.2 CWJAP: may print WIFI CONNECTED / WIFI GOT IP then OK.
-   * Accept GOT IP early so join does not wait forever if OK is delayed. */
+  /* CWJAP joins may finish on GOT IP before OK. A +CWJAP: query body is
+   * never a terminal result, and an unterminated line may still be growing.
+   * Query callers must additionally distinguish the command form: GOT IP is
+   * a join URC, not a response to CWJAP?. */
   if (expect == EWM103_TYPE_CWJAP) {
-    return AT_HasToken(raw, "WIFI GOT IP") || AT_HasToken(raw, "+CWJAP:") ||
-           AT_HasFinalResult(raw);
+    const char *cursor = raw;
+    const char *end;
+    while ((end = strchr(cursor, '\n')) != NULL) {
+      AT_Line line = {cursor, (size_t)(end - cursor)};
+      AT_TrimLine(&line);
+      if (AT_LineEquals(&line, "WIFI GOT IP") ||
+          AT_LineEquals(&line, "OK") || AT_LineEquals(&line, "ERROR") ||
+          AT_LineStartsWith(&line, "+CME ERROR:") ||
+          AT_LineStartsWith(&line, "+CMS ERROR:")) {
+        return 1;
+      }
+      cursor = end + 1;
+    }
+    return 0;
   }
   /* Manual §4.2.3 CWLAP: many +CWLAP lines then OK/ERROR. */
   if (expect == EWM103_TYPE_CWLAP) {

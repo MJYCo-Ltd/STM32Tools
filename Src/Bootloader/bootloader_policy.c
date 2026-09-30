@@ -120,10 +120,12 @@ void BootloaderPolicy_Decide(const BootloaderPolicyIn *in,
   if ((in->state == (uint32_t)UPGRADE_STATE_ROLLBACK_PENDING) ||
       (in->state == (uint32_t)UPGRADE_STATE_ROLLING_BACK)) {
     if (out->phase_attempts >= max_phase) {
-      out->state = (uint32_t)UPGRADE_STATE_FAILED;
+      /* Keep the recovery marker across resets. Even plausible vectors may
+       * belong to an interrupted rollback; exhaustion must never bless them. */
+      out->state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
       out->last_error = BOOTLOADER_POLICY_ERR_PHASE_LIMIT;
       out->persist = 1U;
-      HoldOrJump(in, out);
+      out->action = BOOTLOADER_ACTION_HOLD;
       return;
     }
     out->state = (uint32_t)UPGRADE_STATE_ROLLING_BACK;
