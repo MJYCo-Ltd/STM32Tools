@@ -227,6 +227,28 @@ static void test_legacy_non_control_and_builders(void)
   }
 }
 
+static void test_publish_payload_boundaries(void)
+{
+  char payload[ML307_MQTT_PUBLISH_PAYLOAD_SIZE + 1U];
+  char output[640];
+  char too_small[64];
+
+  memset(payload, 'x', sizeof(payload));
+  payload[ML307_MQTT_PUBLISH_PAYLOAD_SIZE - 1U] = '\0';
+  CHECK(ML307_MqttBuildPublish(output, sizeof(output), 0U, "health", 1U,
+                               0U, payload) == ML307_RESULT_OK);
+  CHECK(strstr(output, ",383,\"") != NULL);
+  CHECK(strlen(output) < sizeof(output));
+  CHECK(ML307_MqttBuildPublish(too_small, sizeof(too_small), 0U, "health",
+                               1U, 0U, payload) ==
+        ML307_RESULT_BUFFER_TOO_SMALL);
+
+  payload[ML307_MQTT_PUBLISH_PAYLOAD_SIZE - 1U] = 'x';
+  payload[ML307_MQTT_PUBLISH_PAYLOAD_SIZE] = '\0';
+  CHECK(ML307_MqttBuildPublish(output, sizeof(output), 0U, "health", 1U,
+                               0U, payload) == ML307_RESULT_INVALID_VALUE);
+}
+
 int main(void)
 {
   test_valid_controls();
@@ -235,6 +257,7 @@ int main(void)
   test_coalesced_connection_responses();
   test_bounded_slices_and_noise();
   test_legacy_non_control_and_builders();
+  test_publish_payload_boundaries();
   printf("ML307 control parser: %u checks; bounded slices + 10000 noise inputs passed\n", checks);
   return 0;
 }
