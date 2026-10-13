@@ -20,7 +20,10 @@ extern "C" {
 #define ML307_DATA_NAME_SIZE 32U
 #define ML307_DATA_TEXT_SIZE 512U
 #define ML307_TOPIC_SIZE 128U
+/** Maximum received MQTT text payload, including the terminating NUL. */
 #define ML307_PAYLOAD_SIZE 256U
+/** Maximum MQTT publish payload, including the terminating NUL. */
+#define ML307_MQTT_PUBLISH_PAYLOAD_SIZE 384U
 
 typedef enum {
   ML307_RESULT_OK = 0,

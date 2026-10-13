@@ -264,10 +264,10 @@ Storage_Status StorageRecord_Append(
   return STORAGE_OK;
 }
 
-Storage_Status StorageRecord_FindLatest(
+static Storage_Status FindLatest(
     const StoragePartitionMap *map, uint32_t partition, uint32_t region_offset,
     uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
-    uint32_t payload_buf_size)
+    uint32_t payload_buf_size, uint8_t strict)
 {
   uint32_t cursor;
   uint32_t region_end;
@@ -276,6 +276,7 @@ Storage_Status StorageRecord_FindLatest(
   StorageRecordLoc best;
   Storage_Status found = STORAGE_ERR_NOT_FOUND;
   Storage_Status st;
+  uint8_t expected_boundary = 1U;
 
   if ((map == NULL) || (out_loc == NULL) || (region_size == 0U)) {
     return STORAGE_ERR_PARAM;
@@ -299,16 +300,41 @@ Storage_Status StorageRecord_FindLatest(
     if (st != STORAGE_OK) {
       return st;
     }
+    /* Only boundary-aligned committed markers can identify a corrupted
+     * magic value. During resynchronization arbitrary payload bytes are not
+     * evidence of a record unless their magic is recognizable as well. */
+    if (strict && header.commit_marker == STORAGE_COMMIT_MARKER &&
+        (expected_boundary || header.magic == STORAGE_RECORD_MAGIC)) {
+      st = ValidateHeader(&header, region_end, cursor);
+      if (st != STORAGE_OK) return st;
+    }
     if (header.magic == STORAGE_ERASED_U32) {
       break;
     }
     if (header.magic != STORAGE_RECORD_MAGIC) {
       cursor = (cursor + 4U);
+      expected_boundary = 0U;
       continue;
     }
     st = ValidateHeader(&header, region_end, cursor);
     if (st != STORAGE_OK) {
+      if (strict && header.commit_marker != STORAGE_COMMIT_MARKER) {
+        /* A fully written header has an independently checked extent even
+         * before its last commit word. Skip its payload without interpreting
+         * payload words as record headers. Partial headers resynchronize. */
+        StorageRecordHeader committed = header;
+        committed.commit_marker = STORAGE_COMMIT_MARKER;
+        if (ValidateHeader(&committed, region_end, cursor) == STORAGE_OK) {
+          next = cursor + (uint32_t)sizeof(header) + header.payload_length;
+          next = NorFlash_AlignUp(next, 4U);
+          if (next <= cursor) break;
+          cursor = next;
+          expected_boundary = 1U;
+          continue;
+        }
+      }
       cursor = (cursor + 4U);
+      expected_boundary = 0U;
       continue;
     }
     st = ValidatePayload(
@@ -323,6 +349,8 @@ Storage_Status StorageRecord_FindLatest(
         best.valid = 1U;
         found = STORAGE_OK;
       }
+    } else if (strict) {
+      return st;
     } else if ((st != STORAGE_ERR_CRC) && (st != STORAGE_ERR_STATE) &&
                (st != STORAGE_ERR_RANGE)) {
       return st;
@@ -334,6 +362,7 @@ Storage_Status StorageRecord_FindLatest(
       break;
     }
     cursor = next;
+    expected_boundary = 1U;
   }
   *out_loc = best;
   if ((found == STORAGE_OK) && (payload_buf != NULL) &&
@@ -345,6 +374,24 @@ Storage_Status StorageRecord_FindLatest(
     }
   }
   return found;
+}
+
+Storage_Status StorageRecord_FindLatest(
+    const StoragePartitionMap *map, uint32_t partition, uint32_t region_offset,
+    uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
+    uint32_t payload_buf_size)
+{
+  return FindLatest(map, partition, region_offset, region_size, out_loc,
+                    payload_buf, payload_buf_size, 0U);
+}
+
+Storage_Status StorageRecord_FindLatestStrict(
+    const StoragePartitionMap *map, uint32_t partition, uint32_t region_offset,
+    uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
+    uint32_t payload_buf_size)
+{
+  return FindLatest(map, partition, region_offset, region_size, out_loc,
+                    payload_buf, payload_buf_size, 1U);
 }
 
 Storage_Status StorageRecord_ReadPayload(
@@ -385,3 +432,4 @@ Storage_Status StorageRecord_ReadPayload(
   }
   return STORAGE_OK;
 }
+
