@@ -10,19 +10,23 @@ static Storage_Status DualBankStore_FindBank(const DualBankStore *store,
                                              StorageRecordLoc *location,
                                              void *payload)
 {
+  if (store->strict_recovery)
+    return StorageRecord_FindLatestStrict(store->map, store->partition, offset,
+                                  store->bank_size, location, payload,
+                                  store->payload_size);
   return StorageRecord_FindLatest(store->map, store->partition, offset,
                                   store->bank_size, location, payload,
                                   store->payload_size);
 }
 
-Storage_Status DualBankStore_Init(DualBankStore *store,
+static Storage_Status Init(DualBankStore *store,
                                   const DualBankTransaction *transaction,
                                   const StoragePartitionMap *map,
                                   uint32_t partition, uint32_t bank_a_off,
                                   uint32_t bank_b_off, uint32_t bank_size,
                                   uint32_t payload_size,
                                   DualBankPayloadValidFn valid, void *scratch_a,
-                                  void *scratch_b)
+                                  void *scratch_b, uint8_t strict)
 {
   StorageRecordLoc location_a;
   StorageRecordLoc location_b;
@@ -49,6 +53,7 @@ Storage_Status DualBankStore_Init(DualBankStore *store,
   store->active_bank = 0U;
   store->next_sequence = 1U;
   store->have_snapshot = 0U;
+  store->strict_recovery = strict;
 
   lock_status = store->transaction.begin(store->transaction.ctx);
   if (lock_status != STORAGE_OK) {
@@ -57,10 +62,8 @@ Storage_Status DualBankStore_Init(DualBankStore *store,
   /* Select the newest committed record before interpreting its payload. An
    * older schema in the other bank must not poison a completed migration.
    * Never fall back from an invalid newest payload to stale execution state. */
-  status_a = StorageRecord_FindLatest(map, partition, bank_a_off, bank_size,
-      &location_a, NULL, 0U);
-  status_b = StorageRecord_FindLatest(map, partition, bank_b_off, bank_size,
-      &location_b, NULL, 0U);
+  status_a = DualBankStore_FindBank(store, bank_a_off, &location_a, NULL);
+  status_b = DualBankStore_FindBank(store, bank_b_off, &location_b, NULL);
   Storage_Status result = STORAGE_ERR_NOT_FOUND;
   const StorageRecordLoc *selected = NULL;
   uint32_t active_bank = 0U;
@@ -91,6 +94,32 @@ Storage_Status DualBankStore_Init(DualBankStore *store,
   }
   store->transaction.end(store->transaction.ctx);
   return result;
+}
+
+Storage_Status DualBankStore_Init(DualBankStore *store,
+                                  const DualBankTransaction *transaction,
+                                  const StoragePartitionMap *map,
+                                  uint32_t partition, uint32_t bank_a_off,
+                                  uint32_t bank_b_off, uint32_t bank_size,
+                                  uint32_t payload_size,
+                                  DualBankPayloadValidFn valid, void *scratch_a,
+                                  void *scratch_b)
+{
+  return Init(store, transaction, map, partition, bank_a_off, bank_b_off,
+              bank_size, payload_size, valid, scratch_a, scratch_b, 0U);
+}
+
+Storage_Status DualBankStore_InitStrict(DualBankStore *store,
+                                  const DualBankTransaction *transaction,
+                                  const StoragePartitionMap *map,
+                                  uint32_t partition, uint32_t bank_a_off,
+                                  uint32_t bank_b_off, uint32_t bank_size,
+                                  uint32_t payload_size,
+                                  DualBankPayloadValidFn valid, void *scratch_a,
+                                  void *scratch_b)
+{
+  return Init(store, transaction, map, partition, bank_a_off, bank_b_off,
+              bank_size, payload_size, valid, scratch_a, scratch_b, 1U);
 }
 
 Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out)
@@ -139,6 +168,18 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
   if (status != STORAGE_OK) {
     return status;
   }
+  if (store->strict_recovery) {
+    StorageRecordLoc latest;
+    status = DualBankStore_FindBank(store, active_offset, &latest, NULL);
+    if (status == STORAGE_OK && (!store->have_snapshot ||
+        latest.sequence != store->next_sequence - 1U ||
+        latest.payload_length != store->payload_size)) status = STORAGE_ERR_STATE;
+    if (status == STORAGE_ERR_NOT_FOUND && store->have_snapshot) status = STORAGE_ERR_STATE;
+    if (status != STORAGE_OK && status != STORAGE_ERR_NOT_FOUND) {
+      store->transaction.end(store->transaction.ctx);
+      return status;
+    }
+  }
   status = StorageRecord_Append(
       store->map, store->partition, active_offset, store->bank_size,
       store->next_sequence, payload, store->payload_size, &written_offset);
@@ -158,3 +199,4 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
   }
   return status;
 }
+

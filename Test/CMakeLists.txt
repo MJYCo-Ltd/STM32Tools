@@ -168,4 +168,14 @@ add_test(NAME st7305_paged_test COMMAND st7305_paged_test)
 include("${CMAKE_CURRENT_LIST_DIR}/CoreMigrationTests.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/BootloaderTests.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Ewm103QueryTests.cmake")
+add_executable(strict_snapshot_recovery_test strict_snapshot_recovery_test.c
+    ../Src/Flash/DualBankStore.c ../Src/Flash/storage_record.c
+    ../Src/Flash/storage_bank.c ../Src/Flash/storage_commit.c
+    ../Src/Flash/storage_partition.c ../Src/Flash/storage_backend.c
+    ../Src/Flash/nor_flash.c ../Src/Common.c)
+target_include_directories(strict_snapshot_recovery_test PRIVATE ../Inc)
+target_compile_options(strict_snapshot_recovery_test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-UNDEBUG>)
+add_test(NAME strict_snapshot_recovery_test COMMAND strict_snapshot_recovery_test)
 stm32tools_finalize_host_tests()
+

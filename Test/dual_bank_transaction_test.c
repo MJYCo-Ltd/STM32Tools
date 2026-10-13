@@ -56,6 +56,12 @@ Storage_Status StorageRecord_ReadPayload(const StoragePartitionMap *map,
   if (length != NULL) *length = io.lengths[bank];
   return io.payload_status;
 }
+Storage_Status StorageRecord_FindLatestStrict(const StoragePartitionMap *map,
+    uint32_t partition, uint32_t offset, uint32_t size, StorageRecordLoc *loc,
+    void *payload, uint32_t capacity)
+{
+  return StorageRecord_FindLatest(map,partition,offset,size,loc,payload,capacity);
+}
 Storage_Status StorageRecord_Append(const StoragePartitionMap *map,
     uint32_t partition, uint32_t offset, uint32_t size, uint32_t sequence,
     const void *payload, uint32_t length, uint32_t *written)
@@ -138,3 +144,4 @@ int main(void)
   assert(!io.held && io.begins == io.ends + 1U);
   return 0;
 }
+
