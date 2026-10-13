@@ -203,7 +203,8 @@ ML307_Result ML307_MqttBuildPublish(char *output, size_t output_size,
 
   if ((connect_id > 5U) || (qos > 2U) || (retain > 1U) ||
       !MqttStringIsValid(topic, 256U) || (topic[0] == '\0') ||
-      !MqttStringIsValid(message, ML307_PAYLOAD_SIZE - 1U)) {
+      !MqttStringIsValid(message,
+                         ML307_MQTT_PUBLISH_PAYLOAD_SIZE - 1U)) {
     return ML307_RESULT_INVALID_VALUE;
   }
   message_length = strlen(message);
