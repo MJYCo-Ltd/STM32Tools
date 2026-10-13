@@ -34,6 +34,7 @@ typedef struct {
   uint32_t active_bank;
   uint32_t next_sequence;
   uint8_t have_snapshot;
+  uint8_t strict_recovery;
 } DualBankStore;
 
 /**
@@ -49,8 +50,22 @@ Storage_Status DualBankStore_Init(DualBankStore *store,
                                   DualBankPayloadValidFn valid, void *scratch_a,
                                   void *scratch_b);
 
+/** Same contract as Init, with fail-closed committed-record recovery in
+ * Init/Load and before Save. Other callers retain the legacy Init policy. */
+Storage_Status DualBankStore_InitStrict(DualBankStore *store,
+                                  const DualBankTransaction *transaction,
+                                  const StoragePartitionMap *map,
+                                  uint32_t partition, uint32_t bank_a_off,
+                                  uint32_t bank_b_off, uint32_t bank_size,
+                                  uint32_t payload_size,
+                                  DualBankPayloadValidFn valid, void *scratch_a,
+                                  void *scratch_b);
+
 Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out);
 
+/** A failed Save can already have committed in either bank. Stop writes and
+ * re-Init before retrying; strict recovery does not resolve an ambiguous
+ * in-memory active-bank/sequence cache without scanning both banks again. */
 Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload);
 
 #ifdef __cplusplus
@@ -58,3 +73,4 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload);
 #endif
 
 #endif /* STM32TOOLS_DUAL_BANK_STORE_H */
+

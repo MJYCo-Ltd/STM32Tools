@@ -57,6 +57,18 @@ Storage_Status StorageRecord_FindLatest(
     uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
     uint32_t payload_buf_size);
 
+/** Opt-in fail-closed recovery for safety state. A committed record with a
+ * corrupt header/payload (including corrupt magic at an expected record
+ * boundary) returns an error rather than restoring an older record.
+ * Torn/uncommitted writes remain ignorable. Ambiguous committed residue from
+ * an interrupted erase may conservatively require explicit recovery.
+ * A damaged commit marker is indistinguishable from an uncommitted write;
+ * this policy cannot detect every possible media-corruption pattern. */
+Storage_Status StorageRecord_FindLatestStrict(
+    const StoragePartitionMap *map, uint32_t partition, uint32_t region_offset,
+    uint32_t region_size, StorageRecordLoc *out_loc, void *payload_buf,
+    uint32_t payload_buf_size);
+
 /** Validate one committed record, including its payload CRC. */
 Storage_Status StorageRecord_ValidateAt(
     const StoragePartitionMap *map, uint32_t partition, uint32_t record_offset,
@@ -71,3 +83,4 @@ Storage_Status StorageRecord_ReadPayload(
 #endif
 
 #endif /* STM32TOOLS_STORAGE_RECORD_H */
+
