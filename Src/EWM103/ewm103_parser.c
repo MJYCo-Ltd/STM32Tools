@@ -269,3 +269,53 @@ EWM103_Result EWM103_ParseResponse(const char *raw, EWM103_Type expect,
   }
   return EWM103_RESULT_OK;
 }
+
+const ModuleLengthFrameProtocolEx EWM103_MqttReceiveProtocol = {
+  .base = {.prefix = "+MQTTSUBRECV:", .field_count = 3U, .payload_length_field = 2U,
+  .field_separator = ',', .maximum_payload_length = EWM103_PAYLOAD_SIZE - 1U,
+  .fixed_tail = "\r\n", .fixed_tail_length = 2U},
+  .quoted_field = 2U, .maximum_quoted_length = EWM103_TOPIC_SIZE - 1U,
+  .maximum_header_length = 160U
+};
+
+ModuleFrameResult EWM103_ParseMqttReceive(const uint8_t *frame, size_t length,
+                                          EWM103_MqttMessage *message)
+{
+  uint32_t fields[3];
+  const uint8_t *body;
+  size_t body_length, consumed;
+  ModuleFrameSpan topic;
+  ModuleFrameResult result;
+  if (message == NULL) return MODULE_FRAME_INVALID;
+  memset(message, 0, sizeof(*message));
+  result = ModuleFrameParser_ParseLengthFrameEx(frame, length, &EWM103_MqttReceiveProtocol,
+      fields, 3U, &topic, &body, &body_length, &consumed);
+  if (result != MODULE_FRAME_COMPLETE) return result;
+  if (consumed != length || fields[0] > 4U) return MODULE_FRAME_INVALID;
+  message->link = fields[0];
+  message->topic = topic;
+  message->payload = (ModuleFrameSpan){body, body_length};
+  return MODULE_FRAME_COMPLETE;
+}
+
+EWM103_LinkEvent EWM103_ParseLinkEvent(const uint8_t *line, size_t length)
+{
+  size_t offset = 0U, count;
+  const uint8_t *value;
+  static const char disconnected[] = "+MQTTDISCONNECTED:";
+  if (!ModuleFrameParser_NextLine(line, length, &offset, &value, &count) || offset != length)
+    return EWM103_LINK_EVENT_NONE;
+  if (count == sizeof("WIFI DISCONNECT") - 1U && !memcmp(value, "WIFI DISCONNECT", count))
+    return EWM103_LINK_EVENT_DISCONNECTED;
+  if (count == sizeof("WIFI GOT IP") - 1U && !memcmp(value, "WIFI GOT IP", count))
+    return EWM103_LINK_EVENT_GOT_IP;
+  if (count > sizeof(disconnected) - 1U &&
+      !memcmp(value, disconnected, sizeof(disconnected) - 1U)) {
+    uint32_t link;
+    const uint8_t *cursor = value + sizeof(disconnected) - 1U;
+    while (cursor < value + count && *cursor == ' ') ++cursor;
+    if (ModuleFrameParser_ParseUnsigned(&cursor, value + count, 4U, &link) == MODULE_FRAME_COMPLETE &&
+        cursor == value + count && link == 0U) return EWM103_LINK_EVENT_MQTT_DISCONNECTED;
+  }
+  return EWM103_LINK_EVENT_NONE;
+}

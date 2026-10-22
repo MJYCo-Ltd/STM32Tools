@@ -157,76 +157,117 @@ void ModuleFrameParser_FeedRawLines(ModuleLineCollector *collector,
   FeedLines(collector, data, length, 1U);
 }
 
+ModuleFrameResult ModuleFrameParser_ParseLengthHeader(
+    const uint8_t *data, size_t length, const ModuleLengthFrameProtocolEx *protocol,
+    uint32_t *fields, size_t fields_capacity, ModuleFrameSpan *quoted,
+    const uint8_t **payload, size_t *payload_length)
+{
+  const uint8_t *cursor, *end;
+  size_t i, prefix_length;
+  ModuleFrameSpan parsed_quote = {0};
+  if (payload != NULL) *payload = NULL;
+  if (payload_length != NULL) *payload_length = 0U;
+  if (quoted != NULL) *quoted = (ModuleFrameSpan){0};
+  if (data == NULL || protocol == NULL || protocol->base.prefix == NULL ||
+      !protocol->base.field_count || protocol->base.payload_length_field >= protocol->base.field_count ||
+      protocol->quoted_field > protocol->base.field_count ||
+      protocol->quoted_field == protocol->base.payload_length_field + 1U ||
+      fields == NULL || fields_capacity < protocol->base.field_count ||
+      payload == NULL || payload_length == NULL) return MODULE_FRAME_INVALID;
+  prefix_length = strlen(protocol->base.prefix);
+  if (memcmp(data, protocol->base.prefix, length < prefix_length ? length : prefix_length))
+    return MODULE_FRAME_INVALID;
+  if (length < prefix_length) return MODULE_FRAME_INCOMPLETE;
+  cursor = data + prefix_length;
+  end = data + length;
+  /* Limit header parsing independently of the opaque body. */
+  if (protocol->maximum_header_length && length > protocol->maximum_header_length)
+    end = data + protocol->maximum_header_length;
+  while (cursor < end && (*cursor == ' ' || *cursor == '\t')) ++cursor;
+  for (i = 0U; i < protocol->base.field_count; ++i) {
+    if (protocol->quoted_field == i + 1U) {
+      const uint8_t *begin;
+      if (cursor == end) goto incomplete;
+      if (*cursor++ != '"') return MODULE_FRAME_INVALID;
+      begin = cursor;
+      while (cursor < end && *cursor != '"') {
+        if (*cursor == 0U || *cursor == '\r' || *cursor == '\n') return MODULE_FRAME_INVALID;
+        ++cursor;
+        if (protocol->maximum_quoted_length &&
+            (size_t)(cursor - begin) > protocol->maximum_quoted_length)
+          return MODULE_FRAME_INVALID;
+      }
+      if (cursor == end) goto incomplete;
+      if (cursor == begin) return MODULE_FRAME_INVALID;
+      parsed_quote = (ModuleFrameSpan){begin, (size_t)(cursor - begin)};
+      fields[i] = 0U;
+      ++cursor;
+    } else {
+      ModuleFrameResult result = ModuleFrameParser_ParseUnsigned(&cursor, end, UINT32_MAX, &fields[i]);
+      if (result == MODULE_FRAME_INVALID) return result;
+      if (result == MODULE_FRAME_INCOMPLETE) goto incomplete;
+    }
+    if (cursor == end) goto incomplete;
+    if (*cursor != protocol->base.field_separator &&
+        (i + 1U != protocol->base.field_count || !protocol->base.alternate_payload_separator ||
+         *cursor != protocol->base.alternate_payload_separator)) return MODULE_FRAME_INVALID;
+    ++cursor;
+  }
+  if (quoted != NULL) *quoted = parsed_quote;
+  *payload = cursor;
+  *payload_length = fields[protocol->base.payload_length_field];
+  return MODULE_FRAME_COMPLETE;
+incomplete:
+  return protocol->maximum_header_length && length >= protocol->maximum_header_length
+             ? MODULE_FRAME_INVALID : MODULE_FRAME_INCOMPLETE;
+}
+
+ModuleFrameResult ModuleFrameParser_ParseLengthFrameEx(
+    const uint8_t *data, size_t length, const ModuleLengthFrameProtocolEx *protocol,
+    uint32_t *fields, size_t fields_capacity, ModuleFrameSpan *quoted,
+    const uint8_t **payload, size_t *payload_length, size_t *consumed)
+{
+  const uint8_t *begin, *body;
+  size_t body_length, tail_consumed = 0U;
+  ModuleFrameResult result;
+  if (consumed != NULL) *consumed = 0U;
+  if (data == NULL || protocol == NULL || consumed == NULL ||
+      payload == NULL || payload_length == NULL ||
+      (protocol->base.parse_tail == NULL &&
+       (protocol->base.fixed_tail == NULL || !protocol->base.fixed_tail_length))) return MODULE_FRAME_INVALID;
+  begin = ModuleFrameParser_FindLinePrefix(data, length, protocol->base.prefix);
+  if (begin == NULL) return MODULE_FRAME_INCOMPLETE;
+  result = ModuleFrameParser_ParseLengthHeader(begin, length - (size_t)(begin - data),
+      protocol, fields, fields_capacity, quoted, &body, &body_length);
+  if (result != MODULE_FRAME_COMPLETE) return result;
+  *payload = body;
+  *payload_length = body_length;
+  if (body_length > protocol->base.maximum_payload_length) return MODULE_FRAME_INVALID;
+  if (body_length > length - (size_t)(body - data)) return MODULE_FRAME_INCOMPLETE;
+  body += body_length;
+  if (protocol->base.parse_tail != NULL) {
+    result = protocol->base.parse_tail(body, length - (size_t)(body - data), &tail_consumed);
+    if (result != MODULE_FRAME_COMPLETE) return result;
+  } else {
+    size_t available = length - (size_t)(body - data);
+    size_t compare = available < protocol->base.fixed_tail_length ? available : protocol->base.fixed_tail_length;
+    if (memcmp(body, protocol->base.fixed_tail, compare)) return MODULE_FRAME_INVALID;
+    if (available < protocol->base.fixed_tail_length) return MODULE_FRAME_INCOMPLETE;
+    tail_consumed = protocol->base.fixed_tail_length;
+  }
+  if (tail_consumed > length - (size_t)(body - data)) return MODULE_FRAME_INVALID;
+  *consumed = (size_t)(body - data) + tail_consumed;
+  return MODULE_FRAME_COMPLETE;
+}
+
 ModuleFrameResult ModuleFrameParser_ParseLengthFrame(
-    const uint8_t *data, size_t length,
-    const ModuleLengthFrameProtocol *protocol,
+    const uint8_t *data, size_t length, const ModuleLengthFrameProtocol *protocol,
     uint32_t *fields, size_t fields_capacity,
     const uint8_t **payload, size_t *payload_length, size_t *consumed)
 {
-  const uint8_t *cursor;
-  const uint8_t *end;
-  size_t field_index;
-  size_t body_length;
-  size_t tail_consumed = 0U;
-  ModuleFrameResult result;
-  if ((data == NULL) || (protocol == NULL) || (protocol->prefix == NULL) ||
-      (protocol->field_count == 0U) ||
-      (protocol->payload_length_field >= protocol->field_count) ||
-      (fields == NULL) || (fields_capacity < protocol->field_count) ||
-      (payload == NULL) || (payload_length == NULL) || (consumed == NULL) ||
-      ((protocol->parse_tail == NULL) &&
-       ((protocol->fixed_tail == NULL) ||
-        (protocol->fixed_tail_length == 0U)))) return MODULE_FRAME_INVALID;
-
-  cursor = ModuleFrameParser_FindLinePrefix(data, length, protocol->prefix);
-  if (cursor == NULL) return MODULE_FRAME_INCOMPLETE;
-  end = data + length;
-  cursor += strlen(protocol->prefix);
-  while ((cursor < end) && ((*cursor == (uint8_t)' ') ||
-                            (*cursor == (uint8_t)'\t'))) ++cursor;
-
-  for (field_index = 0U; field_index < protocol->field_count; ++field_index) {
-    result = ModuleFrameParser_ParseUnsigned(&cursor, end, UINT32_MAX,
-                                             &fields[field_index]);
-    if (result != MODULE_FRAME_COMPLETE) return result;
-    if (cursor >= end) return MODULE_FRAME_INCOMPLETE;
-    if (*cursor != protocol->field_separator) {
-      if ((field_index + 1U != protocol->field_count) ||
-          (protocol->alternate_payload_separator == 0U) ||
-          (*cursor != protocol->alternate_payload_separator)) {
-        return MODULE_FRAME_INVALID;
-      }
-    }
-    ++cursor;
-  }
-
-  body_length = (size_t)fields[protocol->payload_length_field];
-  if ((fields[protocol->payload_length_field] >
-       protocol->maximum_payload_length) ||
-      ((size_t)(end - cursor) < body_length)) {
-    return (fields[protocol->payload_length_field] >
-            protocol->maximum_payload_length)
-               ? MODULE_FRAME_INVALID
-               : MODULE_FRAME_INCOMPLETE;
-  }
-  *payload = cursor;
-  *payload_length = body_length;
-  cursor += body_length;
-  if (protocol->parse_tail != NULL) {
-    result = protocol->parse_tail(cursor, (size_t)(end - cursor),
-                                  &tail_consumed);
-    if (result != MODULE_FRAME_COMPLETE) return result;
-  } else {
-    if ((size_t)(end - cursor) < protocol->fixed_tail_length) {
-      return MODULE_FRAME_INCOMPLETE;
-    }
-    if (memcmp(cursor, protocol->fixed_tail,
-               protocol->fixed_tail_length) != 0) {
-      return MODULE_FRAME_INVALID;
-    }
-    tail_consumed = protocol->fixed_tail_length;
-  }
-  if (tail_consumed > (size_t)(end - cursor)) return MODULE_FRAME_INVALID;
-  *consumed = (size_t)(cursor - data) + tail_consumed;
-  return MODULE_FRAME_COMPLETE;
+  ModuleLengthFrameProtocolEx extended;
+  if (protocol == NULL) return MODULE_FRAME_INVALID;
+  extended = (ModuleLengthFrameProtocolEx){.base = *protocol};
+  return ModuleFrameParser_ParseLengthFrameEx(data, length, &extended, fields,
+      fields_capacity, NULL, payload, payload_length, consumed);
 }

@@ -704,6 +704,86 @@ static void TestTransactions(void)
         ML307_SSL_TRANSACTION_COMPLETE);
 }
 
+static void TestReadbackWithoutScratch(void)
+{
+  uint8_t certificate[ML307_SSL_CERTIFICATE_MAX];
+  uint8_t frame[ML307_SSL_CERTIFICATE_MAX + 64U];
+  uint8_t original[sizeof(frame)];
+  uint8_t scratch[sizeof(certificate)];
+  ML307_SslTransaction waiting, copy, borrowed;
+  size_t frame_length, payload_offset;
+  memset(certificate, 0xA5, sizeof(certificate));
+  /* Control-looking bytes and NUL inside the length-framed body are data. */
+  memcpy(certificate, "\0\r\n+MATREADY\r\nOK\r\nERROR\r\n", 26U);
+  ML307_SslTransactionInit(&waiting);
+  CHECK(ML307_SslTransactionStartCaInstall(&waiting, "root.pem", certificate,
+            sizeof(certificate)) == ML307_RESULT_OK);
+  CHECK(ML307_SslTransactionActionSent(&waiting) == ML307_RESULT_OK);
+  CHECK(ML307_SslTransactionConsumeResponse(&waiting,
+            (const uint8_t *)">", 1U, NULL, 0U) == ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslTransactionActionSent(&waiting) == ML307_RESULT_OK);
+  CHECK(ML307_SslTransactionConsumeResponse(&waiting,
+            (const uint8_t *)"OK\r\n", 4U, NULL, 0U) == ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslTransactionActionSent(&waiting) == ML307_RESULT_OK);
+  frame_length = BuildCertificateReadFrame(frame, sizeof(frame), certificate,
+                                            sizeof(certificate));
+  payload_offset = frame_length - sizeof(certificate) - 6U;
+  memcpy(original, frame, frame_length);
+  for (size_t cut = 0U; cut < frame_length; ++cut) {
+    CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, cut, NULL, 0U)
+          == ML307_SSL_PARSE_INCOMPLETE);
+    borrowed = waiting;
+    CHECK(ML307_SslTransactionConsumeResponse(&borrowed, frame, cut, NULL, 0U)
+          == ML307_SSL_PARSE_INCOMPLETE);
+    CHECK(memcmp(&borrowed, &waiting, sizeof(waiting)) == 0);
+  }
+  CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, frame_length,
+            NULL, 0U) == ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, frame_length,
+            NULL, 0U) == ML307_SSL_PARSE_COMPLETE);
+  CHECK(memcmp(frame, original, frame_length) == 0);
+  CHECK(memcmp(certificate, frame + payload_offset, sizeof(certificate)) == 0);
+  borrowed = waiting;
+  CHECK(ML307_SslTransactionConsumeResponse(&borrowed, frame, frame_length,
+            NULL, 0U) == ML307_SSL_PARSE_COMPLETE);
+  CHECK(ML307_SslTransactionGetStatus(&borrowed) == ML307_SSL_TRANSACTION_COMPLETE);
+  CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, frame_length,
+            NULL, 1U) == ML307_SSL_PARSE_BUFFER_TOO_SMALL);
+  CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, frame_length,
+            scratch, sizeof(scratch) - 1U) == ML307_SSL_PARSE_BUFFER_TOO_SMALL);
+  /* Each certificate byte must still be compared, including the final byte. */
+  for (size_t i = 0U; i < sizeof(certificate); ++i) {
+    frame[payload_offset + i] ^= 1U;
+    CHECK(ML307_SslTransactionInspectResponse(&waiting, frame, frame_length,
+              NULL, 0U) == ML307_SSL_PARSE_INVALID);
+    frame[payload_offset + i] ^= 1U;
+  }
+  /* Both modes must reject a shorter valid frame, a mismatching body, a bad
+   * final result and an external module reset, with the same failure state. */
+  for (unsigned int variant = 0U; variant < 4U; ++variant) {
+    size_t length = frame_length;
+    memcpy(frame, original, frame_length);
+    if (variant == 0U)
+      length = BuildCertificateReadFrame(frame, sizeof(frame), certificate,
+                                          sizeof(certificate) - 1U);
+    else if (variant == 1U) frame[payload_offset] ^= 1U;
+    else if (variant == 2U) frame[frame_length - 4U] = 'X';
+    else {
+      memcpy(frame + frame_length, "+MATREADY\r\n", 11U);
+      length += 11U;
+    }
+    copy = borrowed = waiting;
+    const ML307_SslParseResult expected = variant == 3U
+        ? ML307_SSL_PARSE_MODULE_RESET : ML307_SSL_PARSE_INVALID;
+    CHECK(ML307_SslTransactionConsumeResponse(&copy, frame, length,
+              scratch, sizeof(scratch)) == expected);
+    CHECK(ML307_SslTransactionConsumeResponse(&borrowed, frame, length,
+              NULL, 0U) == expected);
+    CHECK(ML307_SslTransactionGetStatus(&borrowed) == ML307_SSL_TRANSACTION_FAILED);
+    CHECK(memcmp(&borrowed, &copy, sizeof(copy)) == 0);
+  }
+}
+
 int main(void)
 {
   TestOptionCommands();
@@ -713,6 +793,7 @@ int main(void)
   TestCertificateRead();
   TestClock();
   TestTransactions();
+  TestReadbackWithoutScratch();
   if (failures != 0) {
     fprintf(stderr, "ml307_ssl_test: %d failure(s)\n", failures);
     return 1;

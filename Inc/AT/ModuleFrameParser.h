@@ -43,6 +43,36 @@ typedef struct {
   ModuleFrameTailParser parse_tail;
 } ModuleLengthFrameProtocol;
 
+/* Separate extension keeps positional numeric initializers source compatible,
+ * including projects that enable -Werror=missing-field-initializers. */
+typedef struct {
+  ModuleLengthFrameProtocol base;
+  /* Optional one-based quoted field index; zero preserves numeric protocols. */
+  uint8_t quoted_field;
+  size_t maximum_quoted_length;
+  size_t maximum_header_length;
+} ModuleLengthFrameProtocolEx;
+
+typedef struct {
+  const uint8_t *data;
+  size_t length;
+} ModuleFrameSpan;
+
+/* Header-only parse at offset zero. On COMPLETE the body boundary and its
+ * declared length are known, even if larger than maximum_payload_length.
+ * No body bytes are examined. Outputs are cleared until a valid header exists.
+ * This allows collectors to drain oversized bodies without interpreting them.
+ */
+ModuleFrameResult ModuleFrameParser_ParseLengthHeader(
+    const uint8_t *data, size_t length, const ModuleLengthFrameProtocolEx *protocol,
+    uint32_t *fields, size_t fields_capacity, ModuleFrameSpan *quoted,
+    const uint8_t **payload, size_t *payload_length);
+
+ModuleFrameResult ModuleFrameParser_ParseLengthFrameEx(
+    const uint8_t *data, size_t length, const ModuleLengthFrameProtocolEx *protocol,
+    uint32_t *fields, size_t fields_capacity, ModuleFrameSpan *quoted,
+    const uint8_t **payload, size_t *payload_length, size_t *consumed);
+
 uint8_t ModuleFrameParser_NextLine(const uint8_t *data, size_t length,
                                    size_t *offset, const uint8_t **line,
                                    size_t *line_length);

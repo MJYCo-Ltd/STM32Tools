@@ -179,12 +179,18 @@ ML307_Result ML307_SslTransactionGetAction(
 /** Commit one successful adapter transmit; duplicate calls are rejected. */
 ML307_Result ML307_SslTransactionActionSent(
     ML307_SslTransaction *transaction);
-/** Inspect current buffered response without advancing transaction state. */
+/** Inspect current buffered response without advancing transaction state.
+ * Pass NULL/0 for certificate_scratch/certificate_capacity to compare the
+ * fully validated readback directly in response without making a copy.
+ * response and the expected certificate must remain valid and unchanged
+ * during the call; no pointer into response is retained. A supplied scratch
+ * buffer retains the existing copy-and-compare behavior. */
 ML307_SslParseResult ML307_SslTransactionInspectResponse(
     const ML307_SslTransaction *transaction, const uint8_t *response,
     size_t response_length, uint8_t *certificate_scratch,
     size_t certificate_capacity);
-/** Validate a complete response and advance to the next model-defined step. */
+/** Validate a complete response and advance to the next model-defined step.
+ * The scratch/response lifetime contract is the same as InspectResponse. */
 ML307_SslParseResult ML307_SslTransactionConsumeResponse(
     ML307_SslTransaction *transaction, const uint8_t *response,
     size_t response_length, uint8_t *certificate_scratch,
