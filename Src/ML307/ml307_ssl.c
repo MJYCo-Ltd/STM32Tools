@@ -441,9 +441,11 @@ static uint8_t SslControlHasModuleReadyBeforeCertificateFrame(
   return SslControlHasModuleReady(data, control_length);
 }
 
-ML307_SslParseResult ML307_SslParseCertificateRead(
-    const uint8_t *response, size_t length, uint8_t *certificate,
-    size_t certificate_capacity, size_t *certificate_length)
+/* Borrow only a fully validated payload for the duration of this call chain.
+ * Neither the response nor the expected certificate is modified. */
+static ML307_SslParseResult SslCertificateReadView(
+    const uint8_t *response, size_t length, const uint8_t **certificate,
+    size_t *certificate_length)
 {
   static const ModuleLengthFrameProtocol protocol = {
       "+MSSLCERTRD:", 1U, 0U, ',', 0U, ML307_SSL_CERTIFICATE_MAX,
@@ -507,6 +509,22 @@ ML307_SslParseResult ML307_SslParseCertificateRead(
   if (result == MODULE_FRAME_INCOMPLETE) return ML307_SSL_PARSE_INCOMPLETE;
   if (result != MODULE_FRAME_COMPLETE || consumed != length ||
       payload_length == 0U) return ML307_SSL_PARSE_INVALID;
+  *certificate = payload;
+  *certificate_length = payload_length;
+  return ML307_SSL_PARSE_COMPLETE;
+}
+
+ML307_SslParseResult ML307_SslParseCertificateRead(
+    const uint8_t *response, size_t length, uint8_t *certificate,
+    size_t certificate_capacity, size_t *certificate_length)
+{
+  const uint8_t *payload;
+  size_t payload_length;
+  ML307_SslParseResult result;
+  if (certificate == NULL || certificate_length == NULL)
+    return ML307_SSL_PARSE_INVALID;
+  result = SslCertificateReadView(response, length, &payload, &payload_length);
+  if (result != ML307_SSL_PARSE_COMPLETE) return result;
   if (payload_length > certificate_capacity)
     return ML307_SSL_PARSE_BUFFER_TOO_SMALL;
   memcpy(certificate, payload, payload_length);
@@ -908,6 +926,7 @@ ML307_SslParseResult ML307_SslTransactionInspectResponse(
   ML307_SslOptionValue option_value;
   ML307_SslCertificateNames names;
   ML307_ModuleClock clock;
+  const uint8_t *certificate_view;
   size_t certificate_length = 0U;
   uint8_t mqtt_enable = 0U;
   uint8_t mqtt_ssl_id = 0U;
@@ -928,15 +947,24 @@ ML307_SslParseResult ML307_SslTransactionInspectResponse(
   case SSL_TX_WAIT_MQTT_SET:
     return ML307_SslParseFinalResult(response, response_length);
   case SSL_TX_WAIT_CERT_READ:
-    if (certificate_scratch == NULL ||
-        certificate_capacity < transaction->certificate_length)
+    /* NULL/0 explicitly requests comparison in the immutable response buffer.
+     * Preserve the copying API for callers that still need a readback copy. */
+    if ((certificate_scratch == NULL && certificate_capacity != 0U) ||
+        (certificate_scratch != NULL &&
+         certificate_capacity < transaction->certificate_length))
       return ML307_SSL_PARSE_BUFFER_TOO_SMALL;
-    result = ML307_SslParseCertificateRead(
-        response, response_length, certificate_scratch, certificate_capacity,
-        &certificate_length);
+    if (certificate_scratch != NULL) {
+      result = ML307_SslParseCertificateRead(
+          response, response_length, certificate_scratch, certificate_capacity,
+          &certificate_length);
+      certificate_view = certificate_scratch;
+    } else {
+      result = SslCertificateReadView(response, response_length,
+                                      &certificate_view, &certificate_length);
+    }
     if (result == ML307_SSL_PARSE_COMPLETE &&
         (certificate_length != transaction->certificate_length ||
-         memcmp(certificate_scratch, transaction->certificate,
+         memcmp(certificate_view, transaction->certificate,
                 certificate_length) != 0))
       return ML307_SSL_PARSE_INVALID;
     return result;

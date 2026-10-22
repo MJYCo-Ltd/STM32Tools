@@ -179,3 +179,7 @@ target_compile_options(strict_snapshot_recovery_test PRIVATE
 add_test(NAME strict_snapshot_recovery_test COMMAND strict_snapshot_recovery_test)
 stm32tools_finalize_host_tests()
 
+
+target_sources(mqtt_line_collector_test PRIVATE ../Src/EWM103/ewm103_parser.c ../Src/AT/at_codec.c
+  ../Src/EWM103/ewm103.c ../Src/EWM103/ewm103_at.c)
+target_compile_options(mqtt_line_collector_test PRIVATE -Wall -Wextra -Werror -pedantic)

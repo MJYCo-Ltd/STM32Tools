@@ -45,6 +45,47 @@ typedef enum {
 #define COMM_ADAPTER_ID_NONE 0U
 #define COMM_ADAPTER_REGISTRY_MAX_BITMASK 8U
 
+typedef enum {
+  COMM_ADAPTER_EVENT_MESSAGE = 0,
+  COMM_ADAPTER_EVENT_PUBLISH_COMPLETE,
+  COMM_ADAPTER_EVENT_DIAGNOSTIC,
+  COMM_ADAPTER_EVENT_SIGNAL,
+  COMM_ADAPTER_EVENT_PROVISION
+} CommAdapterEventType;
+
+typedef enum {
+  COMM_ADAPTER_DIAGNOSTIC_RESULT = 0,
+  COMM_ADAPTER_DIAGNOSTIC_ERROR,
+  COMM_ADAPTER_DIAGNOSTIC_MODEM_INFO,
+  COMM_ADAPTER_DIAGNOSTIC_REGISTRATION
+} CommAdapterDiagnostic;
+
+typedef struct {
+  CommAdapterEventType type;
+  union {
+    /* Writable borrowed spans; data[length] is an accessible framing byte.
+     * Binding may temporarily terminate and MUST restore it before returning. */
+    struct { uint8_t *topic; size_t topic_length; uint8_t *payload; size_t payload_length; } message;
+    struct { uint8_t ok; uint8_t managed; } publish;
+    struct { CommAdapterDiagnostic kind; const char *command; const char *detail; } diagnostic;
+    struct { int dbm; uint8_t queried; const char *command; const char *detail; } signal;
+    struct { uint8_t finished; uint32_t cookie; const char *detail; } provision;
+  } value;
+} CommAdapterEvent;
+
+/* Injected by the product registry before init; NetTask synchronous only.
+ * No pointer in an event may be retained. Return is consumed for publish
+ * completion, or the product-owned cookie for a provisioning begin. */
+typedef struct {
+  uint32_t (*report)(CommAdapterId source, const CommAdapterEvent *event);
+} CommAdapterEvents;
+
+static inline uint32_t CommAdapter_Report(const CommAdapterEvents *events,
+    CommAdapterId source, const CommAdapterEvent *event)
+{
+  return events != NULL && events->report != NULL ? events->report(source, event) : 0U;
+}
+
 typedef struct {
   CommAdapterId id;
   const char *name;
