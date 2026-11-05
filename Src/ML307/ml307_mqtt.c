@@ -556,6 +556,29 @@ ML307_Result ML307_MqttParseUrc(const char *raw, ML307_MqttEvent *event)
   return ML307_RESULT_OK;
 }
 
+const ModuleLengthFrameProtocolEx ML307_MqttReceiveProtocol = {
+  .base={.prefix="+MQTTURC: \"publish\",",.field_count=5U,.payload_length_field=4U,
+      .field_separator=',',.maximum_payload_length=ML307_PAYLOAD_SIZE-1U,
+      .fixed_tail="\r\n",.fixed_tail_length=2U},
+  .quoted_field=3U,.maximum_quoted_length=ML307_TOPIC_SIZE-1U,.maximum_header_length=176U
+};
+
+ModuleFrameResult ML307_MqttParseReceive(const uint8_t *frame,size_t length,ML307_MqttMessage *message)
+{
+  uint32_t fields[5]; ModuleFrameSpan topic; const uint8_t *body;
+  size_t count,consumed;
+  if (!message) return MODULE_FRAME_INVALID;
+  memset(message,0,sizeof(*message));
+  const ModuleFrameResult result=ModuleFrameParser_ParseLengthFrameEx(frame,length,
+      &ML307_MqttReceiveProtocol,fields,5U,&topic,&body,&count,&consumed);
+  if (result!=MODULE_FRAME_COMPLETE) return result;
+  if (consumed!=length || fields[0]>5U || fields[1]>UINT16_MAX || fields[3]!=count)
+    return MODULE_FRAME_INVALID;
+  *message=(ML307_MqttMessage){.connect_id=fields[0],.message_id=fields[1],
+      .topic=topic,.payload={body,count}};
+  return MODULE_FRAME_COMPLETE;
+}
+
 /* Audit-branch API retained as an alias to the single checked text parser. */
 ML307_Result ML307_MqttParseTextPublish(const uint8_t *line, size_t length,
                                        ML307_MqttEvent *event)

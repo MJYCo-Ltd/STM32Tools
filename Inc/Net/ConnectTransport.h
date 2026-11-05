@@ -40,6 +40,9 @@ typedef struct {
 
 typedef uint8_t (*ConnectDownloadStart)(const ConnectDownloadRequest *request);
 typedef uint8_t (*ConnectDownloadGetEvent)(ConnectDownloadEvent *event);
+/* accepted=0 rejects pending data or cancels an active reception. A successful
+ * request is followed by FAILED with actual release evidence; it never proves
+ * the command channel reusable. accepted=1 still requires pending DATA. */
 typedef uint8_t (*ConnectDownloadAcknowledge)(uint8_t accepted);
 
 typedef struct {

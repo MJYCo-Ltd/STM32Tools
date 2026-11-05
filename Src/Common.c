@@ -94,6 +94,17 @@ uint16_t ReadLE16(const uint8_t *data)
   return ((uint16_t)data[1] << 8) | data[0];
 }
 
+uint32_t ReadLE32(const uint8_t *data)
+{
+  return (uint32_t)ReadLE16(data) | ((uint32_t)ReadLE16(data+2U) << 16U);
+}
+
+void WriteLE32(uint8_t *data, uint32_t value)
+{
+  WriteLE16(data,(uint16_t)value);
+  WriteLE16(data+2U,(uint16_t)(value >> 16U));
+}
+
 void WriteBE16(uint8_t *data, uint16_t value)
 {
   data[0] = (uint8_t)(value >> 8);

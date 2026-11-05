@@ -11,6 +11,8 @@
 #define STM32TOOLS_ML307_MQTT_H
 
 #include <stddef.h>
+#include <AT/ModuleFrameParser.h>
+
 #include <stdint.h>
 
 #include <ML307/ml307.h>
@@ -18,6 +20,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct {
+  uint32_t connect_id, message_id;
+  ModuleFrameSpan topic, payload;
+} ML307_MqttMessage;
+extern const ModuleLengthFrameProtocolEx ML307_MqttReceiveProtocol;
+ModuleFrameResult ML307_MqttParseReceive(const uint8_t *frame,size_t length,ML307_MqttMessage *message);
 
 typedef enum {
   ML307_MQTT_EVENT_NONE = 0,

@@ -107,7 +107,8 @@ _stm32tools_component(HttpRange
     Src/Protocol/HttpRange.c
 )
 
-_stm32tools_component(Comm)
+_stm32tools_component(Comm Src/Net/ConnectTransfer.c)
+target_link_libraries(stm32tools_Comm INTERFACE STM32Tools::Core)
 
 _stm32tools_component(ML307
     Src/ML307/ml307.c

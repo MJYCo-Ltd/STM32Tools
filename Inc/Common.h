@@ -23,9 +23,11 @@ const uint8_t *FindBytes(const uint8_t *data, size_t length, const char *needle)
 uint16_t ReadBE16(const uint8_t *data);
 uint32_t ReadBE32(const uint8_t *data);
 uint16_t ReadLE16(const uint8_t *data);
+uint32_t ReadLE32(const uint8_t *data);
 void WriteBE16(uint8_t *data, uint16_t value);
 void WriteBE32(uint8_t *data, uint32_t value);
 void WriteLE16(uint8_t *data, uint16_t value);
+void WriteLE32(uint8_t *data, uint32_t value);
 
 /** Return an aligned pseudo-random value in [start, end). */
 uint32_t Rand_range(uint32_t start, uint32_t end, uint32_t align);
