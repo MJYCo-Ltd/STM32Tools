@@ -19,7 +19,7 @@ typedef struct {
   DurableRecordQueue queue;
   uint32_t depth, maximum_depth, begins, ends, reads, writes, erases;
   uint32_t fail_write, fail_read;
-  uint8_t reject_lock, fail_ack_read, partial_erase;
+  uint8_t reject_lock, fail_ack_read, partial_erase, fail_erase_read;
 } Environment;
 static Environment a, b;
 static uint32_t record[16], out[16];
@@ -64,6 +64,7 @@ static Storage_Status Erase(void *ctx, uint32_t address)
   assert(e->depth && address>=SECTOR && address%SECTOR==0U && address<=MEDIA_SIZE-SECTOR);
   ++e->erases;
   memset(e->flash+address,255,e->partial_erase ? SECTOR/2U : SECTOR);
+  if (e->fail_erase_read) e->fail_read=address;
   return e->partial_erase ? STORAGE_ERR_IO : STORAGE_OK;
 }
 static Storage_Status Init(Environment *e)
@@ -150,6 +151,7 @@ static void TestUncertainAck(void)
   Append(&a,192U); /* evict first sector from both detailed caches */
   assert(Peek(&a)==STORAGE_OK && out[2]==65U);
   const uint32_t erases=a.erases, writes=a.writes;
+  assert(DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_ERR_NO_SPACE && a.erases==erases);
   assert(DurableRecordQueue_ReclaimOne(&a.queue)==STORAGE_ERR_NO_SPACE && a.erases==erases);
   assert(DurableRecordQueue_Acknowledge(&a.queue,epoch,sequence+1U)==STORAGE_ERR_NOT_FOUND);
   assert(DurableRecordQueue_Acknowledge(&a.queue,epoch,sequence)==STORAGE_OK && a.writes==writes);
@@ -157,9 +159,41 @@ static void TestUncertainAck(void)
   assert(Peek(&a)==STORAGE_OK && out[2]==65U);
   assert(!a.depth && a.begins==a.ends);
 }
+
+static uint8_t DenyErase(void) { assert(a.depth); return 0U; }
+static void TestSpareWatermark(void)
+{
+  Reset(&a); Append(&a,192U);
+  for (unsigned i=0U;i<128U;++i) Ack(&a);
+  a.flash[DATA_PHYSICAL+SECTOR+12U]^=1U; /* Committed CRC failure in ACKed sector. */
+  assert(Init(&a)==STORAGE_OK && a.queue.free_slots==64U);
+  assert(DurableRecordQueue_ReclaimOne(&a.queue)==STORAGE_OK && a.erases==0U);
+  assert(DurableRecordQueue_PrepareOne(&a.queue,DenyErase,0U)==STORAGE_OK && a.erases==0U);
+  assert(DurableRecordQueue_PrepareOne(&a.queue,DenyErase,1U)==STORAGE_ERR_BUSY);
+  assert(a.queue.free_slots==64U && a.erases==0U);
+  assert(DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_OK);
+  assert(a.queue.free_slots==128U && a.erases==1U);
+  assert(DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_OK && a.erases==1U);
+  assert(Peek(&a)==STORAGE_OK && out[2]==129U);
+  Append(&a,128U);
+  assert(DurableRecordQueue_Append(&a.queue,record)==STORAGE_ERR_NO_SPACE);
+  assert(DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_ERR_NO_SPACE && a.erases==1U);
+  assert(a.flash[DATA_PHYSICAL+SECTOR]!=0xFFU);
+  assert(Peek(&a)==STORAGE_OK && out[2]==129U);
+
+  Reset(&a); Append(&a,256U);
+  for (unsigned i=0U;i<64U;++i) Ack(&a);
+  a.fail_erase_read=1U;
+  assert(DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_ERR_IO);
+  a.fail_erase_read=0U; a.fail_read=UINT32_MAX;
+  assert(a.queue.free_slots==0U && DurableRecordQueue_PrepareOne(&a.queue,NULL,1U)==STORAGE_ERR_NO_SPACE);
+  assert(Init(&a)==STORAGE_OK && a.queue.free_slots==64U && a.erases==1U);
+  Append(&a,64U);
+  assert(DurableRecordQueue_Append(&a.queue,record)==STORAGE_ERR_NO_SPACE);
+}
 int main(void)
 {
-  TestPortAndLegacy(); TestFullAndPartial(); TestUncertainAck();
-  puts("durable core: injected partition/recursive transaction, real epoch banks, legacy ABI, faults and ACK pin PASS");
+  TestPortAndLegacy(); TestFullAndPartial(); TestUncertainAck(); TestSpareWatermark();
+  puts("durable core: real epoch banks, legacy ABI, spare watermark, faults and ACK pin PASS");
   return 0;
 }

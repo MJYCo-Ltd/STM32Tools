@@ -17,6 +17,9 @@
 #define SPI_TIMEOUT_MS        100U
 #define BUSY_TIMEOUT_MS       5000U
 #define CHIP_ERASE_TIMEOUT_MS 60000U
+/* 128 two-byte status exchanges take at least 328 us on the board's 6.25 MHz
+ * SPI bus. Keep a short fast path for page program, then wait between polls. */
+#define PROGRAM_FAST_POLLS    128U
 
 static void CsLow(const W25Q_Device *dev)
 {
@@ -49,17 +52,6 @@ static NorFlash_Status SpiTxRx(W25Q_Device *dev, uint8_t *tx, uint8_t *rx,
   return (status == HAL_OK) ? NOR_FLASH_OK : NOR_FLASH_ERR_IO;
 }
 
-static NorFlash_Status WriteEnable(W25Q_Device *dev)
-{
-  uint8_t command = CMD_WRITE_ENABLE;
-  NorFlash_Status status;
-
-  CsLow(dev);
-  status = SpiTxRx(dev, &command, NULL, 1U);
-  CsHigh(dev);
-  return status;
-}
-
 static NorFlash_Status ReadStatus1(W25Q_Device *dev, uint8_t *status1)
 {
   uint8_t tx[2] = {CMD_READ_STATUS1, 0xFFU};
@@ -75,10 +67,12 @@ static NorFlash_Status ReadStatus1(W25Q_Device *dev, uint8_t *status1)
   return status;
 }
 
-static NorFlash_Status WaitBusy(W25Q_Device *dev, uint32_t timeout_ms)
+static NorFlash_Status WaitBusy(W25Q_Device *dev, uint32_t timeout_ms,
+                                uint8_t fast_polls)
 {
   const uint32_t start = HAL_GetTick();
   uint32_t last_poll = start;
+  uint8_t remaining = fast_polls;
   uint8_t status1;
   NorFlash_Status status;
 
@@ -88,18 +82,46 @@ static NorFlash_Status WaitBusy(W25Q_Device *dev, uint32_t timeout_ms)
       return status;
     }
     if ((status1 & SR1_BUSY) == 0U) {
+      dev->needs_ready = 0U;
       return NOR_FLASH_OK;
     }
-    if ((HAL_GetTick() - start) >= timeout_ms) {
+    const uint32_t now = HAL_GetTick();
+    if ((now - start) >= timeout_ms) {
       return NOR_FLASH_ERR_TIMEOUT;
     }
     /* StorageBackend poll only runs before erase; BUSY wait can last seconds. */
     if ((dev->wait_poll != NULL) &&
-        ((uint32_t)(HAL_GetTick() - last_poll) >= 200U)) {
+        ((uint32_t)(now - last_poll) >= 200U)) {
       dev->wait_poll();
       last_poll = HAL_GetTick();
     }
+    if (dev->wait_yield != NULL && --remaining == 0U) {
+      if (dev->wait_yield()) {
+        if (HAL_GetTick() - start >= timeout_ms) return NOR_FLASH_ERR_TIMEOUT;
+        remaining = 1U;
+      } else {
+        remaining = fast_polls;
+      }
+    }
   }
+}
+
+static NorFlash_Status EnsureReady(W25Q_Device *dev)
+{
+  /* A timed-out transfer may have started a mutation. An ignored command
+   * or all-FF read during that BUSY interval cannot be used as evidence. */
+  return dev->needs_ready ? WaitBusy(dev, BUSY_TIMEOUT_MS, 1U) : NOR_FLASH_OK;
+}
+
+static NorFlash_Status WriteEnable(W25Q_Device *dev)
+{
+  uint8_t command = CMD_WRITE_ENABLE;
+  NorFlash_Status status = EnsureReady(dev);
+  if (status != NOR_FLASH_OK) return status;
+  CsLow(dev);
+  status = SpiTxRx(dev, &command, NULL, 1U);
+  CsHigh(dev);
+  return status;
 }
 
 static NorFlash_Status SpiRead(W25Q_Device *dev, uint32_t address,
@@ -107,7 +129,8 @@ static NorFlash_Status SpiRead(W25Q_Device *dev, uint32_t address,
 {
   uint8_t header[4];
   uint32_t done = 0U;
-  NorFlash_Status status;
+  NorFlash_Status status = EnsureReady(dev);
+  if (status != NOR_FLASH_OK) return status;
 
   header[0] = CMD_READ_DATA;
   header[1] = (uint8_t)(address >> 16);
@@ -144,13 +167,15 @@ static NorFlash_Status SpiProgramPage(W25Q_Device *dev, uint32_t address,
   header[2] = (uint8_t)(address >> 8);
   header[3] = (uint8_t)address;
 
+  dev->needs_ready = 1U;
   CsLow(dev);
   status = SpiTxRx(dev, header, NULL, sizeof(header));
   if (status == NOR_FLASH_OK) {
     status = SpiTxRx(dev, (uint8_t *)data, NULL, (uint16_t)length);
   }
   CsHigh(dev);
-  return (status == NOR_FLASH_OK) ? WaitBusy(dev, BUSY_TIMEOUT_MS) : status;
+  return (status == NOR_FLASH_OK) ?
+      WaitBusy(dev, BUSY_TIMEOUT_MS, PROGRAM_FAST_POLLS) : status;
 }
 
 static NorFlash_Status SpiErase(W25Q_Device *dev, NorFlash_EraseType type,
@@ -176,10 +201,11 @@ static NorFlash_Status SpiErase(W25Q_Device *dev, NorFlash_EraseType type,
   header[2] = (uint8_t)(address >> 8);
   header[3] = (uint8_t)address;
 
+  dev->needs_ready = 1U;
   CsLow(dev);
   status = SpiTxRx(dev, header, NULL, sizeof(header));
   CsHigh(dev);
-  return (status == NOR_FLASH_OK) ? WaitBusy(dev, BUSY_TIMEOUT_MS) : status;
+  return (status == NOR_FLASH_OK) ? WaitBusy(dev, BUSY_TIMEOUT_MS, 1U) : status;
 }
 
 static NorFlash_Status SpiEraseChip(W25Q_Device *dev)
@@ -190,10 +216,11 @@ static NorFlash_Status SpiEraseChip(W25Q_Device *dev)
   if (status != NOR_FLASH_OK) {
     return status;
   }
+  dev->needs_ready = 1U;
   CsLow(dev);
   status = SpiTxRx(dev, &command, NULL, 1U);
   CsHigh(dev);
-  return (status == NOR_FLASH_OK) ? WaitBusy(dev, CHIP_ERASE_TIMEOUT_MS)
+  return (status == NOR_FLASH_OK) ? WaitBusy(dev, CHIP_ERASE_TIMEOUT_MS, 1U)
                                   : status;
 }
 
@@ -220,7 +247,7 @@ uint32_t W25Q_ReadID(W25Q_Device *dev)
   uint8_t rx[4] = {0U, 0U, 0U, 0U};
   NorFlash_Status status;
 
-  if ((dev == NULL) || (dev->hspi == NULL)) {
+  if ((dev == NULL) || (dev->hspi == NULL) || EnsureReady(dev) != NOR_FLASH_OK) {
     return 0U;
   }
   CsLow(dev);

@@ -149,7 +149,85 @@ Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out)
   return STORAGE_OK;
 }
 
-Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
+static Storage_Status ValidateActive(const DualBankStore *store, uint32_t offset)
+{
+  StorageRecordLoc latest;
+  const Storage_Status status = DualBankStore_FindBank(store, offset, &latest, NULL);
+  if (status == STORAGE_OK)
+    return store->have_snapshot && latest.sequence == store->next_sequence - 1U &&
+        latest.payload_length == store->payload_size ? STORAGE_OK : STORAGE_ERR_STATE;
+  if (status == STORAGE_ERR_NOT_FOUND)
+    return store->have_snapshot ? STORAGE_ERR_STATE : STORAGE_OK;
+  return status;
+}
+
+static uint8_t ValidPreparation(const DualBankStore *store, uint32_t prepared)
+{
+  const uint32_t a = store->bank_a_off;
+  const uint32_t b = store->bank_b_off;
+  const uint32_t size = store->bank_size;
+  if (!store->strict_recovery || store->map->parts == NULL ||
+      store->partition >= store->map->part_count) return 0U;
+  const uint32_t end = store->map->parts[store->partition].size;
+  return a <= end && b <= end && size <= end - a && size <= end - b &&
+      size != 0U && (a | b | size | prepared) % NOR_FLASH_SECTOR_SIZE == 0U &&
+      prepared <= size && (a < b ? b - a : a - b) >= size;
+}
+
+Storage_Status DualBankStore_PrepareStep(DualBankStore *store, uint32_t *prepared,
+                                       StorageEraseAllowedFn allowed)
+{
+  if (store == NULL || store->map == NULL || prepared == NULL ||
+      store->transaction.begin == NULL || store->transaction.end == NULL ||
+      !ValidPreparation(store, *prepared)) return STORAGE_ERR_PARAM;
+  if (!store->have_snapshot || *prepared == store->bank_size) return STORAGE_OK;
+  Storage_Status status = store->transaction.begin(store->transaction.ctx);
+  if (status != STORAGE_OK) return status;
+  /* have_snapshot comes from strict Init or a verified prepared Save.
+   * Active and inactive cannot change outside this owner. */
+  const uint32_t inactive = store->active_bank ? store->bank_a_off : store->bank_b_off;
+  status = StorageBank_PrepareSector(store->map, store->partition,
+                                    inactive + *prepared, allowed);
+  if (status == STORAGE_OK) *prepared += NOR_FLASH_SECTOR_SIZE;
+  store->transaction.end(store->transaction.ctx);
+  return status;
+}
+
+static Storage_Status VerifyWritten(const DualBankStore *store, uint32_t offset,
+                                    uint32_t bank_end)
+{
+  StorageRecordLoc written;
+  const Storage_Status status = StorageRecord_ValidateAt(
+      store->map, store->partition, offset, bank_end, &written);
+  if (status != STORAGE_OK) return status;
+  return written.sequence == store->next_sequence && written.payload_length == store->payload_size
+      ? STORAGE_OK : STORAGE_ERR_STATE;
+}
+
+static Storage_Status SwitchPrepared(const DualBankStore *store, uint32_t dest,
+                                     uint32_t old, const void *payload,
+                                     uint32_t *prepared)
+{
+  const uint32_t blank = *prepared;
+  *prepared = 0U;
+  for (uint32_t pos = blank; pos < store->bank_size; pos += NOR_FLASH_SECTOR_SIZE) {
+    Storage_Status status = StorageBank_PrepareSector(store->map, store->partition,
+                                                      dest + pos, NULL);
+    if (status != STORAGE_OK) return status;
+  }
+  Storage_Status status = StorageRecord_WriteAt(store->map, store->partition, dest,
+      dest + store->bank_size, store->next_sequence, payload, store->payload_size);
+  if (status != STORAGE_OK) return status;
+  status = VerifyWritten(store, dest, dest + store->bank_size);
+  if (status != STORAGE_OK) return status;
+  /* Retire the head synchronously. The strict scanner stops at the verified
+   * blank head, so a later interrupted tail erase cannot resurrect a record. */
+  status = StorageBank_PrepareSector(store->map, store->partition, old, NULL);
+  if (status == STORAGE_OK) *prepared = NOR_FLASH_SECTOR_SIZE;
+  return status;
+}
+
+static Storage_Status Save(DualBankStore *store, const void *payload, uint32_t *prepared)
 {
   Storage_Status status;
   uint32_t active_offset;
@@ -160,6 +238,9 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
       (store->transaction.begin == NULL) || (store->transaction.end == NULL)) {
     return STORAGE_ERR_PARAM;
   }
+  if (prepared != NULL &&
+      (!ValidPreparation(store, *prepared) || store->valid == NULL ||
+       !store->valid(payload))) return STORAGE_ERR_PARAM;
   active_offset =
       (store->active_bank == 0U) ? store->bank_a_off : store->bank_b_off;
   inactive_offset =
@@ -169,13 +250,8 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
     return status;
   }
   if (store->strict_recovery) {
-    StorageRecordLoc latest;
-    status = DualBankStore_FindBank(store, active_offset, &latest, NULL);
-    if (status == STORAGE_OK && (!store->have_snapshot ||
-        latest.sequence != store->next_sequence - 1U ||
-        latest.payload_length != store->payload_size)) status = STORAGE_ERR_STATE;
-    if (status == STORAGE_ERR_NOT_FOUND && store->have_snapshot) status = STORAGE_ERR_STATE;
-    if (status != STORAGE_OK && status != STORAGE_ERR_NOT_FOUND) {
+    status = ValidateActive(store, active_offset);
+    if (status != STORAGE_OK) {
       store->transaction.end(store->transaction.ctx);
       return status;
     }
@@ -184,13 +260,16 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
       store->map, store->partition, active_offset, store->bank_size,
       store->next_sequence, payload, store->payload_size, &written_offset);
   if (status == STORAGE_ERR_NO_SPACE) {
-    status = StorageBank_Switch(
+    status = prepared != NULL ? SwitchPrepared(store, inactive_offset, active_offset,
+        payload, prepared) : StorageBank_Switch(
         store->map, store->partition, inactive_offset, store->bank_size,
         active_offset, store->bank_size, store->next_sequence, payload,
         store->payload_size, 0U, 0U);
     if (status == STORAGE_OK) {
       store->active_bank = (store->active_bank == 0U) ? 1U : 0U;
     }
+  } else if (status == STORAGE_OK && prepared != NULL) {
+    status = VerifyWritten(store, written_offset, active_offset + store->bank_size);
   }
   store->transaction.end(store->transaction.ctx);
   if (status == STORAGE_OK) {
@@ -198,5 +277,16 @@ Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
     store->have_snapshot = 1U;
   }
   return status;
+}
+
+Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload)
+{
+  return Save(store, payload, NULL);
+}
+
+Storage_Status DualBankStore_SavePrepared(DualBankStore *store, const void *payload,
+                                         uint32_t *prepared)
+{
+  return prepared != NULL ? Save(store, payload, prepared) : STORAGE_ERR_PARAM;
 }
 

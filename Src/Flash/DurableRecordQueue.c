@@ -33,7 +33,7 @@ static Storage_Status Begin(DurableRecordQueue *q)
 } while (0)
 
 enum { FREE, PENDING, USED, CORRUPT };
-enum { HAS_FREE = 1U, HAS_PENDING = 2U, HAS_CORRUPT = 4U, QUARANTINED = 8U };
+enum { HAS_FREE = 1U, HAS_PENDING = 2U, HAS_CORRUPT = 4U, QUARANTINED = 8U, HAS_USED = 16U };
 static uint8_t CacheState(const DurableSectorCache *c, uint32_t slot)
 { return (c->states[(slot % SECTOR_SLOTS) / 4U] >> ((slot % 4U) * 2U)) & 3U; }
 static void CacheSet(DurableSectorCache *c, uint32_t slot, uint8_t state)
@@ -50,6 +50,7 @@ static uint8_t Summary(const DurableSectorCache *c)
     if (state == FREE) flags |= HAS_FREE;
     if (state == PENDING) flags |= HAS_PENDING;
     if (state == CORRUPT) flags |= HAS_CORRUPT;
+    if (state == USED) flags |= HAS_USED;
   }
   return flags;
 }
@@ -186,6 +187,7 @@ static Storage_Status InitLocked(DurableRecordQueue *q)
     if (state == FREE) { *summary |= HAS_FREE; ++q->free_slots; }
     if (state == PENDING) *summary |= HAS_PENDING;
     if (state == CORRUPT) *summary |= HAS_CORRUPT;
+    if (state == USED) *summary |= HAS_USED;
     if (Valid(q, &r)) {
       if (r.epoch > max_epoch) max_epoch = r.epoch;
     } else if (state != FREE && q->config->report_error != NULL) {
@@ -328,45 +330,71 @@ Storage_Status DurableRecordQueue_Acknowledge(DurableRecordQueue *q, uint32_t ep
   if (q == NULL) return STORAGE_ERR_PARAM;
   QUEUE_LOCKED_CALL(AckLocked(q, epoch, sequence));
 }
-static Storage_Status ReclaimLocked(DurableRecordQueue *q)
+static Storage_Status ReclaimLocked(DurableRecordQueue *q, uint32_t watermark,
+                                   StorageEraseAllowedFn allowed)
 {
   DiskRecord r;
   Storage_Status st;
   if (!q->ready) return STORAGE_ERR_STATE;
-  if (q->free_slots >= SECTOR_SLOTS) return STORAGE_OK;
+  if (q->free_slots >= watermark) return STORAGE_OK;
   const uint32_t sectors = q->config->capacity / SECTOR_SLOTS;
+  uint32_t candidate = sectors;
   for (uint32_t i = 0U; i < sectors; ++i) {
     const uint32_t sector = (q->write_slot / SECTOR_SLOTS + i) % sectors;
     if (q->ack_pending && sector == q->ack_slot / SECTOR_SLOTS) continue;
-    if (q->config->sectors[sector] & (HAS_PENDING | HAS_CORRUPT | QUARANTINED)) continue;
+    const uint8_t summary = q->config->sectors[sector];
+    if (!(summary & HAS_USED) || summary & (HAS_PENDING | HAS_CORRUPT | QUARANTINED)) continue;
+    if (!(summary & HAS_FREE)) {
+      candidate = sector;
+      break;
+    }
+    /* At the higher watermark only erase fully used sectors. Keep partially
+     * used sectors available as an emergency source below one sector. */
+    if (q->free_slots < SECTOR_SLOTS && candidate == sectors) candidate = sector;
+  }
+  if (candidate != sectors) {
+    const uint32_t sector = candidate;
     DurableSectorCache *cache;
     st = LoadSector(q, sector, &cache);
     if (st != STORAGE_OK) return st;
+    uint32_t used = 0U;
     for (uint32_t j = 0U; j < SECTOR_SLOTS; ++j) {
       st = Read(q, sector * SECTOR_SLOTS + j, &r);
       if (st != STORAGE_OK) return st;
-      if (Classify(q, &r) == PENDING || Classify(q, &r) == CORRUPT) {
+      const uint8_t state = Classify(q, &r);
+      if (state == PENDING || state == CORRUPT) {
         Quarantine(q, cache);
         return STORAGE_ERR_STATE;
       }
+      used += state == USED;
     }
+    if (allowed != NULL && !allowed()) return STORAGE_ERR_BUSY;
     Quarantine(q, cache);
-    st = Storage_EraseSector(q->map, q->partition, Offset(q, sector * SECTOR_SLOTS));
-    if (st != STORAGE_OK) return st;
-    for (uint32_t j = 0U; j < SECTOR_SLOTS; ++j) {
-      st = Read(q, sector * SECTOR_SLOTS + j, &r);
+    if (used != 0U) {
+      st = Storage_EraseSector(q->map, q->partition, Offset(q, sector * SECTOR_SLOTS));
       if (st != STORAGE_OK) return st;
-      if (!Erased(&r)) return STORAGE_ERR_STATE;
+      for (uint32_t j = 0U; j < SECTOR_SLOTS; ++j) {
+        st = Read(q, sector * SECTOR_SLOTS + j, &r);
+        if (st != STORAGE_OK) return st;
+        if (!Erased(&r)) return STORAGE_ERR_STATE;
+      }
     }
     memset(cache->states, 0, sizeof(cache->states));
     q->config->sectors[sector] = HAS_FREE;
     q->free_slots += SECTOR_SLOTS;
     return STORAGE_OK;
   }
-  return STORAGE_ERR_NO_SPACE;
+  return q->free_slots >= SECTOR_SLOTS ? STORAGE_OK : STORAGE_ERR_NO_SPACE;
 }
 Storage_Status DurableRecordQueue_ReclaimOne(DurableRecordQueue *q)
 {
   if (q == NULL) return STORAGE_ERR_PARAM;
-  QUEUE_LOCKED_CALL(ReclaimLocked(q));
+  QUEUE_LOCKED_CALL(ReclaimLocked(q, SECTOR_SLOTS, NULL));
+}
+Storage_Status DurableRecordQueue_PrepareOne(DurableRecordQueue *q,
+                                           StorageEraseAllowedFn allowed,
+                                           uint8_t keep_spare)
+{
+  if (q == NULL) return STORAGE_ERR_PARAM;
+  QUEUE_LOCKED_CALL(ReclaimLocked(q, keep_spare ? 2U * SECTOR_SLOTS : 1U, allowed));
 }

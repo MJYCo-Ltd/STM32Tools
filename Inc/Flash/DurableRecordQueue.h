@@ -63,6 +63,12 @@ Storage_Status DurableRecordQueue_Acknowledge(DurableRecordQueue *queue,
                                              uint32_t epoch, uint32_t sequence);
 /* Low-priority call: erase at most one safe sector; never an unconfirmed one. */
 Storage_Status DurableRecordQueue_ReclaimOne(DurableRecordQueue *queue);
+/* With keep_spare, replenish toward two free sectors without reserving slots.
+ * Otherwise reclaim only from a full queue to unblock a required append.
+ * Admission runs after the candidate has been read and verified. */
+Storage_Status DurableRecordQueue_PrepareOne(DurableRecordQueue *queue,
+                                           StorageEraseAllowedFn allowed,
+                                           uint8_t keep_spare);
 
 #ifdef __cplusplus
 }

@@ -24,6 +24,37 @@ static Storage_Status ValidateRegion(uint32_t partition_size, uint32_t offset,
              : STORAGE_ERR_RANGE;
 }
 
+Storage_Status StorageBank_PrepareSector(const StoragePartitionMap *map,
+                                        uint32_t partition, uint32_t offset,
+                                        StorageEraseAllowedFn allowed)
+{
+  uint8_t bytes[128];
+  uint8_t erased = 0U;
+  if (map == NULL || map->parts == NULL || partition >= map->part_count)
+    return STORAGE_ERR_PARAM;
+  if (ValidateRegion(map->parts[partition].size, offset, NOR_FLASH_SECTOR_SIZE) != STORAGE_OK)
+    return STORAGE_ERR_RANGE;
+  uint32_t pos = 0U;
+  while (pos < NOR_FLASH_SECTOR_SIZE) {
+    Storage_Status st = Storage_Read(map, partition, offset + pos, bytes, sizeof(bytes));
+    if (st != STORAGE_OK) return st;
+    uint32_t i = 0U;
+    while (i < sizeof(bytes) && bytes[i] == 0xFFU) ++i;
+    if (i == sizeof(bytes)) {
+      pos += sizeof(bytes);
+      continue;
+    }
+    if (erased) return STORAGE_ERR_STATE;
+    if (allowed != NULL && !allowed()) return STORAGE_ERR_BUSY;
+    st = Storage_EraseSector(map, partition, offset);
+    if (st != STORAGE_OK) return st;
+    erased = 1U;
+    /* Resume verification from the sector start. */
+    pos = 0U;
+  }
+  return STORAGE_OK;
+}
+
 Storage_Status StorageBank_EraseRegion(const StoragePartitionMap *map,
                                        uint32_t partition,
                                        uint32_t region_offset,

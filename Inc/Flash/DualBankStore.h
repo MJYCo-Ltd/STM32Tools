@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <Flash/storage_partition.h>
+#include <Flash/storage_bank.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,6 +68,17 @@ Storage_Status DualBankStore_Load(DualBankStore *store, void *payload_out);
  * re-Init before retrying; strict recovery does not resolve an ambiguous
  * in-memory active-bank/sequence cache without scanning both banks again. */
 Storage_Status DualBankStore_Save(DualBankStore *store, const void *payload);
+
+/** Strict stores only. The sole owner keeps a zero-initialized byte cursor
+ * for this store, resets it on every Init and uses only SavePrepared for
+ * writes. It proves a verified blank prefix of the current inactive bank.
+ * PrepareStep verifies at most one sector and does not change the snapshot. */
+Storage_Status DualBankStore_PrepareStep(DualBankStore *store, uint32_t *prepared,
+                                       StorageEraseAllowedFn allowed);
+/** On switch, verify the replacement before retiring the old bank's head.
+ * The old tail is prepared incrementally. On failure re-Init as for Save. */
+Storage_Status DualBankStore_SavePrepared(DualBankStore *store, const void *payload,
+                                         uint32_t *prepared);
 
 #ifdef __cplusplus
 }

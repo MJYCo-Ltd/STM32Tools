@@ -85,6 +85,26 @@ Storage_Status StorageBank_Switch(const StoragePartitionMap *map,
   return io.switch_status;
 }
 
+Storage_Status StorageBank_PrepareSector(const StoragePartitionMap *map,
+    uint32_t partition, uint32_t offset, StorageEraseAllowedFn allowed)
+{
+  (void)map; (void)partition; (void)offset; (void)allowed;
+  assert(!"legacy transaction entered prepared path"); return STORAGE_ERR_STATE;
+}
+Storage_Status StorageRecord_WriteAt(const StoragePartitionMap *map,
+    uint32_t partition, uint32_t offset, uint32_t end, uint32_t sequence,
+    const void *payload, uint32_t length)
+{
+  (void)map; (void)partition; (void)offset; (void)end; (void)sequence; (void)payload; (void)length;
+  assert(!"legacy transaction entered prepared path"); return STORAGE_ERR_STATE;
+}
+Storage_Status StorageRecord_ValidateAt(const StoragePartitionMap *map,
+    uint32_t partition, uint32_t offset, uint32_t end, StorageRecordLoc *out)
+{
+  (void)map; (void)partition; (void)offset; (void)end; (void)out;
+  assert(!"legacy transaction entered prepared path"); return STORAGE_ERR_STATE;
+}
+
 int main(void)
 {
   DualBankStore store;

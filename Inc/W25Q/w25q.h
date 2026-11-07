@@ -45,6 +45,11 @@ typedef struct {
   uint32_t capacity_bytes;
   /** Optional IWDG feed while BUSY; NULL in Bootloader. */
   void (*wait_poll)(void);
+  /** Optional one-tick scheduler wait, with CS high and chip ownership held.
+   * Return 1 if delayed, 0 if the calling context cannot block. */
+  uint8_t (*wait_yield)(void);
+  /** An attempted mutation still needs an observed ready status. */
+  uint8_t needs_ready;
 } W25Q_Device;
 
 W25Q_Status W25Q_Init(W25Q_Device *dev, SPI_HandleTypeDef *hspi,

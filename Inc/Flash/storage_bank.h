@@ -9,6 +9,15 @@
 extern "C" {
 #endif
 
+typedef uint8_t (*StorageEraseAllowedFn)(void);
+
+/** Verify one blank sector, erasing it only if dirty. An optional admission
+ * check runs just before erase. The caller owns the entire transaction and
+ * is responsible for proving that the sector is disposable. */
+Storage_Status StorageBank_PrepareSector(const StoragePartitionMap *map,
+                                        uint32_t partition, uint32_t offset,
+                                        StorageEraseAllowedFn allowed);
+
 /** Erase [region_offset, region_offset + region_size) in sector steps. */
 Storage_Status StorageBank_EraseRegion(const StoragePartitionMap *map,
                                        uint32_t partition,

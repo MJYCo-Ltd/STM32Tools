@@ -11,7 +11,9 @@
 #define BANK_SIZE 8192U
 static uint8_t flash[BANK_SIZE*2U];
 static uint32_t writes,erases,fail_write,fail_erase,partial_erase;
+static uint32_t fail_read_offset, fail_read_after_writes, fail_read_after_erases;
 static uint8_t commit_then_error;
+static uint8_t silent_erase;
 static uint32_t lock_depth;
 static StorageBackend backend;
 static StoragePartDesc part={0U,sizeof(flash),0U,{0}};
@@ -22,6 +24,8 @@ static Snapshot payload,scratch_a,scratch_b;
 static Storage_Status Read(void *ctx,uint32_t offset,void *out,uint32_t length)
 {
   (void)ctx;assert(offset+length<=sizeof(flash));
+  if (offset == fail_read_offset && writes >= fail_read_after_writes &&
+      erases >= fail_read_after_erases) return STORAGE_ERR_IO;
   memcpy(out,flash+offset,length);return STORAGE_OK;
 }
 static Storage_Status Write(void *ctx,uint32_t offset,const void *raw,uint32_t length)
@@ -38,7 +42,7 @@ static Storage_Status Erase(void *ctx,uint32_t offset)
   ++erases;
   if(erases==fail_erase) {
     if(partial_erase)memset(flash+offset,0xff,partial_erase);
-    return STORAGE_ERR_INJECT;
+    return silent_erase ? STORAGE_OK : STORAGE_ERR_INJECT;
   }
   memset(flash+offset,0xff,NOR_FLASH_SECTOR_SIZE);return STORAGE_OK;
 }
@@ -52,7 +56,8 @@ static uint8_t Valid(const void *raw)
 static void Reset(void)
 {
   memset(flash,0xff,sizeof(flash));writes=erases=fail_write=fail_erase=partial_erase=0;
-  commit_then_error=0;lock_depth=0;memset(&payload,0,sizeof(payload));
+  fail_read_offset=UINT32_MAX;fail_read_after_writes=fail_read_after_erases=0;
+  silent_erase=commit_then_error=0;lock_depth=0;memset(&payload,0,sizeof(payload));
   backend=(StorageBackend){.read=Read,.write=Write,.erase_sector=Erase};
   assert(StoragePartition_Init(&map,&backend,&part,1,sizeof(flash))==STORAGE_OK);
 }
@@ -190,9 +195,95 @@ static void TestGcWriteFaults(void)
   fail_write=0;commit_then_error=0;
   assert(Init(&store,1)==STORAGE_OK && scratch_a.value==2);
 }
+
+static uint8_t DenyErase(void) { assert(lock_depth); return 0U; }
+
+static void TestPreparedSwitch(void)
+{
+  DualBankStore store;
+  Reset(); assert(Init(&store,1)==STORAGE_ERR_NOT_FOUND);
+  uint32_t prepared=0U;
+  payload.value=1U;
+  assert(DualBankStore_SavePrepared(&store,&payload,&prepared)==STORAGE_OK);
+  flash[BANK_SIZE+NOR_FLASH_SECTOR_SIZE+8U]=0U; /* Discardable inactive tail. */
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_OK);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==0U);
+  assert(DualBankStore_PrepareStep(&store,&prepared,DenyErase)==STORAGE_ERR_BUSY);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==0U);
+  fail_read_offset=BANK_SIZE+NOR_FLASH_SECTOR_SIZE;
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_ERR_IO);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==0U);
+  fail_read_after_erases=1U;
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_ERR_IO);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==1U);
+  fail_read_offset=UINT32_MAX;
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_OK);
+  assert(prepared==BANK_SIZE && erases==1U); /* Reverify, with no needless erase. */
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_OK && erases==1U);
+  payload.value=2U;
+  assert(DualBankStore_SavePrepared(&store,&payload,&prepared)==STORAGE_OK);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==2U && store.active_bank==1U);
+  assert(flash[0]==0xFFU && flash[NOR_FLASH_SECTOR_SIZE]==0U);
+
+  /* Fresh boot has no RAM proof. Its first sector is already blank. A torn
+   * later tail erase cannot make any old record visible to the strict scan. */
+  assert(Init(&store,1)==STORAGE_OK && scratch_a.value==2U);
+  prepared=0U;
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_OK && erases==2U);
+  fail_erase=3U;partial_erase=128U;silent_erase=1U;
+  assert(DualBankStore_PrepareStep(&store,&prepared,NULL)==STORAGE_ERR_STATE);
+  assert(prepared==NOR_FLASH_SECTOR_SIZE && erases==3U);
+  assert(Init(&store,1)==STORAGE_OK && scratch_a.value==2U);
+  prepared=0U;
+  payload.value=3U;
+  assert(DualBankStore_SavePrepared(&store,&payload,&prepared)==STORAGE_OK);
+  assert(erases==5U && store.active_bank==0U);
+  assert(Init(&store,1)==STORAGE_OK && scratch_a.value==3U);
+  flash[sizeof(StorageRecordHeader)]^=1U;
+  assert(Init(&store,1)==STORAGE_ERR_CRC && !store.have_snapshot);
+}
+
+static void TestPreparedPowerCuts(void)
+{
+  DualBankStore store;
+  for (uint32_t cut=1U;cut<=8U;++cut) {
+    Reset();assert(Init(&store,1)==STORAGE_ERR_NOT_FOUND);
+    uint32_t prepared=0U;
+    payload.value=1U;
+    assert(DualBankStore_SavePrepared(&store,&payload,&prepared)==STORAGE_OK);
+    payload.value=2U;
+    writes=0U;
+    if (cut<=3U) fail_write=cut;
+    if (cut==4U) { fail_write=3U; commit_then_error=1U; }
+    if (cut==5U) {
+      fail_read_offset=BANK_SIZE+sizeof(StorageRecordHeader);
+      fail_read_after_writes=3U;
+    }
+    if (cut==6U || cut==7U) {
+      fail_erase=1U; partial_erase=cut==7U ? 1U : 0U;
+    }
+    if (cut==8U) {
+      fail_read_offset=0U; fail_read_after_erases=1U;
+    }
+    const Storage_Status status=DualBankStore_SavePrepared(&store,&payload,&prepared);
+    assert(status==(cut==5U || cut==8U ? STORAGE_ERR_IO : STORAGE_ERR_INJECT));
+    assert(!prepared && !lock_depth);
+    if (cut<=5U) assert(erases==0U && flash[0]!=0xFFU);
+    fail_write=fail_erase=0U;fail_read_offset=UINT32_MAX;
+    if (cut==7U) {
+      assert(Init(&store,1)==STORAGE_ERR_STATE && !store.have_snapshot);
+    } else {
+      assert(Init(&store,1)==STORAGE_OK && scratch_a.value==(cut<=3U ? 1U : 2U));
+      payload.value=3U;
+      assert(DualBankStore_SavePrepared(&store,&payload,&prepared)==STORAGE_OK);
+      assert(Init(&store,1)==STORAGE_OK && scratch_a.value==3U);
+    }
+  }
+}
 int main(void)
 {
   TestCommittedCorruption();TestTornAndWrap();TestStrictStore();TestGcEraseFaults();TestGcWriteFaults();
-  puts("strict snapshot recovery: committed corruption fails closed; torn writes, wrap and GC fault sweep PASS");
+  TestPreparedSwitch();TestPreparedPowerCuts();
+  puts("strict snapshot recovery: corruption, torn writes, wrap, legacy GC and prepared-bank fault sweeps PASS");
   return 0;
 }
