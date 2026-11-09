@@ -20,6 +20,7 @@ typedef struct {
   MqttLineCollectorCallback callback;
   void *context;
   uint8_t discarding;
+  size_t frame_remaining;
 } MqttLineCollector;
 
 static inline void MqttLineCollector_Dispatch(char *line, size_t length, void *context) {
@@ -35,6 +36,7 @@ static inline void MqttLineCollector_Init(MqttLineCollector *collector,
     return;
   collector->length = 0U;
   collector->discarding = 0U;
+  collector->frame_remaining = 0U;
   collector->buffer[0] = '\0';
   collector->callback = callback;
   collector->context = context;
@@ -47,6 +49,7 @@ static inline void MqttLineCollector_Invalidate(MqttLineCollector *collector) {
   collector->length = 0U;
   collector->buffer[0] = '\0';
   collector->discarding = 1U;
+  collector->frame_remaining = 0U;
 }
 
 /** Task-context, single owner; callbacks must not reenter/reset this collector. */
@@ -73,9 +76,10 @@ typedef void (*MqttTextCallback)(const uint8_t *text, size_t length, void *conte
  * belong to the module model. Only fixed tails are supported here. Text bytes
  * go to the AT owner before the complete-line callback (early ACK ordering).
  * Frames, including rejected non-text bodies, NEVER enter the AT text path.
- * discarding: 0 prefix/header/body; 1 drain bad line; 2 drain declared body;
- * 3 drain declared tail; 4 ordinary text; 5 overflowed ordinary text.
- * length doubles as drain remaining.
+ * discarding: 0 prefix/header; 1 drain bad line; 2 drain oversized body;
+ * 3 drain oversized tail; 4 ordinary text; 5 overflowed ordinary text;
+ * 6 buffered body; 7 buffered tail. frame_remaining tracks accepted body/tail;
+ * length remains the buffered frame size or oversized drain remainder.
  * No callback may reset/reenter this collector; borrowed memory expires on return.
  */
 static inline void MqttLineCollector_FeedFrames(MqttLineCollector *collector,
@@ -102,6 +106,7 @@ static inline void MqttLineCollector_FeedFrames(MqttLineCollector *collector,
           protocol->base.fixed_tail_length - collector->length]) {
         collector->length = 0U;
         collector->discarding = byte == '\n' ? 0U : 1U;
+        collector->frame_remaining = 0U;
         continue;
       }
       if (--collector->length == 0U) {
@@ -112,12 +117,40 @@ static inline void MqttLineCollector_FeedFrames(MqttLineCollector *collector,
       }
       continue;
     }
+    if (collector->discarding == 6U) {
+      collector->buffer[collector->length++] = (char)byte;
+      collector->buffer[collector->length] = '\0';
+      if (--collector->frame_remaining == 0U) {
+        collector->discarding = 7U;
+        collector->frame_remaining = protocol->base.fixed_tail_length;
+      }
+      continue;
+    }
+    if (collector->discarding == 7U) {
+      size_t tail_index = protocol->base.fixed_tail_length - collector->frame_remaining;
+      if (byte != (uint8_t)protocol->base.fixed_tail[tail_index]) {
+        collector->length = 0U;
+        collector->discarding = byte == '\n' ? 0U : 1U;
+        collector->frame_remaining = 0U;
+        continue;
+      }
+      collector->buffer[collector->length++] = (char)byte;
+      collector->buffer[collector->length] = '\0';
+      if (--collector->frame_remaining == 0U) {
+        size_t completed = collector->length;
+        collector->length = 0U;
+        collector->discarding = 0U;
+        if (frame_callback) frame_callback(collector->buffer, completed, collector->context);
+      }
+      continue;
+    }
     if (collector->length >= sizeof(collector->buffer) - 1U ||
         (byte == 0U && collector->discarding == 4U)) {
       uint8_t text_overflow = collector->discarding == 4U && byte != 0U;
       if (text_overflow && text_callback) text_callback(&data[i], 1U, collector->context);
       collector->length = 0U;
       collector->discarding = byte == '\n' ? 0U : (text_overflow ? 5U : 1U);
+      collector->frame_remaining = 0U;
       continue;
     }
     collector->buffer[collector->length++] = (char)byte;
@@ -131,33 +164,28 @@ static inline void MqttLineCollector_FeedFrames(MqttLineCollector *collector,
       if (memcmp(collector->buffer, protocol->base.prefix, compare)) {
         collector->discarding = 4U;
         if (text_callback) text_callback((const uint8_t *)collector->buffer,
-                                        collector->length, collector->context);
+                                         collector->length, collector->context);
       } else {
         result = ModuleFrameParser_ParseLengthHeader((const uint8_t *)collector->buffer,
             collector->length, protocol, fields, 8U, NULL, &body, &body_length);
         if (result == MODULE_FRAME_INVALID) {
           collector->length = 0U;
           collector->discarding = byte == '\n' ? 0U : 1U;
+          collector->frame_remaining = 0U;
         } else if (result == MODULE_FRAME_COMPLETE) {
           size_t header_length = (size_t)(body - (const uint8_t *)collector->buffer);
           size_t available = collector->length - header_length;
           if (body_length > protocol->base.maximum_payload_length ||
               header_length + protocol->base.fixed_tail_length >= sizeof(collector->buffer) ||
               body_length >= sizeof(collector->buffer) - header_length - protocol->base.fixed_tail_length) {
-            collector->length = body_length - available;
+            collector->length = body_length > available ? body_length - available : 0U;
             collector->discarding = collector->length ? 2U : 3U;
+            collector->frame_remaining = 0U;
             if (!collector->length) collector->length = protocol->base.fixed_tail_length;
-          } else if (available >= body_length) {
-            size_t tail_available = available - body_length;
-            size_t compare_tail = tail_available < protocol->base.fixed_tail_length ? tail_available : protocol->base.fixed_tail_length;
-            if (memcmp(body + body_length, protocol->base.fixed_tail, compare_tail)) {
-              collector->length = 0U;
-              collector->discarding = byte == '\n' ? 0U : 1U;
-            } else if (tail_available == protocol->base.fixed_tail_length) {
-              size_t completed = collector->length;
-              collector->length = 0U;
-              if (frame_callback) frame_callback(collector->buffer, completed, collector->context);
-            }
+          } else {
+            collector->discarding = body_length == 0U ? 7U : 6U;
+            collector->frame_remaining = body_length == 0U ?
+                protocol->base.fixed_tail_length : body_length;
           }
         }
         continue;
@@ -166,6 +194,7 @@ static inline void MqttLineCollector_FeedFrames(MqttLineCollector *collector,
     if (byte == '\n') {
       collector->length = 0U;
       collector->discarding = 0U;
+      collector->frame_remaining = 0U;
       if (collector->callback) collector->callback(collector->buffer, collector->context);
     }
   }

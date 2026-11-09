@@ -25,15 +25,25 @@ The old unimplemented `ReadFlash` declaration is removed.
 ## UART ownership and bounded servicing
 
 Configure the UART registry and loss callback before concurrent RX/service.
-One task owns ProcessUart/ProcessUartBudget. The default budget is 8 chunks;
-ports are serviced round-robin. Receive callbacks must themselves do bounded
-work. Ports use normal (not circular) ReceiveToIdle DMA, with half-transfer
-interrupts disabled. StopReceive prevents autonomous restart. Registry lifetime
-is the application lifetime; dynamically removing active UARTs is unsupported.
+One task owns ProcessUart/ProcessUartBudget and services default ports
+round-robin with an 8-chunk default budget. Ports registered through
+`UartReceive_AddDedicated` are excluded from the global pump and pending check.
+Their sole owner calls `UartReceive_ProcessPort`, optionally blocking on the
+same RX queue with a timeout in kernel ticks. Callbacks do bounded work and
+must avoid reentering receive service for the port. The owner also controls
+stop and restart after startup. Stop disables autonomous restart, discards
+the inbox and reports any pending loss in the owner's context.
+
+Ports use normal ReceiveToIdle DMA with half-transfer interrupts disabled.
+UART and RX DMA interrupts for a port use the same preemption priority. DMA
+rearms on the alternate buffer before submitting the completed queue item.
+The owner copies the next item into stable callback storage. Registry lifetime
+is the application lifetime.
 
 On queue overflow, malformed size or HAL receive error, subsequent ISR chunks
 are discarded until the consumer flushes the old inbox and reports loss. The
-loss callback runs in task context before post-gap bytes are decoded. Its
+loss callback runs in owner context before post-gap bytes are decoded. Loss
+wakes a blocked dedicated owner even when no data arrived. Its
 counter counts observed dropped/error chunks, not exact missing byte counts.
 Protocols must invalidate partial AT/MQTT/HTTP/RS485 state; continuing a broken
 stream as a complete record is unsafe. Bare-metal one-slot inboxes follow the
@@ -54,15 +64,23 @@ polled. Object lifetime, unique EXTI lines and task ownership still apply.
 
 ## MQTT stream boundaries
 
-MqttLineCollector now adapts the shared ModuleLineCollector and preserves its
-legacy CRLF callback contract. Oversize or embedded-NUL records are discarded
-through LF. Callbacks must not recursively feed/reset the same collector.
-The ML307 text PUBLISH parser checks connection/message IDs, unsigned lengths,
-actual fragment byte count and fragment <= total; it preserves payload spaces.
-The product accepts only complete payloads for its selected connection.
-This is a bounded TEXT interface. Binary/newline-bearing MQTT payloads and
-fragment reassembly are not advertised as supported. Never reinterpret a
-partial fragment as a business message. HTTP binary readers remain separate.
+`MqttLineCollector_Feed` adapts the shared `ModuleLineCollector` and preserves
+its legacy CRLF callback contract. Oversize or embedded-NUL text records are
+discarded through LF. Callbacks must not recursively feed/reset the same
+collector.
+
+`MqttLineCollector_FeedFrames` consumes each module's declared length-frame
+protocol. Once the generic header parser validates a frame header, the collector
+tracks the declared body and fixed tail without reparsing body bytes. The body
+is opaque binary data: NUL, CR/LF, `OK`/`ERROR`, and URC-like bytes stay out of
+the AT text and line callbacks. Frames that exceed the existing collector or
+protocol size limits are drained by their declared length and are not delivered.
+
+The ML307 text PUBLISH parser separately checks connection/message IDs,
+unsigned lengths, actual fragment byte count and fragment <= total; it preserves
+payload spaces. The product accepts only complete payloads for its selected
+connection. Never reinterpret a partial fragment as a business message. HTTP
+binary readers remain separate.
 
 ## HealthMonitor
 
