@@ -29,6 +29,10 @@ static ML307_Cmd TypeToCmd(ML307_Type type)
     return ML307_CMD_CGATT;
   case ML307_TYPE_CCLK:
     return ML307_CMD_CCLK;
+  case ML307_TYPE_CPIN:
+    return ML307_CMD_CPIN;
+  case ML307_TYPE_MCCID:
+    return ML307_CMD_MCCID;
   default:
     return ML307_CMD_COUNT;
   }
@@ -104,6 +108,10 @@ const char *ML307_TypeName(ML307_Type type)
     return "CGATT";
   case ML307_TYPE_CCLK:
     return "CCLK";
+  case ML307_TYPE_CPIN:
+    return "CPIN";
+  case ML307_TYPE_MCCID:
+    return "MCCID";
   case ML307_TYPE_SLEEP:
     return "SLEEP";
   case ML307_TYPE_MQTT_DISCONNECT:
@@ -293,6 +301,19 @@ ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
   }
   if (parse_result != ML307_PARSE_OK) {
     return ML307_RESULT_NOT_FOUND;
+  }
+
+  if ((expect == ML307_TYPE_CPIN) || (expect == ML307_TYPE_MCCID)) {
+    const size_t length = strlen(out->text);
+    /* Validate the full decoded field, never a digit prefix. The generic
+     * parser already rejects embedded response prefixes and truncation. */
+    if (!out->ok || length == 0U || strchr(out->text, '\n') != NULL ||
+        ((expect == ML307_TYPE_MCCID) &&
+         (length < 18U || length > 22U ||
+          strspn(out->text, "0123456789") != length))) {
+      out->ok = 0U;
+      return ML307_RESULT_INVALID_VALUE;
+    }
   }
 
   if (expect == ML307_TYPE_CESQ) {

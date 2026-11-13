@@ -48,7 +48,9 @@ typedef enum {
   ML307_TYPE_MQTT_SSL_CONFIG,
   ML307_TYPE_MQTT_CONNECT,
   ML307_TYPE_MQTT_SUBSCRIBE,
-  ML307_TYPE_MQTT_PUBLISH
+  ML307_TYPE_MQTT_PUBLISH,
+  ML307_TYPE_CPIN,
+  ML307_TYPE_MCCID
 } ML307_Type;
 
 /** Content to pack. Unused fields may be NULL / 0. */
@@ -104,6 +106,8 @@ int ML307_IsComplete(const char *packet, ML307_Type expect, uint8_t id);
 /**
  * Unpack a module response for the request type that was sent.
  * Fills out->name / out->text (and typed fields when applicable).
+ * SIM queries require OK and one nonempty decoded field; MCCID is 18..22
+ * decimal digits. CPIN readiness policy remains with the caller.
  */
 ML307_Result ML307_Unpack(const char *packet, ML307_Type expect,
                           ML307_Data *out);

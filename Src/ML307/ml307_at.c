@@ -119,6 +119,7 @@ static const ML307_CmdInfo s_commands[ML307_CMD_COUNT] = {
 
     /* 10. Error */
     {ML307_CMD_CMEE, ML307_CATEGORY_ERROR, KIND_P, Q_READ, RESP_P, "CMEE"},
+    {ML307_CMD_MCCID, ML307_CATEGORY_SIM, KIND_P, Q_EXEC, RESP_P, "MCCID"},
 };
 
 _Static_assert(sizeof(s_commands) / sizeof(s_commands[0]) == ML307_CMD_COUNT,

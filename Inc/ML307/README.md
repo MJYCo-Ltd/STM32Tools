@@ -1,5 +1,15 @@
 # ML307 (Inc)
 
+`ml307.h` 的 CPIN/MCCID 查询复用 `ml307_at.c` 目录与通用响应解析器，
+分别生成 `AT+CPIN?\r\n` 和 `AT+MCCID\r\n`。枚举追加以保留旧值。
+SIM 响应必须有成功最终结果和完整非空字段；MCCID 只接受完整的 18–22 位
+十进制数字，拒绝截断、数字前缀后附垃圾、嵌入的响应前缀和 ERROR。
+CPIN 文本只负责解码，是否 READY 由产品判断；UART、会话、超时、重试、
+SIM 生命周期及持久化仍由调用方管理。库不增加缓冲、队列或查询循环。
+调用方复用原有 `ML307_Data`，但新增调用会叠加既有 `ML307_Unpack` 的
+解析局部栈帧，不能据此宣称 RAM 或运行栈减少。`ml307_sim_test` 覆盖纯驱动
+契约；产品 UART、恢复和存储重试由消费方测试，实板栈水位仍需现场验证。
+
 `ml307_http.h` 提供 ML307C HTTP/HTTPS 缓存模式的有界命令构造与解析，
 HTTPS 实例通过 `ML307_HttpBuildSsl` 绑定 SSL context。OTA 应按 HTTP Range
 小片读取并流式写入 Flash；`ML307_HttpParseRead` 使用显式字节

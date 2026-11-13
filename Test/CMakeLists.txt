@@ -142,6 +142,19 @@ add_executable(ml307_mqtt_control_test
 target_include_directories(ml307_mqtt_control_test PRIVATE ../Inc)
 add_test(NAME ml307_mqtt_control_test COMMAND ml307_mqtt_control_test)
 
+add_executable(ml307_sim_test
+    ml307_sim_test.c
+    ../Src/ML307/ml307.c
+    ../Src/ML307/ml307_at.c
+    ../Src/ML307/ml307_parser.c
+    ../Src/ML307/ml307_mqtt.c
+    ../Src/AT/at_codec.c
+    ../Src/AT/ModuleFrameParser.c)
+target_include_directories(ml307_sim_test PRIVATE ../Inc)
+target_compile_options(ml307_sim_test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror;-pedantic;-UNDEBUG>)
+add_test(NAME ml307_sim_test COMMAND ml307_sim_test)
+
 add_executable(ml307_ssl_test
     ml307_ssl_test.c
     ../Src/ML307/ml307_ssl.c
